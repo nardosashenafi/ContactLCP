@@ -71,7 +71,7 @@ function wt(sys, x)
     return permutedims(hcat([1.0, 0.0]...))
 end
 
-function plots(Z, t, Λn, Λt)
+function plots(Z, t, Λn)
     fig1 = plt.figure()
     fig1.clf()
     subplot(2, 2, 1)
@@ -94,8 +94,4 @@ function plots(Z, t, Λn, Λt)
     ticklabel_format(axis="y", style="sci",scilimits=(0,0))
     ylabel(L"$\lambda_{n1} [N]$", fontsize=15)
 
-    subplot(2, 1, 2)
-    plot(t[2:end], getindex.(Λt, 1))
-    ticklabel_format(axis="y", style="sci",scilimits=(0,0))
-    ylabel(L"$\lambda_{t1} [N]$", fontsize=15)
 end
