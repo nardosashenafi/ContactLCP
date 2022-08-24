@@ -8,5 +8,4 @@ using LinearAlgebra
 
 include("lcp.jl")
 
-export
 end # module
