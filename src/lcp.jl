@@ -104,15 +104,18 @@ function lcpOpt(A, b, contactNum)
     return JuMP.value.(λ)
 end
 
-function lcpOptMosek(A, b, contactNum)
+function lcpOptMosek(A, b, x, contactNum)
 
     model = Model(Mosek.Optimizer)
     set_silent(model)
+    gn, γn, γt, M, h, Wn, Wt = ContactLCP.sysAttributes(lcp, x)
+    uA = x[3:4]
 
     @variable(model, λ[1:contactNum] >= 0.0)
+    @variable(model, v[1:2])
     @constraints(model, begin
         A*λ .+ b .>= 0.0
-        # (A*λ .+ b) ⟂ λ
+        M*(v - uA) .== Wn*λ + h*Δt
     end)
     @objective(model, Min, dot(A*λ .+ b, λ))
     optimize!(model)
@@ -120,46 +123,6 @@ function lcpOptMosek(A, b, contactNum)
     return JuMP.value.(λ)
 end
 
-function lcpGrad(A, b, contactNum)
-
-    model = JuMP.Model(() -> DiffOpt.diff_optimizer(Mosek.Optimizer))
-    constraintNum = size(A, 1)
-
-    @variable(model, λ[1:contactNum] >= 0.0)
-    @constraint(model,
-        cons[j in 1:constraintNum],
-        # (A[j,i]*λ[i] + b[j] for i in 1:contactNum) .>= 0.0
-        A*λ .+ b .>= 0.0
-    )
-
-    @objective(model, Min, dot(A*λ .+ b, λ))
-    optimize!(model) 
-    
-    grad = MOI.set.(  
-        model, 
-        DiffOpt.ReverseVariablePrimal(),
-        λ, 
-        ones(contactNum)
-    )
-    
-    DiffOpt.reverse_differentiate!(model)
-    grad_const = []
-    grad_coef = []
-    grad = []
-
-    for k in 1:constraintNum
-        push!(grad, MOI.get(   
-            model,
-            DiffOpt.ReverseConstraintFunction(),
-            cons[k][1]
-        ))
-
-        push!(grad_const, JuMP.constant(grad[end]))
-        push!(grad_coef, JuMP.coefficient(grad[end], λ[k]))  
-    end
-
-    return grad_const, grad_coef
-end
 
 function oneTimeStep(lcp::Lcp, x1; Δt = 0.001)
 
