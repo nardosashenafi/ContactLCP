@@ -1,6 +1,7 @@
 
 using ContactLCP
 using LaTeXStrings
+ENV["MPLBACKEND"]="tkagg"
 using PyPlot
 
 include("bouncing_ball.jl")
