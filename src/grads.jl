@@ -7,10 +7,9 @@ function lcpGradForwardControlParam(lcp, x1, θ; Δt = 0.001)
     qM      = qA + 0.5*Δt*uA
 
     x_mid   = [qM...,uA...]
-    gn, γn, γt, M, h, Wn, Wt = ContactLCP.sysAttributes(lcp, x_mid)
-
+    gn, γn, γt, M, h, Wn, Wt = ContactLCP.setSysAttributes(lcp, x_mid)
     ContactLCP.checkContact(lcp, gn)
-    ContactLCP.createContactMap(lcp, gn, γn, γt, M, h, Wn, Wt)
+    ContactLCP.trimAttributes(lcp, gn, γn, γt, M, h, Wn, Wt)
 
     s = lcp.current_contact_num
 

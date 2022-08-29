@@ -13,7 +13,7 @@ struct BouncingBall{T}
 
     function BouncingBall(T)
 
-        m               = T(0.2)
+        m               = T(0.21)
         r               = T(0.1)
         g               = T(9.81)
         ϵn              = T.(0.9*ones(1))
@@ -38,6 +38,16 @@ function (sys::BouncingBall)(x)
     Wt  = wt(sys, x)
 
     return gn, γn, γt, M, h, Wn, Wt
+end
+
+function setCoefficients(sys::BouncingBall, ϵn, ϵt, μ)
+    sys.ϵn[:] = ϵn
+    sys.ϵt[:] = ϵt
+    sys.μ[:]= μ
+end
+
+function setInitial(sys::BouncingBall, x)
+    sys.x0[:] = x
 end
 
 function gap(sys::BouncingBall, x)
