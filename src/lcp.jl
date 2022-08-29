@@ -54,11 +54,11 @@ function resetCoefficients(lcp::Lcp)
     return ϵn, ϵt, μ
 end
 
-function sysAttributes(lcp, x)
+function setSysAttributes(lcp, x)
     return lcp.sys(x)
 end
 
-function createContactMap(lcp::Lcp, gn, γn, γt, M, h, Wn, Wt)
+function trimAttributes(lcp::Lcp, gn, γn, γt, M, h, Wn, Wt)
 
     ϵn, ϵt, μ       = resetCoefficients(lcp)
     lcp.gn          = gn[lcp.sys.contactIndex .== 1]
@@ -67,62 +67,50 @@ function createContactMap(lcp::Lcp, gn, γn, γt, M, h, Wn, Wt)
     lcp.Wn          = Wn[:, lcp.sys.contactIndex .== 1]   #pick out the ones in contact
     lcp.Wt          = Wt[:, lcp.sys.contactIndex .== 1]
 
-    #trim the coefficients and relative velocities
+    #trim the coefficients and relative velocities; they will be used in computing A and b 
     lcp.ϵn, lcp.ϵt, lcp.μ, lcp.γn, lcp.γt = map(x -> x[lcp.sys.contactIndex .== 1], 
                                             [ϵn, ϵt, μ, γn, γt])
 end
 
-function solveLcp(lcp::Lcp; Δt = 0.001)
-
-    s = lcp.current_contact_num
-    E = Matrix{Float64}(I, s, s)
-
-    if (s > 0)
-        A = lcp.Wn'*(lcp.M\lcp.Wn)
-        b = lcp.Wn'*(lcp.M \ lcp.h*Δt) + (E + diagm(0 => lcp.ϵn))*lcp.γn
-        
-        λ = lcpOpt(A, b, s)
-    else
-        λ = zeros(s)
-    end
-    
-    return λ
+function solveLcp(lcp::Lcp, x; Δt = 0.001)
+    return lcpOptNormal(lcp, x, 2; Δt = Δt)
 end
 
-function lcpOpt(A, b, contactNum)
-
-    model = Model(PATHSolver.Optimizer)
-    set_silent(model)
-
-    @variable(model, λ[1:contactNum] >= 0.0)
-    @constraints(model, begin
-        (A*λ .+ b) ⟂ λ
-    end)
-
-    optimize!(model)
-
-    return JuMP.value.(λ)
-end
-
-function lcpOptMosek(A, b, x, contactNum)
+function lcpOptNormal(lcp::Lcp, x, stateNum; Δt = 0.001)   
+    #this only considers normal contact forces. For tangential forces, use PATHSolver
 
     model = Model(Mosek.Optimizer)
     set_silent(model)
-    gn, γn, γt, M, h, Wn, Wt = ContactLCP.sysAttributes(lcp, x)
-    uA = x[3:4]
 
-    @variable(model, λ[1:contactNum] >= 0.0)
-    @variable(model, v[1:2])
+    gn, γn, γt, M, h, Wn, Wt = setSysAttributes(lcp, x)
+    checkContact(lcp, gn)
+    trimAttributes(lcp, gn, γn, γt, M, h, Wn, Wt)
+
+    E = Matrix{Float64}(I, lcp.current_contact_num, lcp.current_contact_num)
+
+    A = lcp.Wn'*(lcp.M\lcp.Wn)
+    b = lcp.Wn'*(lcp.M \ lcp.h*Δt) + (E + diagm(0 => lcp.ϵn))*lcp.γn
+
+    #TODO: use env macro to directly receive state info from the system struct
+    qM = x[1:stateNum]
+    uA = x[stateNum+1:2stateNum]
+
+    @variable(model, λ[1:lcp.total_contact_num] >= 0.0)
+    @variable(model, v[1:stateNum])
+    @variable(model, q[1:stateNum])
+
+    @expression(model, contactForces, [lcp.sys.contactIndex[i] == 1 ? λ[i] : 0.0 for i in 1:lcp.total_contact_num] )
     @constraints(model, begin
-        A*λ .+ b .>= 0.0
-        M*(v - uA) .== Wn*λ + h*Δt
+        A*λ[lcp.sys.contactIndex .== 1] .+ b .>= 0.0
+        M*(v - uA) .== Wn*contactForces + h*Δt
+        q .== qM + 0.5*Δt*v
     end)
-    @objective(model, Min, dot(A*λ .+ b, λ))
+
+    @objective(model, Min, dot(A*λ[lcp.sys.contactIndex .== 1] .+ b, λ[lcp.sys.contactIndex .== 1]))
     optimize!(model)
 
-    return JuMP.value.(λ)
+    return JuMP.value.(q), JuMP.value.(v), JuMP.value.(λ)
 end
-
 
 function oneTimeStep(lcp::Lcp, x1; Δt = 0.001)
 
@@ -132,19 +120,7 @@ function oneTimeStep(lcp::Lcp, x1; Δt = 0.001)
     qM      = qA + 0.5*Δt*uA
 
     x_mid   = [qM...,uA...]
-    gn, γn, γt, M, h, Wn, Wt = sysAttributes(lcp, x_mid)
-
-    checkContact(lcp, gn)
-    createContactMap(lcp, gn, γn, γt, M, h, Wn, Wt)
-
-    Λn  = solveLcp(lcp; Δt=Δt)
-    x2  = [qM...,uA...]
-
-    λn = zeros(lcp.total_contact_num)
-    λn[lcp.sys.contactIndex .== 1] = Λn
-
-    uE = lcp.M\(Wn*λn + lcp.h*Δt) + uA
-    qE = qM + 0.5*Δt*uE
+    qE, uE, λn  = solveLcp(lcp, x_mid; Δt=Δt)
 
     return [qE...,uE...], λn
 

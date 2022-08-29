@@ -1,7 +1,7 @@
 
 module ContactLCP
 
-using JuMP, PATHSolver
+using JuMP, PATHSolver, Mosek, MosekTools
 using LinearAlgebra
 
 include("lcp.jl")
