@@ -77,20 +77,21 @@ function ChainRulesCore.frule((_, _),
         ]
     )
 
-    MOI.set.(  
-        model, 
-        DiffOpt.ForwardObjectiveFunction(),    #to take the derivative wrt to θm
-        -1.0/θm^2.0 * λ_new[1]' * A[1,1] * (ones(Float64) *index(model[:λ][1])*index(model[:λ][1])) + 0.0
-    )
+    if !isempty(A)
+        MOI.set.(  
+            model, 
+            DiffOpt.ForwardObjectiveFunction(),    #to take the derivative wrt to θm
+            -1.0/θm^2.0 * λ_new[1]' * A[1,1] * (ones(Float64) *index(model[:λ][1])*index(model[:λ][1])) + 0.0
+        )
+    end
     
-
     DiffOpt.forward_differentiate!(JuMP.backend(model))
     ∂sol∂θm =  MOI.get.(   
-            model,
-            DiffOpt.ForwardVariablePrimal(),
-            [model[:q]; model[:v]; model[:λ]])
+                model,
+                DiffOpt.ForwardVariablePrimal(),
+                [model[:q]; model[:v]; model[:λ]])
 
-    return sol, ∂sol∂θm
+    return (sol, ∂sol∂θm)
 end
 
 function solveM(lcp, x0, stateNum; Δt = 0.001, totalTimeStep = 1000)
@@ -108,10 +109,10 @@ function computeExpertTraj(lcp, x0, stateNum, θm_actual; Δt = 0.001, totalTime
 
     S       = Array{Array{T, 1}, 1}()
     Λ       = Array{Array{T, 1}, 1}()
-    x1 = deepcopy(x0)
+    x1      = deepcopy(x0)
     #generate trajectory
     for i in 1:totalTimeStep
-        expert_sol = lcpSolve(lcp, x1, θm_actual, 2; Δt = Δt)
+        expert_sol,_ ,_ = lcpSolve(lcp, x1, θm_actual, 2; Δt = Δt)
         x1 = expert_sol[1:2*stateNum]
         push!(S, deepcopy(x1))
         push!(Λ, deepcopy(expert_sol[2*stateNum+1:end]))
@@ -129,7 +130,7 @@ function computeLoss(lcp, S, Λ, θm0, x0; Δt = 0.001, totalTimeStep = 1000)
     Q = diagm(0 => [2.0, 2.0, 0.5, 0.5])
 
     for i in 1:totalTimeStep
-        sol = lcpSolve(lcp, x1, θm0, 2; Δt = Δt)
+        sol,_,_ = lcpSolve(lcp, x1, θm0, 2; Δt = Δt)
         x1 = sol[1:2*stateNum]
         push!(s, deepcopy(x1))
         push!(λ, deepcopy(sol[2*stateNum+1:end]))
@@ -141,10 +142,10 @@ end
 
 function checkGradient(lcp, x1, θ1, θ2, stateNum, Δt)
 
-    sol1, grad1 =  ChainRulesCore.frule((0.0,0.0), lcpSolve, lcp, x1, θ1, stateNum, Δt)
+    sol1, grad1 =  ChainRulesCore.frule((nothing, nothing), lcpSolve, lcp, x1, θ1, stateNum, Δt)
     q1, v1, λ1 = (sol1[1:stateNum], sol1[stateNum+1:2stateNum], sol1[2stateNum+1:end])
 
-    sol2, grad2 =  ChainRulesCore.frule((0.0,0.0), lcpSolve, lcp, x1, θ2, stateNum, Δt)
+    sol2, grad2 =  ChainRulesCore.frule((nothing, nothing), lcpSolve, lcp, x1, θ2, stateNum, Δt)
     q2, v2, λ2 = (sol2[1:stateNum], sol2[stateNum+1:2stateNum], sol2[2stateNum+1:end])
 
     finiteDiff_q = (q2 - q1) / (θ2 - θ1)
