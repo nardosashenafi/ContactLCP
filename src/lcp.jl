@@ -15,7 +15,7 @@ mutable struct Lcp{T, TSYS}
     M                   ::Matrix{T}
     h                   ::Vector{T}
 
-    function Lcp(sys, T)
+    function Lcp(T, sys, θ0)
 
         total_contact_num           = length(sys.contactIndex)
         current_contact_num         = sum(sys.contactIndex)
@@ -27,13 +27,14 @@ mutable struct Lcp{T, TSYS}
         γt                          = zeros(T, total_contact_num)
         ξn                          = zeros(T, total_contact_num)
         ξt                          = zeros(T, total_contact_num)
-        gn, γn, γt, M, h, Wn, Wt    = sys(sys.x0)
+        gn, γn, γt, M, h, Wn, Wt    = sys(sys.x0, θ0)
 
         new{T, typeof(sys)}(sys, total_contact_num, current_contact_num, ϵn, ϵt, μ, gn, γn, γt, ξn, ξt, Wn, Wt, M, h)
     end
 end
 
-function checkContact(lcp::Lcp, gn)
+#check the gap and keep track of the systems in contact
+function checkContact(lcp::Lcp, gn::Vector{T}) where {T<:Real}
      
     for i in 1:lcp.total_contact_num
         if gn[i] < lcp.sys.gThreshold 
@@ -46,6 +47,7 @@ function checkContact(lcp::Lcp, gn)
     lcp.current_contact_num = sum(lcp.sys.contactIndex)
 end
 
+#the coefficients are trimmed inorder to construct A matrix and b vector. This function resets the coefficients
 function resetCoefficients(lcp::Lcp)
     ϵn  = lcp.sys.ϵn
     ϵt  = lcp.sys.ϵt
@@ -54,11 +56,11 @@ function resetCoefficients(lcp::Lcp)
     return ϵn, ϵt, μ
 end
 
-function setSysAttributes(lcp, x)
-    return lcp.sys(x)
+function setSysAttributes(lcp, x::Vector{T}, θ::Vector{T}) where {T<:Real}
+    return lcp.sys(x, θ)
 end
 
-function trimAttributes(lcp::Lcp, gn, γn, γt, M, h, Wn, Wt)
+function trimAttributes(lcp::Lcp, gn::Vector{T}, γn::Vector{T}, γt::Vector{T}, M::Matrix{T}, h::Vector{T}, Wn::Matrix{T}, Wt::Matrix{T}) where {T<:Real}
 
     ϵn, ϵt, μ       = resetCoefficients(lcp)
     lcp.gn          = gn[lcp.sys.contactIndex .== 1]
@@ -72,74 +74,90 @@ function trimAttributes(lcp::Lcp, gn, γn, γt, M, h, Wn, Wt)
                                             [ϵn, ϵt, μ, γn, γt])
 end
 
-function solveLcp(lcp::Lcp, x; Δt = 0.001)
-    return lcpOptNormal(lcp, x, 2; Δt = Δt)
-end
+function lcpSolve(lcp::Lcp, x::Vector{T}, θ::Vector{T}, stateNum; model = JuMP.Model(Mosek.Optimizer)) where {T<:Real}
 
-function lcpOptNormal(lcp::Lcp, x, stateNum; Δt = 0.001)   
-    #this only considers normal contact forces. For tangential forces, use PATHSolver
-
-    model = Model(Mosek.Optimizer)
     set_silent(model)
 
-    gn, γn, γt, M, h, Wn, Wt = setSysAttributes(lcp, x)
+    gn, γn, γt, M, h, Wn, Wt = setSysAttributes(lcp, x, θ)
     checkContact(lcp, gn)
     trimAttributes(lcp, gn, γn, γt, M, h, Wn, Wt)
 
-    E = Matrix{Float64}(I, lcp.current_contact_num, lcp.current_contact_num)
+    E = Matrix{T}(I, lcp.current_contact_num, lcp.current_contact_num)
 
-    A = lcp.Wn'*(lcp.M\lcp.Wn)
-    b = lcp.Wn'*(lcp.M \ lcp.h*Δt) + (E + diagm(0 => lcp.ϵn))*lcp.γn
+    Minv = inv(M)
+    A = lcp.Wn'*(Minv*lcp.Wn)
+    b = lcp.Wn'*(Minv*h*lcp.sys.Δt) + (E + diagm(0 => lcp.ϵn))*lcp.γn
 
     #TODO: use env macro to directly receive state info from the system struct
     qM = x[1:stateNum]
     uA = x[stateNum+1:2stateNum]
 
-    @variable(model, λ[1:lcp.total_contact_num] >= 0.0)
+    @variable(model, λ[1:lcp.total_contact_num] >= T(0.0))
     @variable(model, v[1:stateNum])
     @variable(model, q[1:stateNum])
 
-    @expression(model, contactForces, [lcp.sys.contactIndex[i] == 1 ? λ[i] : 0.0 for i in 1:lcp.total_contact_num] )
-    @constraints(model, begin
-        A*λ[lcp.sys.contactIndex .== 1] .+ b .>= 0.0
-        M*(v - uA) .== Wn*contactForces + h*Δt
-        q .== qM + 0.5*Δt*v
-    end)
+    @expression(model, contactForces, [lcp.sys.contactIndex[i] == 1 ? λ[i] : T(0.0) for i in 1:lcp.total_contact_num] )
+    @constraint(model,
+        cons1,
+        A*λ[lcp.sys.contactIndex .== 1] .+ b .>= T(0.0)
+    )
+
+    # @constraint(model,
+    #     cons2[j in 1:stateNum],
+    #     sum(M[j,i]*(v[i] - uA[i]) for i in 1:stateNum) - h[j]*Δt .== sum(Wn[j, k]*contactForces[k] for k in 1:lcp.total_contact_num)
+    # )
+
+    @constraint(model,
+        cons2,
+        M*(v - uA) - h*lcp.sys.Δt .== Wn*contactForces
+    )
+
+    @constraint(model, 
+        cons3, 
+        q .== qM + 0.5*lcp.sys.Δt*v
+    )
 
     @objective(model, Min, dot(A*λ[lcp.sys.contactIndex .== 1] .+ b, λ[lcp.sys.contactIndex .== 1]))
-    optimize!(model)
 
-    return JuMP.value.(q), JuMP.value.(v), JuMP.value.(λ)
+    optimize!(model) 
+
+   return vcat(JuMP.value.(q), JuMP.value.(v), JuMP.value.(λ)), A, b
 end
 
-function oneTimeStep(lcp::Lcp, x1; Δt = 0.001)
+function oneTimeStep(lcp::Lcp, x1::Vector{T}, θ::Vector{T}) where {T<:Real}
 
     #TODO: replace with getstate
-    uA      = x1[3:4]
-    qA      = x1[1:2]
-    qM      = qA + 0.5*Δt*uA
-
-    x_mid   = [qM...,uA...]
-    qE, uE, λn  = solveLcp(lcp, x_mid; Δt=Δt)
-
+    uA                  = x1[3:4]
+    qA                  = x1[1:2]
+    qM                  = qA + 0.5*lcp.sys.Δt*uA
+    stateNum=2      
+    x_mid               = [qM...,uA...]
+    sol, _, _           = lcpSolve(lcp, x_mid, θ, stateNum)
+    qE, uE, λn          = (sol[1:stateNum], sol[stateNum+1:2stateNum], sol[2stateNum+1:end])
     return [qE...,uE...], λn
 
 end
 
-function fulltimestep(lcp::Lcp, T; Δt = 0.001, totalTimeStep = 1500)
+function fulltimestep(lcp::Lcp, x0::Vector{T}, θ::Vector{T}) where {T<:Real}
 
-    X       = Array{Array{T, 1}, 1}()
-    Λn      = Array{Array{T, 1}, 1}()
-    t       = Array{T, 1}()
-    x       = deepcopy(lcp.sys.x0)
+    X       = Vector{Vector{Float64}}()
+    Λn      = Vector{Vector{Float64}}()
+    t       = Vector{T}()
+
+    if isempty(x0)
+        x = deepcopy(lcp.sys.x0)
+    else
+        x = deepcopy(x0)
+    end
+
     X       = push!(X, x)
-    t       = push!(t, 0.0)
+    t       = push!(t, T(0.0))
 
-    for i in 1:totalTimeStep
-        x, λn = oneTimeStep(lcp, x; Δt=Δt)
+    for i in 1:lcp.sys.totalTimeStep
+        x, λn = oneTimeStep(lcp, x, θ)
         push!(X, x)
         push!(Λn, λn)
-        push!(t, t[end]+Δt)
+        push!(t, t[end]+lcp.sys.Δt)
     end
 
     return X, t, Λn

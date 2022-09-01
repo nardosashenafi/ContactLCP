@@ -1,6 +1,6 @@
 export BouncingBall
 
-struct BouncingBall{T} 
+mutable struct BouncingBall{T} 
     m               ::T 
     r               ::T
     g               ::T 
@@ -10,8 +10,10 @@ struct BouncingBall{T}
     x0              ::Vector{T}
     contactIndex    ::Vector{T}
     gThreshold      ::T
+    Δt              ::T
+    totalTimeStep   ::Int64
 
-    function BouncingBall(T)
+    function BouncingBall(T, Δt, totalTimeStep)
 
         m               = T(0.21)
         r               = T(0.1)
@@ -22,32 +24,63 @@ struct BouncingBall{T}
         x0              = T.([0.0, 0.5, 0.1, -0.1])     #xpos, ypos, xdot, ydot
         contactIndex    = zeros(T, 1)
         gThreshold      = T.(0.001)
+        Δt              = Δt
+        totalTimeStep   = totalTimeStep
 
-        new{T}(m, r, g, ϵn, ϵt, μ, x0, contactIndex, gThreshold)
+        new{T}(m, r, g, ϵn, ϵt, μ, x0, contactIndex, gThreshold, Δt, totalTimeStep)
     end
 
 end
 
-function (sys::BouncingBall)(x)
+function (sys::BouncingBall)(x::Vector{T}, θ::Vector{T}) where {T<:Real}
     gn  = gap(sys, x)
     γn  = vnormal(sys, x)
     γt  = vtang(sys, x)
-    M   = massMatrix(sys, x)
-    h   = genForces(sys, x)
+    M   = massMatrix(sys, x, θ)
+    h   = genForces(sys, x, θ)
     Wn  = wn(sys, x)
     Wt  = wt(sys, x)
 
     return gn, γn, γt, M, h, Wn, Wt
 end
 
+function (sys::BouncingBall)(x::Vector{T}) where {T<:Real}
+    q = x[1:2]
+    u = x[3:4]
+    return q, u
+end
+
+function (sys::BouncingBall)(model, x::Vector{T}, θ::Vector{T}, A::Matrix{T}, b::Vector{T}, sol) where {T<:Real}
+
+    q_new, v_new, λ_new = sol
+    uA = x[3:4]
+    Δcons1 = -1.0/θ[1]^2.0*index(model[:λ][1]) + 0.0
+    Δcons2 = [  1.0*(index(model[:v][1]) - uA[1])
+                1.0*(index(model[:v][2])) - 0.0*index(model[:λ][1]) - uA[2] + sys.g*sys.Δt     #∂cons2[2]/∂θm
+             ]
+
+    Δcons3 = nothing
+    Δobj   = nothing
+    if !isempty(A)
+        Δobj = -1.0/θ[1]^2.0 * λ_new[1]' * A[1,1] * (ones(Float64) *index(model[:λ][1])*index(model[:λ][1])) + 0.0
+    end
+
+    return Δcons1, Δcons2, Δcons3, Δobj
+end
+
 function setCoefficients(sys::BouncingBall, ϵn, ϵt, μ)
-    sys.ϵn[:] = ϵn
-    sys.ϵt[:] = ϵt
-    sys.μ[:]= μ
+    sys.ϵn = ϵn
+    sys.ϵt = ϵt
+    sys.μ= μ
 end
 
 function setInitial(sys::BouncingBall, x)
-    sys.x0[:] = x
+    sys.x0 = x
+end
+
+function setSysParams(sys::BouncingBall, params)
+    sys.m = params[1]
+    sys.r = params[2]
 end
 
 function gap(sys::BouncingBall, x)
@@ -64,13 +97,13 @@ function vtang(sys::BouncingBall, x)
     return Wt'*x[3:4]
 end
 
-function massMatrix(sys, x)
-    return [sys.m 0.0;
-            0.0 sys.m]
+function massMatrix(sys, x, θm)
+    return [θm[1] 0.0;
+            0.0 θm[1]]
 end
 
-function genForces(sys, x)
-    return [0.0, -sys.m*sys.g]
+function genForces(sys, x, θm)
+    return [0.0, -θm[1]*sys.g]
 end
 
 function wn(sys, x)

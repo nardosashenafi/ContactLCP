@@ -1,9 +1,10 @@
 
 module ContactLCP
 
-using JuMP, PATHSolver, Mosek, MosekTools
+using JuMP, PATHSolver, Mosek, MosekTools, DiffOpt
 using LinearAlgebra
+import ChainRulesCore, ForwardDiff
 
-include("lcp.jl")
+include("grads.jl")
 
 end # module
