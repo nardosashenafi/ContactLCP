@@ -2,10 +2,10 @@
 include("lcp.jl")
 
 function ChainRulesCore.frule((_, _), 
-    ::typeof(lcpSolve), lcp::Lcp, x::Vector{T}, θ::Vector{T}, stateNum) where {T<:Real}
+    ::typeof(lcpSolve), lcp::Lcp, x::Vector{T}, θ::Vector{T}) where {T<:Real}
 
     model = JuMP.Model(() -> DiffOpt.diff_optimizer(Mosek.Optimizer))
-    sol, A, b = lcpSolve(lcp, x, θ, stateNum, model=model)
+    sol, A, b = lcpSolve(lcp, x, θ, model=model)
 
     Δcons1, Δcons2, Δcons3, Δobj = getPerturbations(lcp, model, x, θ, A, b, sol)
     cons1 = model[:cons1]
@@ -21,7 +21,7 @@ function ChainRulesCore.frule((_, _),
         )
     end
 
-    if  !isequal(Δcons2, nothing)
+    if !isequal(Δcons2, nothing)
         MOI.set.(  
             model, 
             DiffOpt.ForwardConstraintFunction(),    
@@ -63,17 +63,16 @@ function getPerturbations(lcp::Lcp, model, x, θ, A, b, sol)
     return lcp.sys(model, x, θ, A, b, sol)   
 end
 
-function lossGrad(lcp::Lcp, S, Λ, θm::Vector{T}, stateNum, loss::Function, ∂l∂optsol::Function) where {T<:Real}
+function lossGrad(lcp::Lcp, S, Λ, θm::Vector{T}, loss::Function, ∂l∂optsol::Function, Qs::Matrix{T}, Qλ::Matrix{T}) where {T<:Real}
 
     l   = 0.0
     lg  = 0.0
 
     for i in 1:lcp.sys.totalTimeStep
-        sol1, grad1 = ChainRulesCore.frule((nothing, nothing), lcpSolve, lcp, S[i], θm, stateNum)
-        s           = sol1[1:2stateNum]
-        λ           = sol1[2*stateNum+1:end]
-        l           += loss(S[i], s, Λ[i], λ)
-        lg          += ∂l∂optsol(S[i], s, Λ[i], λ) * grad1[2stateNum+1:end]
+        sol1, grad1     = ChainRulesCore.frule((nothing, nothing), lcpSolve, lcp, S[i], θm)
+        s, λ            = unstackSol(lcp, sol1)
+        l               += loss(S[i], s, Qs, Λ[i], λ, Qλ)
+        lg              += ∂l∂optsol(S[i], s, Qs, Λ[i], λ, Qλ) * grad1
     end
 
     # loss(θm) = computeLoss(lcp, S, Λ, θm, x0, stateNum; Δt = Δt, totalTimeStep=totalTimeStep)
@@ -82,12 +81,12 @@ function lossGrad(lcp::Lcp, S, Λ, θm::Vector{T}, stateNum, loss::Function, ∂
     return l, lg
 end
 
-function checkGradient(lcp::Lcp, x1::Vector{T}, θ1::Vector{T}, θ2::Vector{T}, stateNum) where {T<:Real}
+function checkGradient(lcp::Lcp, x1::Vector{T}, θ1::Vector{T}, θ2::Vector{T}) where {T<:Real}
 
-    sol1, grad1 =  ChainRulesCore.frule((nothing, nothing), lcpSolve, lcp, x1, θ1, stateNum)
+    sol1, grad1 =  ChainRulesCore.frule((nothing, nothing), lcpSolve, lcp, x1, θ1)
     q1, v1, λ1 = (sol1[1:stateNum], sol1[stateNum+1:2stateNum], sol1[2stateNum+1:end])
 
-    sol2, grad2 =  ChainRulesCore.frule((nothing, nothing), lcpSolve, lcp, x1, θ2, stateNum)
+    sol2, grad2 =  ChainRulesCore.frule((nothing, nothing), lcpSolve, lcp, x1, θ2)
     q2, v2, λ2 = (sol2[1:stateNum], sol2[stateNum+1:2stateNum], sol2[2stateNum+1:end])
 
     finiteDiff_q = (q2 - q1) / (θ2 - θ1)

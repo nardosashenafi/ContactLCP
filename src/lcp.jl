@@ -33,6 +33,13 @@ mutable struct Lcp{T, TSYS}
     end
 end
 
+function unstackSol(lcp::Lcp, sol)
+
+    s = sol[1:lcp.sys.stateLength]
+    λ = sol[lcp.sys.stateLength+1:end]
+    return s, λ
+end
+
 #check the gap and keep track of the systems in contact
 function checkContact(lcp::Lcp, gn::Vector{T}) where {T<:Real}
      
@@ -74,7 +81,7 @@ function trimAttributes(lcp::Lcp, gn::Vector{T}, γn::Vector{T}, γt::Vector{T},
                                             [ϵn, ϵt, μ, γn, γt])
 end
 
-function lcpSolve(lcp::Lcp, x::Vector{T}, θ::Vector{T}, stateNum; model = JuMP.Model(Mosek.Optimizer)) where {T<:Real}
+function lcpSolve(lcp::Lcp, x::Vector{T}, θ::Vector{T}; model = JuMP.Model(Mosek.Optimizer)) where {T<:Real}
 
     set_silent(model)
 
@@ -89,12 +96,11 @@ function lcpSolve(lcp::Lcp, x::Vector{T}, θ::Vector{T}, stateNum; model = JuMP.
     b = lcp.Wn'*(Minv*h*lcp.sys.Δt) + (E + diagm(0 => lcp.ϵn))*lcp.γn
 
     #TODO: use env macro to directly receive state info from the system struct
-    qM = x[1:stateNum]
-    uA = x[stateNum+1:2stateNum]
+    qM, uA = lcp.sys(x)
 
     @variable(model, λ[1:lcp.total_contact_num] >= T(0.0))
-    @variable(model, v[1:stateNum])
-    @variable(model, q[1:stateNum])
+    @variable(model, v[1:length(uA)])
+    @variable(model, q[1:length(qM)])
 
     @expression(model, contactForces, [lcp.sys.contactIndex[i] == 1 ? λ[i] : T(0.0) for i in 1:lcp.total_contact_num] )
     @constraint(model,
@@ -103,8 +109,8 @@ function lcpSolve(lcp::Lcp, x::Vector{T}, θ::Vector{T}, stateNum; model = JuMP.
     )
 
     # @constraint(model,
-    #     cons2[j in 1:stateNum],
-    #     sum(M[j,i]*(v[i] - uA[i]) for i in 1:stateNum) - h[j]*Δt .== sum(Wn[j, k]*contactForces[k] for k in 1:lcp.total_contact_num)
+    #     cons2[j in 1:length(uA)],
+    #     sum(M[j,i]*(v[i] - uA[i]) for i in 1:length(uA)) - h[j]*Δt .== sum(Wn[j, k]*contactForces[k] for k in 1:lcp.total_contact_num)
     # )
 
     @constraint(model,
@@ -130,10 +136,11 @@ function oneTimeStep(lcp::Lcp, x1::Vector{T}, θ::Vector{T}) where {T<:Real}
     uA                  = x1[3:4]
     qA                  = x1[1:2]
     qM                  = qA + 0.5*lcp.sys.Δt*uA
-    stateNum=2      
+    
     x_mid               = [qM...,uA...]
-    sol, _, _           = lcpSolve(lcp, x_mid, θ, stateNum)
-    qE, uE, λn          = (sol[1:stateNum], sol[stateNum+1:2stateNum], sol[2stateNum+1:end])
+    sol, _, _           = lcpSolve(lcp, x_mid, θ)
+    s, λn               = unstackSol(lcp, sol)
+    qE, uE              = lcp.sys(s)
     return [qE...,uE...], λn
 
 end

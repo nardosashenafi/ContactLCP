@@ -12,6 +12,7 @@ mutable struct BouncingBall{T}
     gThreshold      ::T
     Δt              ::T
     totalTimeStep   ::Int64
+    stateLength     ::Int64
 
     function BouncingBall(T, Δt, totalTimeStep)
 
@@ -26,12 +27,14 @@ mutable struct BouncingBall{T}
         gThreshold      = T.(0.001)
         Δt              = Δt
         totalTimeStep   = totalTimeStep
+        stateLength     = length(x0)
 
-        new{T}(m, r, g, ϵn, ϵt, μ, x0, contactIndex, gThreshold, Δt, totalTimeStep)
+        new{T}(m, r, g, ϵn, ϵt, μ, x0, contactIndex, gThreshold, Δt, totalTimeStep, stateLength)
     end
 
 end
 
+#returns the attributes need to model contact
 function (sys::BouncingBall)(x::Vector{T}, θ::Vector{T}) where {T<:Real}
     gn  = gap(sys, x)
     γn  = vnormal(sys, x)
@@ -44,12 +47,15 @@ function (sys::BouncingBall)(x::Vector{T}, θ::Vector{T}) where {T<:Real}
     return gn, γn, γt, M, h, Wn, Wt
 end
 
+#parses out the poses and velocities from the state vector
 function (sys::BouncingBall)(x::Vector{T}) where {T<:Real}
     q = x[1:2]
     u = x[3:4]
     return q, u
 end
 
+# returns the perturbation or derivatives of the objective and constraints of the LCP optimization with respect to 
+# the learned parameters. This is passed to the ContactLCP package through the function getPerturbations()
 function (sys::BouncingBall)(model, x::Vector{T}, θ::Vector{T}, A::Matrix{T}, b::Vector{T}, sol) where {T<:Real}
 
     q_new, v_new, λ_new = sol
