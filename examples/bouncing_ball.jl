@@ -16,7 +16,7 @@ struct BouncingBall{T}
         m               = T(0.21)
         r               = T(0.1)
         g               = T(9.81)
-        ϵn              = T.(0.9*ones(1))
+        ϵn              = T.(0.5*ones(1))
         ϵt              = T.(-0.5*ones(1))
         μ               = T.(0.2*ones(1))
         x0              = T.([0.0, 0.5, 0.1, -0.1])     #xpos, ypos, xdot, ydot
