@@ -91,11 +91,10 @@ function lcpSolve(lcp::Lcp, x::Vector{T}, θ::Vector{T}; model = JuMP.Model(Mose
 
     E = Matrix{T}(I, lcp.current_contact_num, lcp.current_contact_num)
 
-    Minv = inv(M)
+    Minv = inv(lcp.M)
     A = lcp.Wn'*(Minv*lcp.Wn)
-    b = lcp.Wn'*(Minv*h*lcp.sys.Δt) + (E + diagm(0 => lcp.ϵn))*lcp.γn
+    b = lcp.Wn'*(Minv*lcp.h*lcp.sys.Δt) + (E + diagm(0 => lcp.ϵn))*lcp.γn
 
-    #TODO: use env macro to directly receive state info from the system struct
     qM, uA = lcp.sys(x)
 
     @variable(model, λ[1:lcp.total_contact_num] >= T(0.0))
@@ -107,11 +106,6 @@ function lcpSolve(lcp::Lcp, x::Vector{T}, θ::Vector{T}; model = JuMP.Model(Mose
         cons1,
         A*λ[lcp.sys.contactIndex .== 1] .+ b .>= T(0.0)
     )
-
-    # @constraint(model,
-    #     cons2[j in 1:length(uA)],
-    #     sum(M[j,i]*(v[i] - uA[i]) for i in 1:length(uA)) - h[j]*Δt .== sum(Wn[j, k]*contactForces[k] for k in 1:lcp.total_contact_num)
-    # )
 
     @constraint(model,
         cons2,
