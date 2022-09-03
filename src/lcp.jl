@@ -85,9 +85,9 @@ function lcpSolve(lcp::Lcp, x::Vector{T}, θ::Vector{T}; model = JuMP.Model(Mose
 
     set_silent(model)
 
-    gn, γn, γt, M, h, Wn, Wt = setSysAttributes(lcp, x, θ)
-    checkContact(lcp, gn)
-    trimAttributes(lcp, gn, γn, γt, M, h, Wn, Wt)
+    gn, γn, γt, M, h, Wn, Wt = ContactLCP.setSysAttributes(lcp, x, θ)
+    ContactLCP.checkContact(lcp, gn)
+    ContactLCP.trimAttributes(lcp, gn, γn, γt, M, h, Wn, Wt)
 
     E = Matrix{T}(I, lcp.current_contact_num, lcp.current_contact_num)
 

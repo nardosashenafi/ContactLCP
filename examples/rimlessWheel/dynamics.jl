@@ -32,7 +32,7 @@ mutable struct RimlessWheel{T}
         l2              = 0.05
         g               = T(9.81)
         α               = T(360.0/10.0/2.0 * pi/180.0)
-        γ               = T(10.0*pi/180.0)
+        γ               = T(0.0*pi/180.0)
         ϵn              = T.(0.0*ones(1))
         ϵt              = T.(-0.5*ones(1))
         μ               = T.(0.2*ones(1))
@@ -89,9 +89,9 @@ function (sys::RimlessWheel)(model, x::Vector{T}, θ::Vector{T}, A::Matrix{T}, b
 end
 
 function setCoefficients(sys::RimlessWheel, ϵn, ϵt, μ)
-    sys.ϵn = ϵn
-    sys.ϵt = ϵt
-    sys.μ= μ
+    sys.ϵn  = ϵn
+    sys.ϵt  = ϵt
+    sys.μ   = μ
 end
 
 function setInitial(sys::RimlessWheel, x)
@@ -99,7 +99,9 @@ function setInitial(sys::RimlessWheel, x)
 end
 
 function gap(sys::RimlessWheel, x)
-    return [sys.l1*(1-cos(x[2]))]
+    return [sys.l1*cos(x[2]) - sys.l1*cos(2sys.α - abs(x[2]))] #l1cos(θ) - l1*cos(2α - |θ|)
+    # return [sys.l1*(1 - cos(x[2]))]
+    # return [0.0]
 end
 
 function vnormal(sys::RimlessWheel, x)
@@ -124,10 +126,10 @@ function control(x, θ)
     return 0
 end
 
-function genForces(sys, x, θ)
+function genForces(sys, x, param)
     q, u = sys(x)
     ϕ, θ = q[1:2]
-    #Bu - C qdot - G
+    #h = Bu - C qdot - G
     B = [-1, 1] 
     C = sys.m2*sys.l1*sys.l2*sin(θ - ϕ)*[0.0 -u[1];
                                         u[2] 0.0]
@@ -135,11 +137,15 @@ function genForces(sys, x, θ)
     G = sys.g*[-sys.mt*sys.l1*sin(θ - sys.γ),
                 sys.m2*sys.l2*sin(ϕ - sys.γ)]
 
-    return B*control(x, θ) - C*u - G
+    return B*control(x, param) - C*u - G
 end
 
 function wn(sys, x)
-    return permutedims(hcat([0.0, sys.l1*sin(x[2])]...))
+    sgn = sign(x[4])
+    return permutedims(hcat([0.0, -sys.l1*sin(x[2]) + sys.l1*sin(2sys.α + x[2])]...))
+    # return permutedims(hcat([0.0, -sys.l1*sin(x[2]) + sys.l1*sin(2sys.α + x[2])]...))
+    # return permutedims(hcat([0.0, sys.l1*sin(x[2])]...))
+    # return permutedims(hcat([0.0, 1.0]...))
 end
 
 function wt(sys, x)
