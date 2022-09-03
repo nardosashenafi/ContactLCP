@@ -1,2 +1,3 @@
 # ContactLCP
-This repository contains a julia package that resolves contacts and Coulomb friction via Linear Complementarity Problem 
+This repository contains a Julia package that resolves contacts via Linear Complementarity Problem(LCP). Moreover, one can learn system and/or control parameters through the LCP. 
+
