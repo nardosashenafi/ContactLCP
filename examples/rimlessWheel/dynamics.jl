@@ -123,7 +123,7 @@ function massMatrix(sys, x)
 end
 
 function control(x, θ)
-    return 0
+    return 0.0 # 10.0*(x[1]-0.25) + 7.0*x[3]
 end
 
 function genForces(sys, x, param)
@@ -182,4 +182,5 @@ function plots(Z, t, Λn)
     plot(getindex.(Z,2), getindex.(Z,4))
     xlabel(L"$\theta$", fontsize=15)
     ylabel(L"$\dot{\theta}$", fontsize=15)
+    fig2.set_tight_layout(true)
 end
