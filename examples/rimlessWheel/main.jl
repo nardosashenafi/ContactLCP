@@ -1,10 +1,11 @@
 using ContactLCP
+ENV["MPLBACKEND"]="tkagg"
 using LaTeXStrings, PyPlot
 using JuMP, LinearAlgebra
 
 include("dynamics.jl")
 
-Δt = 0.001; totalTimeStep = 300
+Δt = 0.001; totalTimeStep = 600
 θ0 = Float64[0.2]
 
 
@@ -70,9 +71,12 @@ function ContactLCP.fulltimestep(lcp::ContactLCP.Lcp, x0::Vector{T}, θ::Vector{
        
         x, λn = ContactLCP.oneTimeStep(lcp, x, Float64[])
         if λn[1] > 0.0 
-            x = deepcopy(X[end])
+            #  x = deepcopy(X[end])
+            #  x[2] = -x[2]
+            #  x, λn = ContactLCP.oneTimeStep(lcp, x, Float64[])
             x[2] = -x[2]
-            x, λn = ContactLCP.oneTimeStep(lcp, x, Float64[])
+            x[3] = -x[3]
+            x[4] = -x[4]
         end
         x = wrapPendulum(x)
         push!(X, x)

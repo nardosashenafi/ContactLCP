@@ -33,7 +33,7 @@ mutable struct RimlessWheel{T}
         g               = T(9.81)
         α               = T(360.0/10.0/2.0 * pi/180.0)
         γ               = T(0.0*pi/180.0)
-        ϵn              = T.(0.0*ones(1))
+        ϵn              = T.(0.97826*ones(1))
         ϵt              = T.(-0.5*ones(1))
         μ               = T.(0.2*ones(1))
         x0              = T.([0.0, 0.5, 0.1, -0.1])     #ϕ, θ, ϕdot, θdot
@@ -178,5 +178,8 @@ function plots(Z, t, Λn)
     plot(t[2:end], getindex.(Λn, 1))
     ticklabel_format(axis="y", style="sci",scilimits=(0,0))
     ylabel(L"$\lambda_{n1} [N]$", fontsize=15)
-
+    subplot(2,1,2)
+    plot(getindex.(Z,2), getindex.(Z,4))
+    xlabel(L"$\theta$", fontsize=15)
+    ylabel(L"$\dot{\theta}$", fontsize=15)
 end
