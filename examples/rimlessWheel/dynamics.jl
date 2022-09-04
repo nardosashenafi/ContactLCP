@@ -99,9 +99,18 @@ function setInitial(sys::RimlessWheel, x)
 end
 
 function gap(sys::RimlessWheel, x)
-    return [sys.l1*cos(x[2]) - sys.l1*cos(2sys.α - abs(x[2]))] #l1cos(θ) - l1*cos(2α - |θ|)
+    if x[2] < 0.0
+        return [sys.l1*cos(x[2]) - sys.l1*cos(2sys.α + x[2])] #l1cos(θ) - l1*cos(2α - |θ|)
+    else 
+        return [sys.l1*cos(x[2]) - sys.l1*cos(2sys.α - x[2])] #l1cos(θ) - l1*cos(2α - |θ|)
+    end
+    # return [sys.l1*cos(x[2]) - sys.l1*cos(2sys.α - abs(x[2]))] #l1cos(θ) - l1*cos(2α - |θ|)
     # return [sys.l1*(1 - cos(x[2]))]
     # return [0.0]
+end
+
+function gap2(sys::RimlessWheel, x)
+    return [sys.l1*cos(x[2]) - sys.l1*cos(2sys.α - x[2])] #l1cos(θ) - l1*cos(2α - |θ|)
 end
 
 function vnormal(sys::RimlessWheel, x)
@@ -142,10 +151,20 @@ end
 
 function wn(sys, x)
     sgn = sign(x[4])
-    return permutedims(hcat([0.0, -sys.l1*sin(x[2]) + sys.l1*sin(2sys.α + x[2])]...))
+
+    if x[2] < 0.0
+        return permutedims(hcat([0.0, -sys.l1*sin(x[2]) + sys.l1*sin(2sys.α + x[2])]...))
+    else
+        return permutedims(hcat([0.0, -sys.l1*sin(x[2]) - sys.l1*sin(2sys.α - x[2])]...))
+    end
+    # return permutedims(hcat([0.0, -sys.l1*sin(x[2]) + sys.l1*sin(2sys.α + x[2])]...))
     # return permutedims(hcat([0.0, -sys.l1*sin(x[2]) + sys.l1*sin(2sys.α + x[2])]...))
     # return permutedims(hcat([0.0, sys.l1*sin(x[2])]...))
     # return permutedims(hcat([0.0, 1.0]...))
+end
+
+function wn2(sys, x)
+    return permutedims(hcat([0.0, -sys.l1*sin(x[2]) - sys.l1*sin(2sys.α - x[2])]...))
 end
 
 function wt(sys, x)

@@ -135,6 +135,16 @@ function oneTimeStep(lcp::Lcp, x1::Vector{T}, θ::Vector{T}) where {T<:Real}
     sol, _, _           = lcpSolve(lcp, x_mid, θ)
     s, λn               = unstackSol(lcp, sol)
     qE, uE              = lcp.sys(s)
+
+    # Does not seem to work well...
+    if λn[1] > 0.0 
+        x_mid_jump = deepcopy(x_mid)
+        x_mid_jump[2] = -x_mid_jump[2]
+        sol, _, _           = lcpSolve(lcp, x_mid_jump, θ)
+        s, _                = unstackSol(lcp, sol)
+        qE, uE              = lcp.sys(s)
+    end
+
     return [qE...,uE...], λn
 
 end
