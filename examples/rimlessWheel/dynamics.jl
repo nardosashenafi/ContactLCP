@@ -109,10 +109,6 @@ function gap(sys::RimlessWheel, x)
     # return [0.0]
 end
 
-function gap2(sys::RimlessWheel, x)
-    return [sys.l1*cos(x[2]) - sys.l1*cos(2sys.α - x[2])] #l1cos(θ) - l1*cos(2α - |θ|)
-end
-
 function vnormal(sys::RimlessWheel, x)
     Wn = wn(sys, x)
     _, u = sys(x)
@@ -127,24 +123,28 @@ end
 
 function massMatrix(sys, x)
     ϕ, θ = x[1:2]
-    return [sys.I1 + sys.mt*sys.l1^2 -sys.m2*sys.l1*sys.l2*cos(θ - ϕ);
-            -sys.m2*sys.l1*sys.l2*cos(θ - ϕ) sys.I2 + sys.m2*sys.l2^2]
+    # return [sys.I1 + sys.mt*sys.l1^2 -sys.m2*sys.l1*sys.l2*cos(θ - ϕ);
+    #         -sys.m2*sys.l1*sys.l2*cos(θ - ϕ) sys.I2 + sys.m2*sys.l2^2]
+    return [
+            sys.I2 + sys.m2*sys.l2^2 -sys.m2*sys.l1*sys.l2*cos(θ - ϕ);
+            -sys.m2*sys.l1*sys.l2*cos(θ - ϕ) sys.I1 + sys.mt*sys.l1^2
+           ]
 end
 
 function control(x, θ)
-    return 0.0 # 10.0*(x[1]-0.25) + 7.0*x[3]
+    return -100.0*(x[1]-0.275) - 10.0*x[3]
 end
 
 function genForces(sys, x, param)
     q, u = sys(x)
     ϕ, θ = q[1:2]
     #h = Bu - C qdot - G
-    B = [-1, 1] 
-    C = sys.m2*sys.l1*sys.l2*sin(θ - ϕ)*[0.0 -u[1];
-                                        u[2] 0.0]
+    B = [1, -1] 
+    C = sys.m2*sys.l1*sys.l2*sin(θ - ϕ)*[0.0 u[2];
+                                         -u[1] 0.0]
 
-    G = sys.g*[-sys.mt*sys.l1*sin(θ - sys.γ),
-                sys.m2*sys.l2*sin(ϕ - sys.γ)]
+    G = sys.g*[sys.m2*sys.l2*sin(ϕ - sys.γ),
+               -sys.mt*sys.l1*sin(θ - sys.γ)]
 
     return B*control(x, param) - C*u - G
 end
@@ -161,10 +161,6 @@ function wn(sys, x)
     # return permutedims(hcat([0.0, -sys.l1*sin(x[2]) + sys.l1*sin(2sys.α + x[2])]...))
     # return permutedims(hcat([0.0, sys.l1*sin(x[2])]...))
     # return permutedims(hcat([0.0, 1.0]...))
-end
-
-function wn2(sys, x)
-    return permutedims(hcat([0.0, -sys.l1*sin(x[2]) - sys.l1*sin(2sys.α - x[2])]...))
 end
 
 function wt(sys, x)
