@@ -33,7 +33,7 @@ mutable struct RimlessWheel{T}
         g               = T(9.81)
         α               = T(360.0/10.0/2.0 * pi/180.0)
         γ               = T(0.0*pi/180.0)
-        ϵn              = T.(0.97826*ones(1))
+        ϵn              = T.(0.8379*ones(1))
         ϵt              = T.(-0.5*ones(1))
         μ               = T.(0.2*ones(1))
         x0              = T.([0.0, 0.5, 0.1, -0.1])     #ϕ, θ, ϕdot, θdot
@@ -132,7 +132,8 @@ function massMatrix(sys, x)
 end
 
 function control(x, θ)
-    return -100.0*(x[1]-0.275) - 10.0*x[3]
+    return 0.0
+    # return -100.0*(x[1]-0.275) - 10.0*x[3]
 end
 
 function genForces(sys, x, param)

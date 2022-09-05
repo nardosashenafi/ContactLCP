@@ -12,7 +12,7 @@ include("dynamics.jl")
 sys  = RimlessWheel(Float64, Δt, totalTimeStep)
 lcp  = ContactLCP.Lcp(Float64, sys, θ0)
 # x0 = [lcp.sys.γ, 0.1, 0.0, -2.0 ]
-x0 = [0.25, 0.1, 0.0, -2.0]
+x0 = [1.0, 0.1, 0.0, -2.0]
 
 function wrapPendulum(x)
     x[1] = atan(tan(x[1]))
@@ -72,13 +72,12 @@ function ContactLCP.fulltimestep(lcp::ContactLCP.Lcp, x0::Vector{T}, θ::Vector{
        
         xpost, λn = ContactLCP.oneTimeStep(lcp, x, Float64[])
         if λn[1] > 0.0 
-            # x = deepcopy(X[end])
-            # x[2] = -x[2]
-            # x, λn = ContactLCP.oneTimeStep(lcp, x, Float64[])
+            # xpost = deepcopy(X[end])
+            # xpost[2] = -xpost[2]
+            # xpost, λn = ContactLCP.oneTimeStep(lcp, xpost, Float64[])
 
-            #  xpost[2] = -xpost[2]
-            #  xpost[3] = -xpost[3]
-            #  xpost[4] = -xpost[4]
+            # xpost[2] = -xpost[2]
+            # xpost[4] = -xpost[4]
 
             # Complete algorithm hi-jacking
             xpost[2] = -xpost[2]
