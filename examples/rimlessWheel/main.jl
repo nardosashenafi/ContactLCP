@@ -5,19 +5,15 @@ using JuMP, LinearAlgebra
 
 include("dynamics.jl")
 
-Δt = 0.001; totalTimeStep = 3000 
+Δt = 0.001; totalTimeStep = 6000 
 θ0 = Float64[0.2]
 
 
 sys  = RimlessWheel(Float64, Δt, totalTimeStep)
 lcp  = ContactLCP.Lcp(Float64, sys, θ0)
 # x0 = [lcp.sys.γ, 0.1, 0.0, -2.0 ]
-x0 = [1.0, 0.1, 0.0, -2.0]
+x0 = [0.35, 0.1, 0.0, -2.0]
 
-function wrapPendulum(x)
-    x[1] = atan(tan(x[1]))
-    return x
-end
 
 function wrapWheel(lcp::ContactLCP.Lcp, x, λn)
 
@@ -76,15 +72,14 @@ function ContactLCP.fulltimestep(lcp::ContactLCP.Lcp, x0::Vector{T}, θ::Vector{
             # xpost[2] = -xpost[2]
             # xpost, λn = ContactLCP.oneTimeStep(lcp, xpost, Float64[])
 
-            # xpost[2] = -xpost[2]
-            # xpost[4] = -xpost[4]
-
-            # Complete algorithm hi-jacking
             xpost[2] = -xpost[2]
-            xpost[3:4] = impactMap(sys, x[1])*x[3:4]
+            xpost[4] = -xpost[4]
+
+            # # Complete algorithm hi-jacking
+            # xpost[2] = -xpost[2]
+            # xpost[3:4] = impactMap(sys, x[1])*x[3:4]
         end
         x = deepcopy(xpost)
-        # x = wrapPendulum(x)
         push!(X, x)
         push!(Λn, λn)
         push!(t, t[end]+lcp.sys.Δt)
