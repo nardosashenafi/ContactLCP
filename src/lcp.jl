@@ -125,9 +125,7 @@ end
 
 function oneTimeStep(lcp::Lcp, x1::Vector{T}, θ::Vector{T}) where {T<:Real}
 
-    #TODO: replace with getstate
-    uA                  = x1[3:4]
-    qA                  = x1[1:2]
+    qA, uA              = lcp.sys(x1)
     qM                  = qA + 0.5*lcp.sys.Δt*uA
     
     x_mid               = [qM...,uA...]
