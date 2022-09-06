@@ -123,7 +123,8 @@ function massMatrix(sys, x)
 end
 
 function control(x, θ)
-    return 0
+    # return 0
+    return -100.0*(x[2]-0.2665) - 20.0*x[4]
 end
 
 function genForces(sys, x, param)
@@ -173,11 +174,46 @@ function wt(sys, x)
     return permutedims(hcat([sys.l1*cos(x[2]), 0.0]...))
 end
 
-function plotRimless(sys, Z)
+function plotRimless(sys, X)
 
+    θ = getindex.(X, 1)
+    ϕ = getindex.(X, 2)
+    θdot = getindex.(X, 3)
+    ϕdot = getindex.(X, 4)
+
+    fig = figure("MyFigure",figsize=(1,1))
+    ax = plt.axes(xlim = (-7,7),ylim=(0,2))
+
+    #plane
+    planeLength = 1
+    planex = [-planeLength/2, planeLength/2]
+    planey = [0.0, planeLength * sin(sys.γ)]
+
+
+    x1(θ) = 0.0
+    y1(θ) = tan(sys.γ) ./ (planeLength/2.0)  
+
+    # x2(θ) = x1(θ) + sys.l1*sin(θ - sys.γ)
+    x2(θ) = x1(θ) + sys.l1*sin(-θ)
+    y2(θ) = y1(θ) + sys.l1*cos(θ)
+
+    step = 10
+
+    function animate(i)
+        clf()
+        x_spoke = [x1(θ[step*i+1]), x2(θ[step*i+1])]
+        y_spoke = [y1(θ[step*i+1]), y2(θ[step*i+1])]
+        plot(planex, planey)
+        plot(x_spoke,y_spoke)
+    end
+
+    myanim = anim.FuncAnimation(fig, animate, frames=length(X)-1)
+    plt.show()
+    # myanim[:save]("animation.gif", writer="PillowWriter", fps=2)
+    # display("text/html", html_video("test1.mp4"))
 end
 
-function plots(Z, t, Λn)
+function plots(Z, t)
     fig1 = plt.figure()
     fig1.clf()
     subplot(2, 2, 1)
@@ -197,11 +233,6 @@ function plots(Z, t, Λn)
 
     fig2 = plt.figure()
     fig2.clf()
-    subplot(2, 1, 1)
-    plot(t[2:end], getindex.(Λn, 1))
-    ticklabel_format(axis="y", style="sci",scilimits=(0,0))
-    ylabel(L"$\lambda_{n1} [N]$", fontsize=15)
-    subplot(2, 1, 2)
     plot(getindex.(Z, 1), getindex.(Z, 3))
     ticklabel_format(axis="y", style="sci",scilimits=(0,0))
     ylabel(L"$\dot{\theta}$", fontsize=15)

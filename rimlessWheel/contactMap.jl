@@ -58,48 +58,6 @@ function setSysAttributes(cm, x::Vector{T}, θ::Vector{T}) where {T<:Real}
     return cm.sys(x, θ)
 end
 
-function cmSolve(cm::ContactMap, x::Vector{T}, θ::Vector{T}; model = JuMP.Model(Mosek.Optimizer)) where {T<:Real}
-
-    set_silent(model)
-    gn, γn, γt, M, h, Wn, Wt = setSysAttributes(cm, x, θ)
-    checkContact(cm, gn)
-    trimAttributes(cm, gn, γn, γt, M, h, Wn, Wt)
-
-    E = Matrix{T}(I, cm.current_contact_num, cm.current_contact_num)
-
-    Minv = inv(cm.M)
-    A = cm.Wn'*(Minv*cm.Wn)
-    b = cm.Wn'*(Minv*cm.h*cm.sys.Δt) + (E + diagm(0 => cm.ϵn))*cm.γn
-
-    qM, uA = cm.sys(x)
-
-    @variable(model, λ[1:cm.total_contact_num] >= T(0.0))
-    @variable(model, v[1:length(uA)])
-    @variable(model, q[1:length(qM)])
-
-    @expression(model, contactForces, [cm.sys.contactIndex[i] == 1 ? λ[i] : T(0.0) for i in 1:cm.total_contact_num] )
-    @constraint(model,
-        cons1,
-        A*λ[cm.sys.contactIndex .== 1] .+ b .>= T(0.0)
-    )
-
-    @constraint(model,
-        cons2,
-        M*(v - uA) - h*cm.sys.Δt .== Wn*contactForces
-    )
-
-    @constraint(model, 
-        cons3, 
-        q .== qM + 0.5*cm.sys.Δt*v
-    )
-
-    @objective(model, Min, dot(A*λ[cm.sys.contactIndex .== 1] .+ b, λ[cm.sys.contactIndex .== 1]))
-
-    optimize!(model) 
-
-   return vcat(JuMP.value.(q), JuMP.value.(v), JuMP.value.(λ)), A, b
-end
-
 function oneTimeStep(cm::ContactMap, x1::Vector{T}, θ::Vector{T}) where {T<:Real}
 
     uA                  = x1[3:4]
@@ -111,18 +69,25 @@ function oneTimeStep(cm::ContactMap, x1::Vector{T}, θ::Vector{T}) where {T<:Rea
     gn, γn, γt, M, h, Wn, Wt = setSysAttributes(cm, x_mid, θ)
     checkContact(cm, gn)
 
-    if any(cm.sys.contactIndex .== 1)
+    if any(cm.sys.contactIndex .== 1) && any(vnormal(cm.sys, x_mid) .< 0.0)
 
+        ϕ = x_mid[2]
         Ξ = impactMap(sys, ϕ)
         uE = Ξ*uA
+        println("Preimpact KE = ", uA'*cm.M*uA, " postimpact KE = ", uE'*cm.M*uE)
         #switch θ to the next spoke
-        qM[1] = -qM[1]
-        qE .== qM + 0.5*cm.sys.Δt*uE
+        # qM[1] = 2*cm.sys.α-qM[1]
+        if uA[1] < 0.0
+            qM[1] = cm.sys.α
+        elseif uA[1] > 0.0
+            qM[1] = -cm.sys.α
+        end
+        qE = qM + 0.5*cm.sys.Δt*uE
 
     else
 
         uE = inv(M)*(h*cm.sys.Δt) + uA
-        qE .== qM + 0.5*cm.sys.Δt*uE
+        qE = qM + 0.5*cm.sys.Δt*uE
 
     end
     
@@ -132,9 +97,8 @@ end
 
 function fulltimestep(cm::ContactMap, x0::Vector{T}, θ::Vector{T}) where {T<:Real}
 
-    X       = Vector{Vector{Float64}}()
-    Λn      = Vector{Vector{Float64}}()
-    t       = Vector{T}()
+    X    = Vector{Vector{Float64}}()
+    t    = Vector{T}()
 
     if isempty(x0)
         x = deepcopy(cm.sys.x0)
@@ -142,15 +106,14 @@ function fulltimestep(cm::ContactMap, x0::Vector{T}, θ::Vector{T}) where {T<:Re
         x = deepcopy(x0)
     end
 
-    X       = push!(X, x)
-    t       = push!(t, T(0.0))
+    X  = push!(X, x)
+    t  = push!(t, T(0.0))
 
     for i in 1:cm.sys.totalTimeStep
-        x, λn = oneTimeStep(cm, x, θ)
+        x = oneTimeStep(cm, x, θ)
         push!(X, x)
-        push!(Λn, λn)
         push!(t, t[end]+cm.sys.Δt)
     end
 
-    return X, t, Λn
+    return X, t
 end
