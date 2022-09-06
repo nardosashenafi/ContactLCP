@@ -54,11 +54,11 @@ function checkContact(cm::ContactMap, gn::Vector{T}) where {T<:Real}
     cm.current_contact_num = sum(cm.sys.contactIndex)
 end
 
-function setSysAttributes(cm, x::Vector{T}, θ::Vector{T}) where {T<:Real}
+function setSysAttributes(cm, x, θ::Vector{T}) where {T<:Real}
     return cm.sys(x, θ)
 end
 
-function oneTimeStep(cm::ContactMap, x1::Vector{T}, θ::Vector{T}) where {T<:Real}
+function oneTimeStep(cm::ContactMap, x1, θ::Vector{T}) where {T<:Real}
 
     uA                  = x1[3:4]
     qA                  = x1[1:2]
@@ -74,7 +74,7 @@ function oneTimeStep(cm::ContactMap, x1::Vector{T}, θ::Vector{T}) where {T<:Rea
         ϕ = x_mid[2]
         Ξ = impactMap(sys, ϕ)
         uE = Ξ*uA
-        println("Preimpact KE = ", uA'*cm.M*uA, " postimpact KE = ", uE'*cm.M*uE)
+        # println("Preimpact KE = ", uA'*cm.M*uA, " postimpact KE = ", uE'*cm.M*uE)
         #switch θ to the next spoke
         # qM[1] = 2*cm.sys.α-qM[1]
         if uA[1] < 0.0
@@ -95,9 +95,9 @@ function oneTimeStep(cm::ContactMap, x1::Vector{T}, θ::Vector{T}) where {T<:Rea
 
 end
 
-function fulltimestep(cm::ContactMap, x0::Vector{T}, θ::Vector{T}) where {T<:Real}
+function fulltimestep(cm::ContactMap, x0, θ::Vector{T}) where {T<:Real}
 
-    X    = Vector{Vector{Float64}}()
+    X    = Vector{Vector{T}}()
     t    = Vector{T}()
 
     if isempty(x0)

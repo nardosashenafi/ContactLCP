@@ -49,8 +49,8 @@ mutable struct RimlessWheel{T}
 end
 
 #returns the attributes need to model contact
-function (sys::RimlessWheel)(x::Vector{T}, θ::Vector{T}) where {T<:Real}
-    gn  = gap(sys, x)
+function (sys::RimlessWheel)(x::Vector{T}, θ) where {T<:Real}
+    gn  = gap(sys, x)  
     γn  = vnormal(sys, x)
     γt  = vtang(sys, x)
     M   = massMatrix(sys, x)
@@ -70,7 +70,7 @@ end
 
 # returns the perturbation or derivatives of the objective and constraints of the LCP optimization with respect to 
 # the learned parameters. This is passed to the ContactLCP package through the function getPerturbations()
-function (sys::RimlessWheel)(model, x::Vector{T}, θ::Vector{T}, A::Matrix{T}, b::Vector{T}, sol) where {T<:Real}
+function (sys::RimlessWheel)(model, x, θ::Vector{T}, A, b, sol) where {T<:Real}
 
     q_new, v_new, λ_new = sol
     uA = x[3:4]
@@ -124,7 +124,7 @@ end
 
 function control(x, θ)
     # return 0
-    return -100.0*(x[2]-0.2665) - 20.0*x[4]
+    return -θ[1]*(x[2]-0.3) - θ[2]*x[4]
 end
 
 function genForces(sys, x, param)
