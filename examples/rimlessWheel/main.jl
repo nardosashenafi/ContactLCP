@@ -5,7 +5,7 @@ using JuMP, LinearAlgebra
 
 include("dynamics.jl")
 
-Δt = 0.001; totalTimeStep = 6000 
+Δt = 0.001; totalTimeStep = 1500 
 θ0 = Float64[0.2]
 
 

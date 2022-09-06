@@ -132,8 +132,8 @@ function massMatrix(sys, x)
 end
 
 function control(x, θ)
-    # return 0.0
-    return -100.0*(x[1]-0.35) - 10.0*x[3]
+    return 0.0
+    # return -100.0*(x[1]-0.35) - 10.0*x[3]
 end
 
 function genForces(sys, x, param)
