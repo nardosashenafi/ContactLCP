@@ -36,7 +36,7 @@ mutable struct RimlessWheel{T}
         ϵn              = T.(0.0*ones(1))
         ϵt              = T.(-0.5*ones(1))
         μ               = T.(0.2*ones(1))
-        x0              = T.([0.0, 0.5, 0.1, -0.1])     #ϕ, θ, ϕdot, θdot
+        x0              = T.([0.0, 0.0, -0.1, 0.0])     #θ, ϕ, θdot, ϕdot
         contactIndex    = zeros(T, 1)
         gThreshold      = T.(0.001)
         Δt              = Δt
@@ -99,7 +99,7 @@ function setInitial(sys::RimlessWheel, x)
 end
 
 function gap(sys::RimlessWheel, x)
-    return [sys.l1*cos(x[2]) - sys.l1*cos(2sys.α - abs(x[2]))] #l1cos(θ) - l1*cos(2α - |θ|)
+    return [sys.l1*cos(x[1]) - sys.l1*cos(2sys.α - abs(x[1]))] #l1cos(θ) - l1*cos(2α - |θ|)
     # return [sys.l1*(1 - cos(x[2]))]
     # return [0.0]
 end
@@ -117,7 +117,7 @@ function vtang(sys::RimlessWheel, x)
 end
 
 function massMatrix(sys, x)
-    ϕ, θ = x[1:2]
+    θ, ϕ = x[1:2]
     return [sys.I1 + sys.mt*sys.l1^2 -sys.m2*sys.l1*sys.l2*cos(θ - ϕ);
             -sys.m2*sys.l1*sys.l2*cos(θ - ϕ) sys.I2 + sys.m2*sys.l2^2]
 end
@@ -128,11 +128,11 @@ end
 
 function genForces(sys, x, param)
     q, u = sys(x)
-    ϕ, θ = q[1:2]
+    θ, ϕ = q[1:2]
     #h = Bu - C qdot - G
     B = [-1, 1] 
-    C = sys.m2*sys.l1*sys.l2*sin(θ - ϕ)*[0.0 -u[1];
-                                        u[2] 0.0]
+    C = sys.m2*sys.l1*sys.l2*sin(θ - ϕ)*[0.0 -u[2];
+                                        u[1] 0.0]
 
     G = sys.g*[-sys.mt*sys.l1*sin(θ - sys.γ),
                 sys.m2*sys.l2*sin(ϕ - sys.γ)]
@@ -141,15 +141,14 @@ function genForces(sys, x, param)
 end
 
 function wn(sys, x)
-    sgn = sign(x[4])
-    return permutedims(hcat([0.0, -sys.l1*sin(x[2]) + sys.l1*sin(2sys.α + x[2])]...))
-    # return permutedims(hcat([0.0, -sys.l1*sin(x[2]) + sys.l1*sin(2sys.α + x[2])]...))
-    # return permutedims(hcat([0.0, sys.l1*sin(x[2])]...))
-    # return permutedims(hcat([0.0, 1.0]...))
+    sgn = sign(x[1])
+    # return permutedims(hcat([0.0, -sys.l1*sin(x[1]) + sys.l1*sin(2sys.α + x[1])]...))
+    return permutedims(hcat([-sys.l1*sin(x[1]) - sgn*sys.l1*sin(2sys.α - abs(x[1])), 0.0]...))
+    # return permutedims(hcat([sys.l1*sin(x[1]), 0.0]...))
 end
 
 function wt(sys, x)
-    return permutedims(hcat([0.0, sys.l1*cos(x[2])]...))
+    return permutedims(hcat([sys.l1*cos(x[2]), 0.0]...))
 end
 
 function plotRimless(sys, Z)
@@ -161,16 +160,18 @@ function plots(Z, t, Λn)
     fig1.clf()
     subplot(2, 2, 1)
     plot(t, getindex.(Z, 1))
-    ylabel(L"$\phi$", fontsize=15)
+    ylabel(L"$\theta$", fontsize=15)
     subplot(2, 2, 2)
     plot(t, getindex.(Z, 2))
-    ylabel(L"$\theta$", fontsize=15)
+    ylabel(L"$\phi$", fontsize=15)
     subplot(2, 2, 3)
     plot(t, getindex.(Z, 3))
-    ylabel(L"$\dot{\phi}$", fontsize=15)
+    ylabel(L"$\dot{\theta}$", fontsize=15)
     subplot(2, 2, 4)
     plot(t, getindex.(Z, 4))
-    ylabel(L"$\dot{\theta}$", fontsize=15)
+    ylabel(L"$\dot{\phi}$", fontsize=15)
+
+
 
     fig2 = plt.figure()
     fig2.clf()
@@ -178,5 +179,10 @@ function plots(Z, t, Λn)
     plot(t[2:end], getindex.(Λn, 1))
     ticklabel_format(axis="y", style="sci",scilimits=(0,0))
     ylabel(L"$\lambda_{n1} [N]$", fontsize=15)
+    subplot(2, 1, 2)
+    plot(getindex.(Z, 1), getindex.(Z, 3))
+    ticklabel_format(axis="y", style="sci",scilimits=(0,0))
+    ylabel(L"$\dot{\theta}$", fontsize=15)
+    xlabel(L"$\theta$", fontsize=15)
 
 end

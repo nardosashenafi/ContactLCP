@@ -4,27 +4,28 @@ using JuMP, LinearAlgebra
 
 include("dynamics.jl")
 
-Δt = 0.001; totalTimeStep = 300
+Δt = 0.001; totalTimeStep = 1000
 θ0 = Float64[0.2]
 
 
 sys  = RimlessWheel(Float64, Δt, totalTimeStep)
 lcp  = ContactLCP.Lcp(Float64, sys, θ0)
-x0 = [lcp.sys.γ, 0.2, 0.0, -2.0 ]
-
-function wrapPendulum(x)
-    x[1] = atan(tan(x[1]))
-    return x
-end
+x0 = [0.2, lcp.sys.γ, -2.0, 0.0]
+# x0 = [ -0.30789577861891354
+#         0.01870418704031956
+#         -2.456690235734249
+#         -0.7132542703022284]
 
 function wrapWheel(lcp::ContactLCP.Lcp, x, λn)
 
-    if (x[2] >= lcp.sys.α )   #moving backwards
+    threshold = 0.0051
+
+    if (x[1] >= lcp.sys.α - threshold) && (x[3] > 0.0)   #moving backwards
         println("switching forward")
-        x[2] = -lcp.sys.α
-    elseif (x[2] <= -lcp.sys.α )   #moving forward
+        x[1] = -lcp.sys.α 
+    elseif (x[1] <= -lcp.sys.α + threshold) && (x[3] < 0.0) #moving forward
         println("switching backward")
-        x[2] = lcp.sys.α
+        x[1] = lcp.sys.α 
     end
 
     # g = gap(lcp.sys, x)
@@ -40,11 +41,13 @@ function impactMap(sys, ϕ)
 
     det = sys.I1*sys.I2 + sys.I1*sys.m2*sys.l2^2 + sys.I2*sys.mt*sys.l1^2 + 
             sys.m2*sys.l1^2*sys.l2^2*(sys.m1 + sys.m2*(sin(sys.α - ϕ))^2)
-    ξ1 = 1/det * (sys.I1*sys.I2 + sys.I1*sys.m2*sys.l2^2) + 
-        (sys.I2*sys.mt*sys.l1^2 + sys.m2*sys.l1^2*sys.l2^2*(sys.m1 +0.5* sys.m2))*cos(2sys.α) -
-        1/2*sys.m2^2*sys.l1^2*sys.l2^2*cos(2ϕ)
+
+    ξ1 = 1/det * ((sys.I1*sys.I2 + sys.I1*sys.m2*sys.l2^2) + 
+            (sys.I2*sys.mt*sys.l1^2 + sys.m2*sys.l1^2*sys.l2^2*(sys.m1 +0.5* sys.m2))*cos(2sys.α) -
+            1/2*sys.m2^2*sys.l1^2*sys.l2^2*cos(2ϕ))
+
     ξ2 = 1/det *(sys.m2*sys.l1*sys.l2*(sys.I1*(cos(sys.α - ϕ) - cos(sys.α + ϕ)) + 
-        sys.mt*sys.l1^2*(cos(2sys.α)*cos(sys.α - ϕ) - cos(sys.α + ϕ))) )
+            sys.mt*sys.l1^2*(cos(2sys.α)*cos(sys.α - ϕ) - cos(sys.α + ϕ))) )
 
     return [ξ1 0;
             ξ2 1]
@@ -69,12 +72,7 @@ function ContactLCP.fulltimestep(lcp::ContactLCP.Lcp, x0::Vector{T}, θ::Vector{
     for i in 1:lcp.sys.totalTimeStep
        
         x, λn = ContactLCP.oneTimeStep(lcp, x, Float64[])
-        if λn[1] > 0.0 
-            x = deepcopy(X[end])
-            x[2] = -x[2]
-            x, λn = ContactLCP.oneTimeStep(lcp, x, Float64[])
-        end
-        x = wrapPendulum(x)
+        wrapWheel(lcp, x, λn)
         push!(X, x)
         push!(Λn, λn)
         push!(t, t[end]+lcp.sys.Δt)
