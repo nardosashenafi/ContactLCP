@@ -140,6 +140,28 @@ function genForces(sys, x, param)
     return B*control(x, param) - C*u - G
 end
 
+function impactMap(sys, ϕ)
+
+    det = sys.I1*sys.I2 + sys.I1*sys.m2*sys.l2^2 + sys.I2*sys.mt*sys.l1^2 + 
+            sys.m2*sys.l1^2*sys.l2^2*(sys.m1 + sys.m2*(sin(sys.α - ϕ))^2)
+
+    ξ1 = 1/det * ((sys.I1*sys.I2 + sys.I1*sys.m2*sys.l2^2) + 
+            (sys.I2*sys.mt*sys.l1^2 + sys.m2*sys.l1^2*sys.l2^2*(sys.m1 +0.5* sys.m2))*cos(2sys.α) -
+            1/2*sys.m2^2*sys.l1^2*sys.l2^2*cos(2ϕ))
+
+    ξ2 = 1/det *(sys.m2*sys.l1*sys.l2*(sys.I1*(cos(sys.α - ϕ) - cos(sys.α + ϕ)) + 
+            sys.mt*sys.l1^2*(cos(2sys.α)*cos(sys.α - ϕ) - cos(sys.α + ϕ))) )
+
+    return [ξ1 0;
+            ξ2 1]
+
+end
+
+function wrapWheel(x, λn)
+    x[1] = -x[1]
+    return x
+end
+
 function wn(sys, x)
     sgn = sign(x[1])
     # return permutedims(hcat([0.0, -sys.l1*sin(x[1]) + sys.l1*sin(2sys.α + x[1])]...))
