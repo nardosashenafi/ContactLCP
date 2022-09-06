@@ -12,8 +12,8 @@ include("dynamics.jl")
 sys  = RimlessWheel(Float64, Δt, totalTimeStep)
 lcp  = ContactLCP.Lcp(Float64, sys, θ0)
 # x0 = [lcp.sys.γ, 0.1, 0.0, -2.0 ]
-x0 = [0.35, 0.1, 0.0, -2.0]
-
+x0 = [0.0, 0.0, 0.0, -3.0]
+close("all")
 
 function wrapWheel(lcp::ContactLCP.Lcp, x, λn)
 
@@ -90,3 +90,9 @@ end
 
 X, t, Λn = ContactLCP.fulltimestep(lcp, x0, θ0)
 plots(X, t, Λn)
+
+ind = findall(x -> x > 0.0, getindex.(Λn, 1))
+# X[ind[1]+1][end]/X[ind[1]][end] |> display
+Em = dot(X[ind[1]][3:4], massMatrix(sys, X[ind[1]]), X[ind[1]][3:4])
+Ep = dot(X[ind[1]+1][3:4], massMatrix(sys, X[ind[1]+1]), X[ind[1]+1][3:4])
+Ep / Em |> display
