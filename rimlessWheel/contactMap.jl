@@ -40,7 +40,6 @@ function unstackSol(cm::ContactMap, sol)
     return s, λ
 end
 
-#check the gap and keep track of the systems in contact
 function checkContact(cm::ContactMap, gn::Vector{T}) where {T<:Real}
      
     for i in 1:cm.total_contact_num
@@ -56,6 +55,13 @@ end
 
 function setSysAttributes(cm, x, θ::Vector{T}) where {T<:Real}
     return cm.sys(x, θ)
+end
+
+function totalEnergy(sys, x)
+    θ, ϕ = x[1:2]
+    θdot, ϕdot = x[3:4]
+    return 0.5*(sys.I1 + sys.mt*sys.l1^2)*θdot^2 - sys.m2*sys.l1*sys.l2*θdot*ϕdot*cos(θ - ϕ) + 
+            0.5*(sys.I2+sys.m2*sys.l2^2)*ϕdot^2 + sys.mt*sys.g*sys.l1*cos(θ - sys.γ) - sys.m2*sys.g*sys.l2*cos(ϕ - sys.γ)
 end
 
 function oneTimeStep(cm::ContactMap, x1, θ::Vector{T}) where {T<:Real}
@@ -83,6 +89,8 @@ function oneTimeStep(cm::ContactMap, x1, θ::Vector{T}) where {T<:Real}
             qM[1] = -cm.sys.α
         end
         qE = qM + 0.5*cm.sys.Δt*uE
+
+        # println("Energy preimpact = ", totalEnergy(cm.sys, x1), " postimpact = ", totalEnergy(cm.sys, [qE...,uE...]))
 
     else
 

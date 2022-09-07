@@ -38,7 +38,7 @@ mutable struct RimlessWheel{T}
         μ               = T.(0.2*ones(1))
         x0              = T.([0.0, 0.0, -0.1, 0.0])     #θ, ϕ, θdot, ϕdot
         contactIndex    = zeros(T, 1)
-        gThreshold      = T.(0.001)
+        gThreshold      = T.(0.0001)
         Δt              = Δt
         totalTimeStep   = totalTimeStep
         stateLength     = length(x0)
@@ -123,8 +123,8 @@ function massMatrix(sys, x)
 end
 
 function control(x, θ)
-    # return 0
-    return -θ[1]*(x[2]-0.3) - θ[2]*x[4]
+    return 0
+    # return -θ[1]*(x[2]-0.325) - θ[2]*x[4]
 end
 
 function genForces(sys, x, param)
