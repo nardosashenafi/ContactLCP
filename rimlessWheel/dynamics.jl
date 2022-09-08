@@ -38,7 +38,7 @@ mutable struct RimlessWheel{T}
         μ               = T.(0.2*ones(1))
         x0              = T.([0.0, 0.0, -0.1, 0.0])     #θ, ϕ, θdot, ϕdot
         contactIndex    = zeros(T, 1)
-        gThreshold      = T.(0.0001)
+        gThreshold      = T.(0.001)
         Δt              = Δt
         totalTimeStep   = totalTimeStep
         stateLength     = length(x0)
@@ -49,12 +49,12 @@ mutable struct RimlessWheel{T}
 end
 
 #returns the attributes need to model contact
-function (sys::RimlessWheel)(x::Vector{T}, θ) where {T<:Real}
+function (sys::RimlessWheel)(x::Vector{T}, θ; limitcycle=false) where {T<:Real}
     gn  = gap(sys, x)  
     γn  = vnormal(sys, x)
     γt  = vtang(sys, x)
     M   = massMatrix(sys, x)
-    h   = genForces(sys, x, θ)
+    h   = genForces(sys, x, θ;  limitcycle=limitcycle)
     Wn  = wn(sys, x)
     Wt  = wt(sys, x)
 
@@ -122,12 +122,17 @@ function massMatrix(sys, x)
             -sys.m2*sys.l1*sys.l2*cos(θ - ϕ) sys.I2 + sys.m2*sys.l2^2]
 end
 
-function control(x, θ)
-    return 0
-    # return -θ[1]*(x[2]-0.325) - θ[2]*x[4]
+function control(x, θ; limitcycle=false)
+   
+    if limitcycle #working control for limit cycle
+        return -θ[1]*(x[2]-0.325) - θ[2]*x[4]
+    else
+        return -θ[1]*(x[2]-0.325) - θ[2]*x[4]
+        # return 0
+    end
 end
 
-function genForces(sys, x, param)
+function genForces(sys, x, param; limitcycle=limitcycle)
     q, u = sys(x)
     θ, ϕ = q[1:2]
     #h = Bu - C qdot - G
@@ -138,7 +143,7 @@ function genForces(sys, x, param)
     G = sys.g*[-sys.mt*sys.l1*sin(θ - sys.γ),
                 sys.m2*sys.l2*sin(ϕ - sys.γ)]
 
-    return B*control(x, param) - C*u - G
+    return B*control(x, param; limitcycle=limitcycle) - C*u - G
 end
 
 function impactMap(sys, ϕ)
@@ -214,6 +219,12 @@ function plotRimless(sys, X)
 end
 
 function plots(Z, t)
+
+    if typeof(Z) == Vector{Vector{Vector{Float64}}}
+        Z = reduce(vcat, Z)
+        t = reduce(vcat, t)
+    end
+
     fig1 = plt.figure()
     fig1.clf()
     subplot(2, 2, 1)

@@ -53,8 +53,8 @@ function checkContact(cm::ContactMap, gn::Vector{T}) where {T<:Real}
     cm.current_contact_num = sum(cm.sys.contactIndex)
 end
 
-function setSysAttributes(cm, x, θ::Vector{T}) where {T<:Real}
-    return cm.sys(x, θ)
+function setSysAttributes(cm, x, θ::Vector{T}; limitcycle=false) where {T<:Real}
+    return cm.sys(x, θ; limitcycle=limitcycle)
 end
 
 function totalEnergy(sys, x)
@@ -64,64 +64,81 @@ function totalEnergy(sys, x)
             0.5*(sys.I2+sys.m2*sys.l2^2)*ϕdot^2 + sys.mt*sys.g*sys.l1*cos(θ - sys.γ) - sys.m2*sys.g*sys.l2*cos(ϕ - sys.γ)
 end
 
-function oneTimeStep(cm::ContactMap, x1, θ::Vector{T}) where {T<:Real}
+function limitCycle(cm::ContactMap) 
 
-    uA                  = x1[3:4]
-    qA                  = x1[1:2]
-    qM                  = qA + 0.5*cm.sys.Δt*uA
-    
-    x_mid               = [qM...,uA...]
+    #limitcycle with no slope
+    γ               = deepcopy(cm.sys.γ)
+    cm.sys.γ        = 0.0
+    totalTimeStep   = deepcopy(cm.sys.totalTimeStep)
+    cm.sys.totalTimeStep = 5000
 
-    gn, γn, γt, M, h, Wn, Wt = setSysAttributes(cm, x_mid, θ)
-    checkContact(cm, gn)
+    x0      = [0.2, 0.1, -2.0, 0.0]
+    X, t    = fulltimestep(cm, x0, [100.0, 20.0]; limitcycle=true)
 
-    if any(cm.sys.contactIndex .== 1) && any(vnormal(cm.sys, x_mid) .< 0.0)
+    #reset γ back for the rest of the computations
+    cm.sys.γ = deepcopy(γ)
+    cm.sys.totalTimeStep = deepcopy(totalTimeStep)
 
-        ϕ = x_mid[2]
-        Ξ = impactMap(sys, ϕ)
-        uE = Ξ*uA
-        # println("Preimpact KE = ", uA'*cm.M*uA, " postimpact KE = ", uE'*cm.M*uE)
-        #switch θ to the next spoke
-        # qM[1] = 2*cm.sys.α-qM[1]
-        if uA[1] < 0.0
-            qM[1] = cm.sys.α
-        elseif uA[1] > 0.0
-            qM[1] = -cm.sys.α
-        end
-        qE = qM + 0.5*cm.sys.Δt*uE
+    x = X[end-1]
+    t = t[end-1] .- t[end-1][1]
 
-        # println("Energy preimpact = ", totalEnergy(cm.sys, x1), " postimpact = ", totalEnergy(cm.sys, [qE...,uE...]))
+    figure()
+    plot(getindex.(x, 1), getindex.(x, 3))
+    ylabel("Limit Cycle check", fontsize=15)
 
-    else
-
-        uE = inv(M)*(h*cm.sys.Δt) + uA
-        qE = qM + 0.5*cm.sys.Δt*uE
-
-    end
-    
-    return [qE...,uE...]
+    return x, t
 
 end
 
-function fulltimestep(cm::ContactMap, x0, θ::Vector{T}) where {T<:Real}
-
-    X    = Vector{Vector{T}}()
-    t    = Vector{T}()
+function fulltimestep(cm::ContactMap, x1, θ::Vector{T}; limitcycle=false, X = Vector{Vector{Vector{T}}}(), t = Vector{Vector{T}}()) where {T<:Real}
 
     if isempty(x0)
         x = deepcopy(cm.sys.x0)
     else
         x = deepcopy(x0)
     end
-
-    X  = push!(X, x)
-    t  = push!(t, T(0.0))
+    push!(X, deepcopy([x1]))
+    push!(t, T.([0.0]))
 
     for i in 1:cm.sys.totalTimeStep
-        x = oneTimeStep(cm, x, θ)
-        push!(X, x)
-        push!(t, t[end]+cm.sys.Δt)
+        qA, uA      = cm.sys(x1)
+        qM          = qA + 0.5*cm.sys.Δt*uA
+        
+        x_mid       = [qM...,uA...]
+
+        gn, γn, γt, M, h, Wn, Wt = setSysAttributes(cm, x_mid, θ; limitcycle=limitcycle)
+        checkContact(cm, gn)
+
+        if any(cm.sys.contactIndex .== 1) && any(vnormal(cm.sys, x_mid) .< 0.0)
+
+            ϕ       = x_mid[2]
+            Ξ       = impactMap(sys, ϕ)
+            uE      = Ξ*uA
+            # println("Preimpact KE = ", uA'*cm.M*uA, " postimpact KE = ", uE'*cm.M*uE)
+
+            #switch θ to the next spoke
+            if uA[1] < 0.0
+                qM[1] = cm.sys.α
+            elseif uA[1] > 0.0
+                qM[1] = -cm.sys.α
+            end
+            qE = qM + 0.5*cm.sys.Δt*uE
+            x2 = [qE...,uE...]
+            push!(X, deepcopy([x2]))
+            push!(t, [t[end][end]+cm.sys.Δt])
+
+            # println("Energy preimpact = ", totalEnergy(cm.sys, x1), " postimpact = ", totalEnergy(cm.sys, [qE...,uE...]))
+        else
+
+            uE = inv(M)*(h*cm.sys.Δt) + uA
+            qE = qM + 0.5*cm.sys.Δt*uE
+            x2 = [qE...,uE...]
+            push!(X[end], deepcopy(x2))
+            push!(t[end], t[end][end]+cm.sys.Δt)
+        end
+        x1 = x2
     end
 
     return X, t
 end
+
