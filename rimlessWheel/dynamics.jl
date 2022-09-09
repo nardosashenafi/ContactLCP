@@ -127,7 +127,7 @@ function control(x, θ; limitcycle=false)
     if limitcycle #working control for limit cycle
         return -θ[1]*(x[2]-0.325) - θ[2]*x[4]
     else
-        return -θ[1]*(x[2]-0.325) - θ[2]*x[4]
+        return -θ[1]*(x[2]-θ[3]) - θ[2]*x[4]
         # return 0
     end
 end

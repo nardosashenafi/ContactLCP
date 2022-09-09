@@ -11,7 +11,7 @@ include("dynamics.jl")
 include("contactMap.jl")
 
 Δt = 0.001; totalTimeStep = 500
-θ0 = zeros(Float64, 2)
+θ0 = zeros(Float64, 3)
 
 sys  = RimlessWheel(Float64, Δt, totalTimeStep)
 cm  = ContactMap(Float64, sys, θ0)
@@ -51,14 +51,6 @@ function perpLoss(x0, τ, θdotstar, param::Vector{T}) where {T<:Real}
         end
     end
 
-    # θ           = getindex.(Z[end], 1)
-    # θdot        = getindex.(Z[end], 3)
-    # ϕdot        = getindex.(Z[end], 4)
-    # τi          = τ.(-θ)
-    # θdotstar_i  = θdotstar.(τi)
-    # loss        = 1.0/length(θ)*(sum(map((xs, s) -> dot(xs-s, xs-s), θdot,  θdotstar_i)) + 
-    #                 0.01*dot(ϕdot, ϕdot))
-    
     for x in Z
         # As this improves, it adds another cycle which increases the cost
         # each time I toss less out and accumulate more cost
@@ -74,6 +66,29 @@ function perpLoss(x0, τ, θdotstar, param::Vector{T}) where {T<:Real}
     end
 
     return loss/length(Z)
+end
+
+
+function speedLoss(cm, x0, param::Vector{T}) where {T<:Real}
+    xd_dot = 0.5
+    X, t   = fulltimestep(cm, x0, param; timeSteps=500)
+    Z           = Vector{Vector{Vector{T}}}()
+    for x in X
+        if !isStumbling(x)
+            push!(Z, x)
+        end
+    end
+
+
+    loss = 0.0
+    for x in Z
+        θ = getindex.(x, 1)
+        θdot = getindex.(x, 3)
+        l1 = xd_dot .+ cm.sys.l1 .* cos.(θ) .* θdot
+        loss += dot(l1, l1)
+    end
+
+    return loss
 end
 
 function sampleInitialStates(x0, param)
@@ -101,8 +116,8 @@ function controlToLimitCycle(cm::ContactMap)
     τ           = interpolate_τ(S, t)
     θdotstar    = interpolate_θdot(S, t)
     counter     = 0
-    param       = [5.0, 1.0]
-    opt         = Adam(0.01)
+    param       = [5.0, 1.0, 0.4]
+    opt         = Adam(0.005)
     fig1        = plt.figure()
     loss        = Inf
 
@@ -110,7 +125,8 @@ function controlToLimitCycle(cm::ContactMap)
 
         X0 = sampleInitialStates(x0, param)
         for xi in X0
-            l1(θ)   = perpLoss(xi, τ, θdotstar , θ)
+            # l1(θ)   = perpLoss(xi, τ, θdotstar , θ)
+            l1(θ)   = speedLoss(cm, xi, θ)
             grad    = ForwardDiff.gradient(l1, param)
             if counter > 10
                 println("loss = ", l1(param), " θ = ", param)
