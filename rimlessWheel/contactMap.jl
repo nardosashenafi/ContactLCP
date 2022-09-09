@@ -85,12 +85,12 @@ function limitCycle(cm::ContactMap)
     figure()
     plot(getindex.(x, 1), getindex.(x, 3))
     ylabel("Limit Cycle check", fontsize=15)
-
+    
     return x, t
 
 end
 
-function fulltimestep(cm::ContactMap, x1, θ::Vector{T}; limitcycle=false, X = Vector{Vector{Vector{T}}}(), t = Vector{Vector{T}}()) where {T<:Real}
+function fulltimestep(cm::ContactMap, x1, θ::Vector{T}; limitcycle=false, timeSteps = cm.sys.totalTimeStep, X = Vector{Vector{Vector{T}}}(), t = Vector{Vector{T}}()) where {T<:Real}
 
     if isempty(x0)
         x = deepcopy(cm.sys.x0)
@@ -100,7 +100,7 @@ function fulltimestep(cm::ContactMap, x1, θ::Vector{T}; limitcycle=false, X = V
     push!(X, deepcopy([x1]))
     push!(t, T.([0.0]))
 
-    for i in 1:cm.sys.totalTimeStep
+    for i in 1:timeSteps
         qA, uA      = cm.sys(x1)
         qM          = qA + 0.5*cm.sys.Δt*uA
         
