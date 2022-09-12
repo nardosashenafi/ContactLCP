@@ -129,6 +129,7 @@ function control(x, θ; limitcycle=false)
     else
         return -θ[1]*(x[2]-θ[3]) - θ[2]*x[4]
         # return 0
+        # return unn(x, θ)
     end
 end
 
