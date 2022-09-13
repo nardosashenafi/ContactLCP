@@ -122,14 +122,28 @@ function massMatrix(sys, x)
             -sys.m2*sys.l1*sys.l2*cos(θ - ϕ) sys.I2 + sys.m2*sys.l2^2]
 end
 
-function control(x, θ; limitcycle=false)
+function vector_to_parameters(ps_new::AbstractVector, ps::NamedTuple)
+    @assert length(ps_new) == Lux.parameterlength(ps)
+    i = 1
+    function get_ps(x)
+        z = reshape(view(ps_new, i:(i + length(x) - 1)), size(x))
+        i += length(x)
+        return z
+    end
+    return fmap(get_ps, ps)
+end
+
+function control(x, θp; limitcycle=false)
    
     if limitcycle #working control for limit cycle
-        return -θ[1]*(x[2]-0.325) - θ[2]*x[4]
+        return -θp[1]*(x[2]-0.325) - θp[2]*x[4]
     else
-        return -θ[1]*(x[2]-θ[3]) - θ[2]*x[4]
+        # return -θ[1]*(x[2]-θ[3]) - θ[2]*x[4]
         # return 0
-        # return unn(x, θ)
+        # ps_new = vector_to_parameters(θp, ps)
+        # y, _ = Lux.apply(unn, x, ps_new, st) 
+        y = unn(x, θp)
+        return clamp(y[1], -satu, satu)
     end
 end
 
