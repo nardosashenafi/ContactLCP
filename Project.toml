@@ -1,5 +1,6 @@
 [deps]
 AbstractDifferentiation = "c29ec348-61ec-40c8-8164-b8c60e9d9f3d"
+BSON = "fbb218c0-5317-5bc6-957e-2ee96dd4b1f0"
 ChainRulesCore = "d360d2e6-b24c-11e9-a2a3-2a2ae2dbcce4"
 DiffEqFlux = "aae7a2af-3d4f-5e19-a356-7da93b79d9d0"
 DiffOpt = "930fe3bc-9c6b-11ea-2d94-6184641e85e7"
