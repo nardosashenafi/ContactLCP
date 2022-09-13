@@ -93,8 +93,12 @@ end
 # function sampleInitialStates(x0::Vector{T}, param) where {T<:Real}
 function sampleInitialStates(x0, param::Vector{T}) where {T<:Real}
 
-    X, tx = fulltimestep(cm, x0, param; timeSteps=5000)
-    Z, tz = extractStumbling(X, tx) #TODO: maybe slowly adding stumbling
+    Z = Vector{Vector{Vector{T}}}()
+
+    while isempty(Z)
+        X, tx = fulltimestep(cm, x0, param; timeSteps=5000)
+        Z, tz = extractStumbling(X, tx) #TODO: maybe slowly adding stumbling
+    end
 
     X0 = Vector{Vector{T}}()
     sampleNum = 50
@@ -119,7 +123,7 @@ function controlToHipSpeed(cm::ContactMap, ps)
     for i in 1:2000
 
         while isempty(X0)
-            # x0 = [rand(-cm.sys.α:0.05:cm.sys.α), rand(0:0.1:pi/2), rand(-5.0:0.1:0.0), 0.0]
+            x0 = [rand(-cm.sys.α:0.05:cm.sys.α), rand(-pi/2:0.1:pi/2), rand(-5.0:0.1:-2.0), 0.0]
             X0 = sampleInitialStates(x0, param)
         end
 
@@ -152,7 +156,6 @@ function testControl(cm, x0, param, grad, fig1; timeSteps=5000)
 
     Ze, tze = extractStumbling(X, tx)   #extracting stumbles to compute hip speed
     Ze      = reduce(vcat, Ze)
-
 
     fig1.clf()
     subplot(2, 1, 1)

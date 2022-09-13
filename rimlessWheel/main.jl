@@ -20,7 +20,7 @@ unn             = FastChain(customLayer, FastDense(6, 3, elu), FastDense(3,1))
 # rng             = Random.default_rng()
 # ps, st          = Lux.setup(rng, unn)
 # controlparam    = rand(Lux.parameterlength(unn))
-ps          = 0.1*rand(DiffEqFlux.paramlength(unn))
+ps          = 0.05*rand(DiffEqFlux.paramlength(unn))
 satu        = 1.0
 # controlparam = [5.0, 1.0, 0.2]
 
