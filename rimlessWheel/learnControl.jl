@@ -85,7 +85,7 @@ end
 function trajLoss(cm, x0, param::Vector{T}) where {T<:Real}
 
     X, tx   = fulltimestep(cm, x0, param; timeSteps=1000);
-    X, tx   = extractStumbling(X, tx)
+    # X, tx   = extractStumbling(X, tx)
 
     return hipSpeedLoss(X, tx)
 end
@@ -97,7 +97,8 @@ function sampleInitialStates(x0, param::Vector{T}) where {T<:Real}
 
     while isempty(Z)
         X, tx = fulltimestep(cm, x0, param; timeSteps=5000)
-        Z, tz = extractStumbling(X, tx) #TODO: maybe slowly adding stumbling
+        # Z, tz = extractStumbling(X, tx) 
+        Z = deepcopy(X)
     end
 
     X0 = Vector{Vector{T}}()
@@ -111,37 +112,37 @@ end
 
 function controlToHipSpeed(cm::ContactMap, ps)
 
-    counter     = 0
-    opt         = Flux.Adam(0.001)
-    # param       = 0.2*rand(Lux.parameterlength(unn)) 
-    param       = deepcopy(ps)
-    fig1        = plt.figure()
-    loss        = Inf
-    X0          = Vector{Vector{Float64}}()
-    # opt_state   = Optimisers.setup(opt, param)
+    counter             = 0
+    opt                 = Flux.Adam(0.001)
+    param               = deepcopy(ps)
+    fig1                = plt.figure()
+    loss                = Inf
+    X0                  = Vector{Vector{Float64}}()
+    θdotmax_sample      = 0.0
 
     for i in 1:2000
-
         while isempty(X0)
-            x0 = [rand(-cm.sys.α:0.05:cm.sys.α), rand(-pi/2:0.1:pi/2), rand(-5.0:0.1:-2.0), 0.0]
+            
+            x0 = [rand(-cm.sys.α:0.05:cm.sys.α), rand(-pi/2:0.1:pi/2), 
+                    rand(-5.0:0.1:θdotmax_sample), rand(-0.5:0.05:0.5)]
+
             X0 = sampleInitialStates(x0, param)
+            #TODO: sample γ as well
         end
 
         for xi in X0
             l1(θ)   = trajLoss(cm, xi, θ)
             grad    = ForwardDiff.gradient(l1, param)
-            # pf_f = AD.value_and_pushforward_function(AD.ForwardDiffBackend(), l1, θ)
-            # grad = Lux.gradient(l1, param)        #only uses Zygote, which does not like mutating arrays
 
             if counter > 30
                 testControl(cm, x0, param, grad, fig1; timeSteps=5000)
+                #slowly adding stumbling to DAgger
+                # θdotmax_sample = min(θdotmax_sample + 0.1, 0.0)
                 counter = 0
             end
 
             Flux.update!(opt, param, grad)
-            # opt_state, param = Optimisers.update(opt_state, param, grad)
             counter += 1
-            # loss = l1(param)
         end
         X0  = Vector{Vector{Float64}}()
     end
@@ -155,7 +156,12 @@ function testControl(cm, x0, param, grad, fig1; timeSteps=5000)
     Z       = reduce(vcat, X)
 
     Ze, tze = extractStumbling(X, tx)   #extracting stumbles to compute hip speed
-    Ze      = reduce(vcat, Ze)
+    hipspeed = 0.0
+
+    if !isempty(Ze)
+        Ze      = reduce(vcat, Ze)
+        hipspeed = -cm.sys.l1 .* cos.(getindex.(Ze, 1)) .* getindex.(Ze, 3)
+    end
 
     fig1.clf()
     subplot(2, 1, 1)
@@ -163,7 +169,7 @@ function testControl(cm, x0, param, grad, fig1; timeSteps=5000)
     subplot(2, 1, 2)
     plot(getindex.(Z, 2))
 
-    println("loss = ", round(loss, digits=4) , " | hip speed = ", round.(mean(-cm.sys.l1 .* cos.(getindex.(Ze, 1)) .* getindex.(Ze, 3)), digits=4) )
+    println("loss = ", round(loss, digits=4) , " | hip speed = ", round.(mean(hipspeed), digits=4) )
     # println("loss = ", round(l1(param), digits=4),  " | p = ", round.(param, digits=4), " | hip speed = ", round.(mean(-cm.sys.l1 .* cos.(getindex.(Z, 1)) .* getindex.(Z, 3)), digits=4) )
 end
 

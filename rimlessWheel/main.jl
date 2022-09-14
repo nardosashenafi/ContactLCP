@@ -16,7 +16,15 @@ totalTimeStep   = 500
 # unn             = Lux.Chain(x -> [cos(x[1]), sin(x[1]), cos(x[2]), sin(x[2]), x[3], x[4]], 
 #                     Lux.Dense(6, 3, elu), Lux.Dense(3,1))
 customLayer(x, p) = [cos(x[1]), sin(x[1]), cos(x[2]), sin(x[2]), x[3], x[4]]
-unn             = FastChain(customLayer, FastDense(6, 3, elu), FastDense(3,1))
+jacobian(::typeof(customLayer), x) = [-sin(x[1]) 0.0 0.0 0.0;
+                                       cos(x[1]) 0.0 0.0 0.0;
+                                       0.0 -sin(x[2]) 0.0 0.0;
+                                       0.0 cos(x[2]) 0.0 0.0;
+                                       0.0 0.0 1.0 0.0;
+                                       0.0 0.0 0.0 1.0]
+                     
+# _applychain(fs::InputFastDense, x, p) = _applychain(tail(fs), first(fs)(x), p)
+unn             = FastChain(customLayer, FastDense(6, 8, elu), FastDense(8, 1))
 # rng             = Random.default_rng()
 # ps, st          = Lux.setup(rng, unn)
 # controlparam    = rand(Lux.parameterlength(unn))
