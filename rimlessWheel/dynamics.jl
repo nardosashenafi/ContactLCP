@@ -133,17 +133,18 @@ function vector_to_parameters(ps_new::AbstractVector, ps::NamedTuple)
     return fmap(get_ps, ps)
 end
 
+inputLayer(x) = [cos(x[1]), sin(x[1]), cos(x[2]), sin(x[2]), x[3], x[4]]
+
 function control(x, θp; limitcycle=false)
    
     if limitcycle #working control for limit cycle
         return -θp[1]*(x[2]-0.325) - θp[2]*x[4]
     else
         # return -θ[1]*(x[2]-θ[3]) - θ[2]*x[4]
-        # return 0
-        # ps_new = vector_to_parameters(θp, ps)
-        # y, _ = Lux.apply(unn, x, ps_new, st) 
-        y = unn(x, θp)
-        return clamp(y[1], -satu, satu)
+        @assert length(θp) == 6 + DiffEqFlux.paramlength(Hd)
+        y = MLBasedESC.controller(npbc, inputLayer(x), θp)
+        # y = unn(inputLayer(x), θp)[1]
+        return clamp(y, -satu, satu)
     end
 end
 
