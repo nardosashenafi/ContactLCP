@@ -69,13 +69,13 @@ function hipSpeedLoss(Z, tz)
         lnorm    += 1/length(θ)*dot(l, l) 
 
         #add cost on contact frequency
-        # if length(x) >= 2
-        #     strikePeriod  = t[end] - t[1] 
-        #     f       = 1/strikePeriod
-        #     if f >= (1+β)*freq_d
-        #         lnorm += 1.0*(f - (1+β) .* freq_d)
-        #     end
-        # end
+    #     if length(x) >= 2
+    #         strikePeriod  = t[end] - t[1] 
+    #         f       = 1/strikePeriod
+    #         if f >= (1+β)*freq_d
+    #             lnorm += 0.0001*(f - (1+β) .* freq_d)
+    #         end
+    #     end
     end
 
     return 1.0/length(Z)*lnorm
@@ -123,7 +123,7 @@ function controlToHipSpeed(cm::ContactMap, ps)
         while isempty(X0)
             
             x0 = [rand(-cm.sys.α:0.05:cm.sys.α), rand(-pi/2:0.1:pi/2), 
-                    rand(-5.0:0.1:θdotmax_sample), rand(-0.5:0.05:0.5)]
+                    rand(-5.0:0.1:θdotmax_sample), rand(-1.0:0.05:1.0)]
 
             X0 = sampleInitialStates(x0, param)
             #TODO: sample γ as well

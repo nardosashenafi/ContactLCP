@@ -14,14 +14,17 @@ using MLBasedESC
 totalTimeStep   = 500
 
 unn             = FastChain(FastDense(6, 8, elu), FastDense(8, 1))
-Hd              = FastChain(FastDense(6, 12, elu), FastDense(12, 1))
+Hd              = FastChain(FastDense(6, 12, elu), FastDense(12, 5, elu), FastDense(5, 1))
 N               = 6
 npbc            = MLBasedESC.NeuralPBC(N, Hd)
 
-# ps              = 0.05*rand(N + DiffEqFlux.paramlength(unn))
+# println("NN parameterized control")
+# ps              = 0.005*rand(N + DiffEqFlux.paramlength(unn))
+
+println("NeuralPBC")
 ps              = 0.01*rand(N + DiffEqFlux.paramlength(Hd))
 ps[end-N+1:end] = 0.1*rand(N)
-satu            = 1.0
+satu            = 1.5
 
 include("dynamics.jl")
 include("contactMap.jl")
