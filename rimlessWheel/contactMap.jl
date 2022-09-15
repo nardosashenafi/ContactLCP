@@ -53,7 +53,6 @@ function checkContact(cm::ContactMap, gn::Vector{T}) where {T<:Real}
     cm.current_contact_num = sum(cm.sys.contactIndex)
 end
 
-# function setSysAttributes(cm, x, θ; limitcycle=false) 
 function setSysAttributes(cm, x, θ::Vector{T}; limitcycle=false) where {T<:Real}
     return cm.sys(x, θ; limitcycle=limitcycle)
 end
@@ -92,7 +91,6 @@ function limitCycle(cm::ContactMap)
 end
 
 function fulltimestep(cm::ContactMap, x1, θ::Vector{T}; limitcycle=false, timeSteps = cm.sys.totalTimeStep, X = Vector{Vector{Vector{T}}}(), t = Vector{Vector{T}}()) where {T<:Real}
-# function fulltimestep(cm::ContactMap, x1::Vector{T}, θ; limitcycle=false, timeSteps = cm.sys.totalTimeStep, X = Vector{Vector{Vector{T}}}(), t = Vector{Vector{T}}()) where {T<:Real}
 
     if isempty(x0)
         x = deepcopy(cm.sys.x0)

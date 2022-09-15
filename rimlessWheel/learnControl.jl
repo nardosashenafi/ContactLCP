@@ -81,7 +81,6 @@ function hipSpeedLoss(Z, tz)
     return 1.0/length(Z)*lnorm
 end
 
-# function trajLoss(cm, x0::Vector{T}, param) where {T<:Real}
 function trajLoss(cm, x0, param::Vector{T}) where {T<:Real}
 
     X, tx   = fulltimestep(cm, x0, param; timeSteps=1000);

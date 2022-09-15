@@ -7,7 +7,6 @@ using PyCall
 @pyimport matplotlib.animation as anim
 using Flux, Printf
 using Interpolations
-# using Lux, Random, Optimisers, Zygote, AbstractDifferentiation
 using Statistics
 using MLBasedESC
 
@@ -19,7 +18,9 @@ Hd              = FastChain(FastDense(6, 12, elu), FastDense(12, 1))
 N               = 6
 npbc            = MLBasedESC.NeuralPBC(N, Hd)
 
-ps              = 0.05*rand(N + DiffEqFlux.paramlength(Hd))
+# ps              = 0.05*rand(N + DiffEqFlux.paramlength(unn))
+ps              = 0.01*rand(N + DiffEqFlux.paramlength(Hd))
+ps[end-N+1:end] = 0.1*rand(N)
 satu            = 1.0
 
 include("dynamics.jl")
