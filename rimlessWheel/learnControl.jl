@@ -64,46 +64,63 @@ function hipSpeedLoss(Z, tz)
         #each loop is one continuous part
         θ       = getindex.(x, 1)
         θdot    = getindex.(x, 3)
-        ϕdot    = getindex.(x, 4)
         l       = xd_dot .+ cm.sys.l1 .* cos.(θ) .* θdot 
-        lnorm    += 1/length(θ)*dot(l, l) 
+        lnorm   += 1/length(θ)*dot(l, l) 
 
         #add cost on contact frequency
-    #     if length(x) >= 2
-    #         strikePeriod  = t[end] - t[1] 
-    #         f       = 1/strikePeriod
-    #         if f >= (1+β)*freq_d
-    #             lnorm += 0.0001*(f - (1+β) .* freq_d)
-    #         end
-    #     end
+        # if length(x) >= 2   #if a section of the trajectory contains only one state, strikePeriod will be 0 and frequency becomes inf
+        #     strikePeriod  = t[end] - t[1] 
+        #     f       = 1/strikePeriod
+        #     if f >= (1+β)*freq_d
+        #         lnorm += 0.001*(f - (1+β) .* freq_d)
+        #     end
+        # end
     end
 
     return 1.0/length(Z)*lnorm
 end
 
-function trajLoss(cm, x0, param::Vector{T}) where {T<:Real}
+function trajLoss(cm, X0, param::Vector{T}) where {T<:Real}
 
-    X, tx   = fulltimestep(cm, x0, param; timeSteps=1000);
-    # X, tx   = extractStumbling(X, tx)
-
-    return hipSpeedLoss(X, tx)
-end
-
-# function sampleInitialStates(x0::Vector{T}, param) where {T<:Real}
-function sampleInitialStates(x0, param::Vector{T}) where {T<:Real}
-
-    Z = Vector{Vector{Vector{T}}}()
-
-    while isempty(Z)
-        X, tx = fulltimestep(cm, x0, param; timeSteps=5000)
-        # Z, tz = extractStumbling(X, tx) 
-        Z = deepcopy(X)
+    l = 0.0
+    Threads.@threads for x0 in X0
+        X, tx = fulltimestep(cm, x0, param; timeSteps=1000);
+        # X, tx   = extractStumbling(X, tx)
+        l += hipSpeedLoss(X, tx)
     end
 
+    return sum(l)/length(X0)
+end
+
+
+function sampleInitialStates(cm::ContactMap, param::Vector{T}) where {T<:Real}
+
+    sampleTrajectories = Vector{Vector{Vector{Vector{T}}}}()
+
+    #generate 5 long trajectories
+    while length(sampleTrajectories) < 5
+
+        xi = [rand(-cm.sys.α:0.05:cm.sys.α), rand(-pi/2:0.1:pi/2), 
+                rand(-5.0:0.1:0.0), rand(-1.0:0.05:1.0)]
+
+        X, tx = fulltimestep(cm, xi, param; timeSteps=5000)
+        # Z, tz = extractStumbling(X, tx) 
+        push!(sampleTrajectories, X)
+
+    end
+
+    #sample 10 initial states from the long trajectories
     X0 = Vector{Vector{T}}()
-    sampleNum = 50
+    sampleNum = 10
     for i in 1:sampleNum
-        push!(X0, rand(rand(Z)))
+        push!(X0, rand(rand(rand(sampleTrajectories))))
+    end
+
+    if all(abs.(abs.(getindex.(X0, 1)) .- cm.sys.α) .< 0.001)
+        # println("All x0 samples are from stumbling. Sampling from nonstumbling sections")
+        for i in 0:Int(floor(sampleNum/2))-1
+            X0[end-i] = rand(rand(rand(sampleTrajectories)[1:3]))
+        end
     end
     return X0
 
@@ -115,34 +132,26 @@ function controlToHipSpeed(cm::ContactMap, ps)
     opt                 = Flux.Adam(0.001)
     param               = deepcopy(ps)
     fig1                = plt.figure()
-    loss                = Inf
     X0                  = Vector{Vector{Float64}}()
-    θdotmax_sample      = 0.0
 
     for i in 1:2000
-        while isempty(X0)
-            
-            x0 = [rand(-cm.sys.α:0.05:cm.sys.α), rand(-pi/2:0.1:pi/2), 
-                    rand(-5.0:0.1:θdotmax_sample), rand(-1.0:0.05:1.0)]
 
-            X0 = sampleInitialStates(x0, param)
+        while isempty(X0)   #this check is necessary if stumbling is extracted. DAgger may return empty replay buffer
+            X0 = sampleInitialStates(cm, param)
             #TODO: sample γ as well
         end
 
-        for xi in X0
-            l1(θ)   = trajLoss(cm, xi, θ)
-            grad    = ForwardDiff.gradient(l1, param)
+        l1(θ)   = trajLoss(cm, X0, θ)
+        grad    = ForwardDiff.gradient(l1, param)
 
-            if counter > 30
-                testControl(cm, x0, param, grad, fig1; timeSteps=5000)
-                #slowly adding stumbling to DAgger
-                # θdotmax_sample = min(θdotmax_sample + 0.1, 0.0)
-                counter = 0
-            end
-
-            Flux.update!(opt, param, grad)
-            counter += 1
+        if counter > 1
+            testControl(cm, X0[end], param, grad, fig1; timeSteps=5000)
+            counter = 0
         end
+
+        Flux.update!(opt, param, grad)
+        counter += 1
+
         X0  = Vector{Vector{Float64}}()
     end
 

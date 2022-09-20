@@ -2,7 +2,7 @@ using LaTeXStrings, PyPlot
 # using JuMP, PATHSolver, Mosek, MosekTools, DiffOpt
 using LinearAlgebra
 # import ChainRulesCore
-using ForwardDiff, DiffEqFlux
+using ForwardDiff, DiffEqFlux, ReverseDiff
 using PyCall
 @pyimport matplotlib.animation as anim
 using Flux, Printf
@@ -14,17 +14,18 @@ using MLBasedESC
 totalTimeStep   = 500
 
 unn             = FastChain(FastDense(6, 8, elu), FastDense(8, 1))
-Hd              = FastChain(FastDense(6, 12, elu), FastDense(12, 5, elu), FastDense(5, 1))
+Hd              = FastChain(FastDense(6, 8, elu), FastDense(8, 5, elu), FastDense(5, 1))
 N               = 6
 npbc            = MLBasedESC.NeuralPBC(N, Hd)
 
 # println("NN parameterized control")
-# ps              = 0.005*rand(N + DiffEqFlux.paramlength(unn))
+# ps              = 0.005*randn(N + DiffEqFlux.paramlength(unn))
+# satu            = 1.5
 
 println("NeuralPBC")
-ps              = 0.01*rand(N + DiffEqFlux.paramlength(Hd))
+ps              = 0.5*randn(N + DiffEqFlux.paramlength(Hd))
 ps[end-N+1:end] = 0.1*rand(N)
-satu            = 1.5
+satu            = 2.0
 
 include("dynamics.jl")
 include("contactMap.jl")
