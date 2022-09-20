@@ -55,7 +55,7 @@ end
 function hipSpeedLoss(Z, tz)
 
     #loss of one trajectory
-    β       = 0.3
+    β       = 0.2
     xd_dot  = 0.5
     freq_d  = 1.0/(2*cm.sys.l1*sin(cm.sys.α)/xd_dot)
 
@@ -65,17 +65,18 @@ function hipSpeedLoss(Z, tz)
         θ       = getindex.(x, 1)
         θdot    = getindex.(x, 3)
         l       = xd_dot .+ cm.sys.l1 .* cos.(θ) .* θdot 
+        lnorm   += 1/length(θ)*dot(l, l)
 
         #add cost on contact frequency
-        # if length(x) >= 2   #if a section of the trajectory contains only one state, strikePeriod will be 0 and frequency becomes inf
-        #     strikePeriod  = t[end] - t[1] 
-        #     f       = 1/strikePeriod
-        #     if f >= (1+β)*freq_d
-        #         l += 0.1*(f - (1+β) .* freq_d)
-        #     end
-        # end
+        if length(x) >= 2   #if a section of the trajectory contains only one state, strikePeriod will be 0 and frequency becomes inf
+            xd_avg        = 1/length(θ)*sum(abs.(-cm.sys.l1 .* cos.(θ) .* θdot))
+            strikePeriod  = 2*cm.sys.l1*sin(cm.sys.α)/xd_avg
+            f             = 1/strikePeriod
+            if f >= (1+β)*freq_d
+                lnorm += 0.1*(f - (1+β) .* freq_d)
+            end
+        end
 
-        lnorm   += 1/length(θ)*dot(l, l) 
     end
 
     return 1.0/length(Z)*lnorm
@@ -146,7 +147,9 @@ function controlToHipSpeed(cm::ContactMap, ps)
         grad    = ForwardDiff.gradient(l1, param)
 
         if counter > 1
-            testControl(cm, X0[end], param, grad, fig1; timeSteps=5000)
+            xi = [rand(-cm.sys.α:0.05:cm.sys.α), rand(-pi/2:0.1:pi/2), 
+                    rand(-5.0:0.1:0.0), rand(-1.0:0.05:1.0)]
+            testControl(cm, xi, param, grad, fig1; timeSteps=5000)
             counter = 0
         end
 
