@@ -65,16 +65,17 @@ function hipSpeedLoss(Z, tz)
         θ       = getindex.(x, 1)
         θdot    = getindex.(x, 3)
         l       = xd_dot .+ cm.sys.l1 .* cos.(θ) .* θdot 
-        lnorm   += 1/length(θ)*dot(l, l) 
 
         #add cost on contact frequency
         # if length(x) >= 2   #if a section of the trajectory contains only one state, strikePeriod will be 0 and frequency becomes inf
         #     strikePeriod  = t[end] - t[1] 
         #     f       = 1/strikePeriod
         #     if f >= (1+β)*freq_d
-        #         lnorm += 0.001*(f - (1+β) .* freq_d)
+        #         l += 0.1*(f - (1+β) .* freq_d)
         #     end
         # end
+
+        lnorm   += 1/length(θ)*dot(l, l) 
     end
 
     return 1.0/length(Z)*lnorm
@@ -98,7 +99,7 @@ function sampleInitialStates(cm::ContactMap, param::Vector{T}) where {T<:Real}
     sampleTrajectories = Vector{Vector{Vector{Vector{T}}}}()
 
     #generate 5 long trajectories
-    while length(sampleTrajectories) < 5
+    while length(sampleTrajectories) < 2
 
         xi = [rand(-cm.sys.α:0.05:cm.sys.α), rand(-pi/2:0.1:pi/2), 
                 rand(-5.0:0.1:0.0), rand(-1.0:0.05:1.0)]
@@ -111,7 +112,7 @@ function sampleInitialStates(cm::ContactMap, param::Vector{T}) where {T<:Real}
 
     #sample 10 initial states from the long trajectories
     X0 = Vector{Vector{T}}()
-    sampleNum = 10
+    sampleNum = 4
     for i in 1:sampleNum
         push!(X0, rand(rand(rand(sampleTrajectories))))
     end
