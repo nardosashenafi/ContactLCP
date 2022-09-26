@@ -63,10 +63,10 @@ end
 
 function trajLoss(x0, param)
 
-    # gn, M, B, C, G, τ, Ξ, contactIndex, Y, tY = Array.(allocateCuArrays(x0, param))
-    # loss = fulltimestep!(x0, param, gn, M, B, C, G, τ, Ξ, contactIndex, Y, tY; timeSteps=1000)
-    X, tx = fulltimestep(x0, param; timeSteps=1000)
-    loss = hipSpeedLoss(X, tx)
+    gn, M, B, C, G, τ, Ξ, contactIndex, Y, tY = allocateCuArrays(x0, param)
+    loss = fulltimestep!(x0, param, gn, M, B, C, G, τ, Ξ, contactIndex, Y, tY; timeSteps=1000)
+    # X, tx = fulltimestep(x0, param; timeSteps=1000)
+    # loss = hipSpeedLoss(X, tx)
 
     return loss
 end
