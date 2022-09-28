@@ -19,7 +19,7 @@ struct BouncingBall{T}
         ϵn              = T.(0.9*ones(1))
         ϵt              = T.(-0.5*ones(1))
         μ               = T.(0.2*ones(1))
-        x0              = T.([0.0, 0.5, 0.1, -0.1])     #xpos, ypos, xdot, ydot
+        x0              = T.([0.1, 0.3, 0.1, -0.1])     #xpos, ypos, xdot, ydot
         contactIndex    = zeros(T, 1)
         gThreshold      = T.(0.001)
 
@@ -28,7 +28,7 @@ struct BouncingBall{T}
 
 end
 
-function (sys::BouncingBall)(x)
+function (sys::BouncingBall)(x, param)
     gn  = gap(sys, x)
     γn  = vnormal(sys, x)
     γt  = vtang(sys, x)
@@ -38,6 +38,12 @@ function (sys::BouncingBall)(x)
     Wt  = wt(sys, x)
 
     return gn, γn, γt, M, h, Wn, Wt
+end
+
+function (sys::BouncingBall)(x::Vector{T}) where {T<:Real}
+    q = x[1:2]
+    u = x[3:4]
+    return q, u
 end
 
 function gap(sys::BouncingBall, x)
