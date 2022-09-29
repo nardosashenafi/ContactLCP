@@ -6,7 +6,7 @@ mutable struct Lcp{T, TSYS}
     ϵt                  ::Vector{T}
     μ                   ::Vector{T}
 
-    function Lcp(T, sys, θ0)
+    function Lcp(T, sys)
 
         total_contact_num           = length(sys.contactIndex)
         current_contact_num         = sum(sys.contactIndex)

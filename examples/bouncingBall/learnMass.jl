@@ -12,7 +12,7 @@ include("bouncing_ball.jl")
 x0 = [0.0,0.5,0.2,-0.2]
 
 sys  = BouncingBall(Float64)
-lcp  = ContactLCP.Lcp(sys, Float64)
+lcp  = ContactLCP.Lcp(Float64, sys)
 
 function loss(lcp, θ, x0, Sθd, λθd)
     Sθ, λθ, _ = trajectory(lcp, x0, θ)
