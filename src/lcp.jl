@@ -18,8 +18,8 @@ mutable struct Lcp{T, TSYS}
     end
 end
 
-function sysAttributes(lcp, x)
-    return lcp.sys(x, [])
+function sysAttributes(lcp::Lcp, x, param)
+    return lcp.sys(x, param)
 end
 
 function checkContact(lcp::Lcp, gn, γn)
@@ -94,13 +94,13 @@ function lcpOpt(A, b, contactNum)
     end
 end
 
-function solveLcp(lcp, gn, γn, γt, M, h, Wn, Wt; Δt=0.001)
+function solveLcp(lcp::Lcp, gn, γn, γt, M, h, Wn, Wt; Δt=0.001) 
 
     contactIndex = checkContact(lcp, gn, γn)
     s            = lcp.current_contact_num
-    λn = zeros(lcp.total_contact_num)
-    λt = zeros(lcp.total_contact_num)
-    λR = zeros(lcp.total_contact_num)
+    Λn = [0.0]
+    ΛR = [0.0]
+    Λt = [0.0]
 
     if s > 0
         A, b         = getAb(lcp, gn, γn, γt, M, h, Wn, Wt; Δt = Δt)
@@ -110,17 +110,13 @@ function solveLcp(lcp, gn, γn, γt, M, h, Wn, Wt; Δt=0.001)
         Λn = λ[1:s]
         ΛR = λ[s+1:2s]
         Λt = ΛR - diagm(0 => lcp.sys.μ[contactIndex .== 1])*Λn
-
-        λn[contactIndex .== 1] = Λn
-        λt[contactIndex .== 1] = Λt
-        λR[contactIndex .== 1] = ΛR
     end
 
-    return λn, λt, λR
+    return Λn, Λt, ΛR
 end
 
 function solveLcp(lcp::Lcp, x; Δt = 0.001)
-    gn, γn, γt, M, h, Wn, Wt = sysAttributes(lcp, x)
+    gn, γn, γt, M, h, Wn, Wt = sysAttributes(lcp, x, [])
     return solveLcp(lcp, gn, γn, γt, M, h, Wn, Wt; Δt=0.001)
 end
 
@@ -131,7 +127,7 @@ function oneTimeStep(lcp::Lcp, x1; Δt = 0.001)
     qM      = qA + 0.5f0*Δt*uA
 
     x_mid   = vcat(qM, uA)
-    gn, γn, γt, M, h, Wn, Wt = sysAttributes(lcp, x_mid)
+    gn, γn, γt, M, h, Wn, Wt = sysAttributes(lcp, x_mid, [])
     # println("x = ", x_mid)
     λn, λt, λR  = solveLcp(lcp, gn, γn, γt, M, h, Wn, Wt; Δt=Δt)
     x2          = vcat(qM,uA)
@@ -143,22 +139,24 @@ function oneTimeStep(lcp::Lcp, x1; Δt = 0.001)
 
 end
 
-function fulltimestep(lcp::Lcp, x0, T; Δt = 0.001, totalTimeStep = 500)
+function fulltimestep(lcp::Lcp, x0::Vector{T}; Δt = 0.001, totalTimeStep = 500) where {T<:Real}
 
-    X       = Array{Array{T, 1}, 1}()
-    Λn      = Array{Array{T, 1}, 1}()
-    Λt      = Array{Array{T, 1}, 1}()
-    t       = Array{T, 1}()
+    X       = Vector{Vector{T}}(undef, totalTimeStep+1)
+    Λn      = Vector{Vector{T}}(undef, totalTimeStep+1)
+    Λt      = Vector{Vector{T}}(undef, totalTimeStep+1)
+    t       = Vector{T}(undef, totalTimeStep+1)
     x       = deepcopy(x0)
-    X       = push!(X, x)
-    t       = push!(t, 0.0)
+    X[1]    = x
+    t[1]    = 0.0
+    Λn[1]   = zeros(T, lcp.total_contact_num)
+    Λt[1]   = zeros(T, lcp.total_contact_num)
 
-    for i in 1:totalTimeStep
+    for i in 2:totalTimeStep+1
         x, λn, λt  = oneTimeStep(lcp, x; Δt=Δt)
-        push!(X, x)
-        push!(Λn, λn)
-        push!(Λt, λt)
-        push!(t, t[end]+Δt)
+        X[i]    = x
+        Λn[i]   = λn
+        Λt[i]   = λt
+        t[i]    = t[i-1]+Δt
     end
 
     return X, t, Λn, Λt
