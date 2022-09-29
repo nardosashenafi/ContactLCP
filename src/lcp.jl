@@ -6,7 +6,7 @@ mutable struct Lcp{T, TSYS}
     ϵt                  ::Vector{T}
     μ                   ::Vector{T}
 
-    function Lcp(sys, T)
+    function Lcp(T, sys, θ0)
 
         total_contact_num           = length(sys.contactIndex)
         current_contact_num         = sum(sys.contactIndex)
@@ -36,6 +36,7 @@ function checkContact(lcp::Lcp, gn, γn)
     return contactIndex
 end
 
+#the coefficients are trimmed inorder to construct A matrix and b vector. This function resets the coefficients
 function resetCoefficients(lcp::Lcp)
     return lcp.sys.ϵn, lcp.sys.ϵt, lcp.sys.μ
 end
@@ -77,7 +78,6 @@ function getAb(lcp::Lcp, gn, γn, γt, M, h, Wn, Wt; Δt = 0.001)
 end
 
 function lcpOpt(A, b, contactNum)
-
     if contactNum > 0
         model = Model(PATHSolver.Optimizer)
         set_silent(model)
@@ -136,7 +136,6 @@ function oneTimeStep(lcp::Lcp, x1; Δt = 0.001)
     qE = qM + 0.5f0*Δt*uE
 
     return vcat(qE,uE), λn, λt
-
 end
 
 function fulltimestep(lcp::Lcp, x0::Vector{T}; Δt = 0.001, totalTimeStep = 500) where {T<:Real}

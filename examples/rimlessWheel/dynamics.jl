@@ -49,6 +49,7 @@ mutable struct RimlessWheel{T}
 end
 
 #returns the attributes need to model contact
+
 function (sys::RimlessWheel)(x::Vector{T}, θ; limitcycle=false) where {T<:Real}
     gn  = gap(sys, x)  
     γn  = vnormal(sys, x)
@@ -118,6 +119,7 @@ function control(x, θp; limitcycle=false)
 end
 
 function genForces(sys, x, param; limitcycle=limitcycle)
+
     q, u = sys(x)
     θ, ϕ = q[1:2]
     #h = Bu - C qdot - G
@@ -148,11 +150,6 @@ function impactMap(sys, ϕ)
 
 end
 
-function wrapWheel(x, λn)
-    x[1] = -x[1]
-    return x
-end
-
 function wn(sys, x)
     sgn = sign(x[1])
     # return permutedims(hcat([0.0, -sys.l1*sin(x[1]) + sys.l1*sin(2sys.α + x[1])]...))
@@ -164,74 +161,3 @@ function wt(sys, x)
     return permutedims(hcat([sys.l1*cos(x[2]), 0.0]...))
 end
 
-function plotRimless(sys, X)
-
-    θ = getindex.(X, 1)
-    ϕ = getindex.(X, 2)
-    θdot = getindex.(X, 3)
-    ϕdot = getindex.(X, 4)
-
-    fig = figure("MyFigure",figsize=(1,1))
-    ax = plt.axes(xlim = (-7,7),ylim=(0,2))
-
-    #plane
-    planeLength = 1
-    planex = [-planeLength/2, planeLength/2]
-    planey = [0.0, planeLength * sin(sys.γ)]
-
-
-    x1(θ) = 0.0
-    y1(θ) = tan(sys.γ) ./ (planeLength/2.0)  
-
-    # x2(θ) = x1(θ) + sys.l1*sin(θ - sys.γ)
-    x2(θ) = x1(θ) + sys.l1*sin(-θ)
-    y2(θ) = y1(θ) + sys.l1*cos(θ)
-
-    step = 10
-
-    function animate(i)
-        clf()
-        x_spoke = [x1(θ[step*i+1]), x2(θ[step*i+1])]
-        y_spoke = [y1(θ[step*i+1]), y2(θ[step*i+1])]
-        plot(planex, planey)
-        plot(x_spoke,y_spoke)
-    end
-
-    myanim = anim.FuncAnimation(fig, animate, frames=length(X)-1)
-    plt.show()
-    # myanim[:save]("animation.gif", writer="PillowWriter", fps=2)
-    # display("text/html", html_video("test1.mp4"))
-end
-
-function plots(Z, t)
-
-    if typeof(Z) == Vector{Vector{Vector{Float64}}}
-        Z = reduce(vcat, Z)
-        t = reduce(vcat, t)
-    end
-
-    fig1 = plt.figure()
-    fig1.clf()
-    subplot(2, 2, 1)
-    plot(t, getindex.(Z, 1))
-    ylabel(L"$\theta$", fontsize=15)
-    subplot(2, 2, 2)
-    plot(t, getindex.(Z, 2))
-    ylabel(L"$\phi$", fontsize=15)
-    subplot(2, 2, 3)
-    plot(t, getindex.(Z, 3))
-    ylabel(L"$\dot{\theta}$", fontsize=15)
-    subplot(2, 2, 4)
-    plot(t, getindex.(Z, 4))
-    ylabel(L"$\dot{\phi}$", fontsize=15)
-
-
-
-    fig2 = plt.figure()
-    fig2.clf()
-    plot(getindex.(Z, 1), getindex.(Z, 3))
-    ticklabel_format(axis="y", style="sci",scilimits=(0,0))
-    ylabel(L"$\dot{\theta}$", fontsize=15)
-    xlabel(L"$\theta$", fontsize=15)
-
-end
