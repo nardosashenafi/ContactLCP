@@ -143,13 +143,13 @@ function oneTimeStep(lcp::Lcp, x1; Δt = 0.001)
 
 end
 
-function fulltimestep(lcp::Lcp, T; Δt = 0.001, totalTimeStep = 500)
+function fulltimestep(lcp::Lcp, x0, T; Δt = 0.001, totalTimeStep = 500)
 
     X       = Array{Array{T, 1}, 1}()
     Λn      = Array{Array{T, 1}, 1}()
     Λt      = Array{Array{T, 1}, 1}()
     t       = Array{T, 1}()
-    x       = deepcopy(lcp.sys.x0)
+    x       = deepcopy(x0)
     X       = push!(X, x)
     t       = push!(t, 0.0)
 

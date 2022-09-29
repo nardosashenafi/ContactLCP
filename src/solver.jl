@@ -44,12 +44,9 @@ function lemke(M, q)
     #starting values
     z = -(M\q)
     w = [0.0, 0.0, 0.0]
-    # z = 2.0*rand(3)
-    # w = rand(3)
 
     if all(q .>= 0)
         println("trivial solution")
-        # z = zeros(totalCol)
         w = q 
         println("w = ", w)
         return w
@@ -119,10 +116,8 @@ function lemke(M, q)
     println(pivottedIndices)
 
     sol = zeros(totalCol)
-    i = 1
     for (r, s) in pivottedIndices
-        sol[i] = q̂[r]
-        i += 1
+        sol[s-1] = q̂[r]
     end
 
     # println("q̂ = ", q̂)
