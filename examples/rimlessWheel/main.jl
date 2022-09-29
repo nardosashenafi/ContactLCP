@@ -1,6 +1,6 @@
 using ContactLCP
-using LaTeXStrings, PyPlot
-using JuMP, LinearAlgebra
+using LaTeXStrings
+using PyPlot
 
 include("dynamics.jl")
 
@@ -83,3 +83,4 @@ end
 
 X, t, Λn = ContactLCP.fulltimestep(lcp, x0, θ0)
 plots(X, t, Λn)
+
