@@ -43,21 +43,22 @@ function lemke(M, q::Vector{T}) where {T<:Real}
 
     #starting values
     z = -(M\q)
-    w = [0.0, 0.0, 0.0]
+    w = zeros(totalRow)
 
     if all(q .>= 0)
-        println("trivial solution")
+        # println("trivial solution")
         w = q 
-        println("w = ", w)
+        # println("w = ", w)
         return w
     end
 
     #Trivial solution does not apply. Create the augemented form
     pivottedIndices = Vector{Tuple{Int64, Int64}}()
-    q0 = 1000.0f0                #start with sufficiently large scalar q0 >= 0.0
     c  = 1.0f0*ones(totalCol)                  # c > 0
-    w0 = 0.0
 
+    aug_size = 1
+    q0 = 10000.0f0              #start with sufficiently large scalar q0 >= 0.0
+    w0 = 0.0
     z0 = maximum(-q ./ c)
 
     ẑ = vcat(z0, z)
@@ -72,7 +73,7 @@ function lemke(M, q::Vector{T}) where {T<:Real}
     d = α
     isFound     = false
     infeasible  = false
-    MAX_ITER    = 10
+    MAX_ITER    = 40
     iter        = 1
 
     while !isFound && !infeasible && iter < MAX_ITER
@@ -89,6 +90,7 @@ function lemke(M, q::Vector{T}) where {T<:Real}
 
         #Pivotting
         if b == α
+
             M̂, q̂, ŵ, ẑ = pivot(M̂, q̂, ŵ, ẑ, b, d)
             push!(pivottedIndices, (b, d))
             # println("Solved")
@@ -103,7 +105,7 @@ function lemke(M, q::Vector{T}) where {T<:Real}
         d = b
     end     #end while
     
-
+    # println("Pivotted indices = ", pivottedIndices)
     if iter == MAX_ITER
         println("Exceeded max iteration. Increase your guess for q0")
     end
@@ -114,7 +116,7 @@ function lemke(M, q::Vector{T}) where {T<:Real}
     end
 
     # println("q̂ = ", q̂)
-    # println("pathsolver = ", lcpOpt(M, q, 1))
+    # println("pathsolver = ", lcpOpt(M, q, Int(floor(length(q)/3))))
     # println("Lemke = ", sol)
     return sol
 end

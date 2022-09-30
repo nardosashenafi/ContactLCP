@@ -27,7 +27,8 @@ function checkContact(lcp::Lcp, gn, γn)
     contactIndex = zeros(lcp.total_contact_num)
 
     for i in 1:lcp.total_contact_num
-        if (gn[i] < lcp.sys.gThreshold) && (γn[i] < 0.0)
+        # if (gn[i] < lcp.sys.gThreshold) && (γn[i] <= 0.0)
+        if (gn[i] < lcp.sys.gThreshold) 
             contactIndex[i] = 1 
         end
     end
@@ -94,41 +95,43 @@ function lcpOpt(A, b, contactNum)
     end
 end
 
-function solveLcp(lcp::Lcp, gn, γn, γt, M, h, Wn, Wt; Δt=0.001) 
+function solveLcp(lcp::Lcp, gn::Vector{T}, γn, γt, M, h, Wn, Wt; Δt=0.001) where {T<:Real}
 
     contactIndex = checkContact(lcp, gn, γn)
+    # println("Gn = ", gn[4:5])
+    # println("γn = ", γn[4:5])
+    println("ContactIndex = ", contactIndex)
     s            = lcp.current_contact_num
-    Λn = [0.0]
-    ΛR = [0.0]
-    Λt = [0.0]
+    Λn           = zeros(T, lcp.total_contact_num)
+    ΛR           = zeros(T, lcp.total_contact_num)
+    Λt           = zeros(T, lcp.total_contact_num)
 
     if s > 0
-        A, b         = getAb(lcp, gn, γn, γt, M, h, Wn, Wt; Δt = Δt)
+        A, b = getAb(lcp, gn, γn, γt, M, h, Wn, Wt; Δt = Δt)
         # λ  = lcpOpt(A, b, s)
         λ =  lemke(A, b)
 
-        Λn = λ[1:s]
-        ΛR = λ[s+1:2s]
-        Λt = ΛR - diagm(0 => lcp.sys.μ[contactIndex .== 1])*Λn
+        Λn[contactIndex .== 1] = λ[1:s]
+        ΛR[contactIndex .== 1] = λ[s+1:2s]
+        Λt[contactIndex .== 1] = λ[s+1:2s] - diagm(0 => lcp.sys.μ[contactIndex .== 1])*λ[1:s]
     end
 
     return Λn, Λt, ΛR
 end
 
-function solveLcp(lcp::Lcp, x; Δt = 0.001)
-    gn, γn, γt, M, h, Wn, Wt = sysAttributes(lcp, x, [])
+function solveLcp(lcp::Lcp, x, param; Δt = 0.001)
+    gn, γn, γt, M, h, Wn, Wt = sysAttributes(lcp, x, param)
     return solveLcp(lcp, gn, γn, γt, M, h, Wn, Wt; Δt=0.001)
 end
 
-function oneTimeStep(lcp::Lcp, x1; Δt = 0.001)
+function oneTimeStep(lcp::Lcp, x1, param; Δt = 0.001)
 
-    #TODO: replace with getstate
     qA, uA  = lcp.sys(x1)
     qM      = qA + 0.5f0*Δt*uA
 
     x_mid   = vcat(qM, uA)
-    gn, γn, γt, M, h, Wn, Wt = sysAttributes(lcp, x_mid, [])
-    # println("x = ", x_mid)
+    gn, γn, γt, M, h, Wn, Wt = sysAttributes(lcp, x_mid, param)
+    println("x = ", x_mid)
     λn, λt, λR  = solveLcp(lcp, gn, γn, γt, M, h, Wn, Wt; Δt=Δt)
     x2          = vcat(qM,uA)
 
@@ -138,7 +141,7 @@ function oneTimeStep(lcp::Lcp, x1; Δt = 0.001)
     return vcat(qE,uE), λn, λt
 end
 
-function fulltimestep(lcp::Lcp, x0::Vector{T}; Δt = 0.001, totalTimeStep = 500) where {T<:Real}
+function fulltimestep(lcp::Lcp, x0::Vector{T}, param; Δt = 0.001, totalTimeStep = 500) where {T<:Real}
 
     X       = Vector{Vector{T}}(undef, totalTimeStep+1)
     Λn      = Vector{Vector{T}}(undef, totalTimeStep+1)
@@ -151,7 +154,7 @@ function fulltimestep(lcp::Lcp, x0::Vector{T}; Δt = 0.001, totalTimeStep = 500)
     Λt[1]   = zeros(T, lcp.total_contact_num)
 
     for i in 2:totalTimeStep+1
-        x, λn, λt  = oneTimeStep(lcp, x; Δt=Δt)
+        x, λn, λt  = oneTimeStep(lcp, x, param; Δt=Δt)
         X[i]    = x
         Λn[i]   = λn
         Λt[i]   = λt
