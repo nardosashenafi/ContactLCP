@@ -47,7 +47,7 @@ function lemke(M, q::Vector{T}) where {T<:Real}
 
     if all(q .>= 0)
         w = q 
-        return w
+        return zeros(totalCol)
     end
 
     #Trivial solution does not apply. Create the augemented form
@@ -115,7 +115,7 @@ function lemke(M, q::Vector{T}) where {T<:Real}
 
     # println("q̂ = ", q̂)
     println("pathsolver = ", lcpOpt(M, q, Int(floor(length(q)/3))))
-    # println("Lemke = ", sol)
+    println("Lemke = ", sol)
     return sol
 end
 
@@ -200,14 +200,15 @@ function lemkeLexi(M, q::Vector{T}) where {T<:Real}
     w = zeros(totalRow)
 
     if all(q .>= 0)
-        w = q 
-        return w
+        println("Trivial solution = ", w)
+        println("pathsolver = ", lcpOpt(M, q, Int(floor(length(q)/3))))
+        return zeros(totalCol)
     end
 
     #Trivial solution does not apply. Create the augemented form
     pivottedIndices = Vector{Tuple{Int64, Int64}}()
     c  = 1.0f0*ones(totalCol)                  # c > 0
-    q0 = 100.0f0              #start with sufficiently large scalar q0 >= 0.0
+    q0 = 1000.0f0              #start with sufficiently large scalar q0 >= 0.0
     w0 = 0.0
     z0 = maximum(-q ./ c)
 
@@ -216,10 +217,13 @@ function lemkeLexi(M, q::Vector{T}) where {T<:Real}
     q̂ = vcat(q0, q)
     M̂ = [0.0f0 -c'; c M]
 
-    Q = Matrix{Float32}(I, totalRow+1, totalRow+1)
-    Q̂ = hcat(q̂, Q)
+    Q = Matrix{Float32}(I, totalRow, totalRow)
+    Q̂ = zeros(totalRow+1, totalCol+1)
+    Q̂[:,1] = q̂
+    Q̂[2:end, 2:end] = Q     # Q̂ = [q0 0; q Q]
+    # Q̂ = hcat(q̂, Q)
 
-    α = lexiαRatioTest(Q̂, c) + 1
+    α = lexiαRatioTest(hcat(q, Q), c) + 1
     Q̂, M̂, q̂, ŵ, ẑ = lexiPivot(Q̂, M̂, q̂, ŵ, ẑ, α, 1)    #first feasible basic solution
     # push!(pivottedIndices, (α, 1))
 
