@@ -97,7 +97,7 @@ function vtang(sys::RimlessWheel, z)
     return Wt'*v
 end
 
-function massMatrix(sys, z)
+function massMatrix(sys::RimlessWheel, z)
     q, v = sys(z)
     x, y, ϕ, θ = q
     
@@ -126,7 +126,7 @@ function control(z, θp; limitcycle=false)
     end
 end
 
-function genForces(sys, z, param; limitcycle=false)
+function genForces(sys::RimlessWheel, z, param; limitcycle=false)
 
     q, v = sys(z)
     x, y, ϕ, θ = q
@@ -147,7 +147,7 @@ function genForces(sys, z, param; limitcycle=false)
     return B*control(z, param; limitcycle=limitcycle) - C*v - G
 end
 
-function impactMap(sys, ϕ)
+function impactMap(sys::RimlessWheel, ϕ)
 
     det = sys.I1*sys.I2 + sys.I1*sys.m2*sys.l2^2 + sys.I2*sys.mt*sys.l1^2 + 
             sys.m2*sys.l1^2*sys.l2^2*(sys.m1 + sys.m2*(sin(sys.α - ϕ))^2)
@@ -164,7 +164,7 @@ function impactMap(sys, ϕ)
 
 end
 
-function wn(sys, z::Vector{T}) where {T<:Real}
+function wn(sys::RimlessWheel, z::Vector{T}) where {T<:Real}
 
     θ        = z[4]
     k_range  = range(1, stop=sys.k, step=1)
@@ -176,7 +176,7 @@ function wn(sys, z::Vector{T}) where {T<:Real}
 
 end
 
-function wt(sys, z::Vector{T}) where {T<:Real}
+function wt(sys::RimlessWheel, z::Vector{T}) where {T<:Real}
 
     θ        = z[4]
     k_range  = range(1, stop=sys.k, step=1)

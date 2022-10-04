@@ -60,20 +60,20 @@ function vtang(sys::BouncingBall, x)
     return Wt'*x[3:4]
 end
 
-function massMatrix(sys, x)
+function massMatrix(sys::BouncingBall, x)
     return [sys.m 0.0;
             0.0 sys.m]
 end
 
-function genForces(sys, x)
+function genForces(sys::BouncingBall, x)
     return [0.0, -sys.m*sys.g]
 end
 
-function wn(sys, x)
+function wn(sys::BouncingBall, x)
     return permutedims(hcat([0.0, 1.0]...))
 end
 
-function wt(sys, x)
+function wt(sys::BouncingBall, x)
     return permutedims(hcat([1.0, 0.0]...))
 end
 

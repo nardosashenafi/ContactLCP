@@ -207,24 +207,19 @@ function lemkeLexi(M, q::Vector{T}) where {T<:Real}
     #Trivial solution does not apply. Create the augemented form
     pivottedIndices = Vector{Tuple{Int64, Int64}}()
     c  = 1.0f0*ones(totalCol)                  # c > 0
-    # q0 = 100.0f0              #start with sufficiently large scalar q0 >= 0.0
-    # w0 = 0.0
+    q0 = 100.0f0              #start with sufficiently large scalar q0 >= 0.0
+    w0 = 0.0
     z0 = maximum(-q ./ c)
 
-    # ẑ = vcat(z0, z)
-    # ŵ = vcat(w0, w)
-    # q̂ = vcat(q0, q)
-    # M̂ = [0.0f0 -c'; c M]
+    ẑ = vcat(z0, z)
+    ŵ = vcat(w0, w)
+    q̂ = vcat(q0, q)
+    M̂ = [0.0f0 -c'; c M]
 
-    ŵ = deepcopy(w)
-    q̂ = deepcopy(q)
-    ẑ = deepcopy(z)
-    Q = Matrix{Float32}(I, totalRow, totalRow)
-    Q̂ = hcat(q, Q)
-    # M̂ = [c M]
-    M̂ = deepcopy(M)
+    Q = Matrix{Float32}(I, totalRow+1, totalRow+1)
+    Q̂ = hcat(q̂, Q)
 
-    α = lexiαRatioTest(Q̂, c) 
+    α = lexiαRatioTest(Q̂, c) + 1
     Q̂, M̂, q̂, ŵ, ẑ = lexiPivot(Q̂, M̂, q̂, ŵ, ẑ, α, 1)    #first feasible basic solution
     # push!(pivottedIndices, (α, 1))
 
@@ -270,12 +265,11 @@ function lemkeLexi(M, q::Vector{T}) where {T<:Real}
 
     sol = zeros(T, totalCol)
     for (r, s) in pivottedIndices
-        sol[s] = q̂[r]
+        sol[s-1] = q̂[r]
     end
 
-    println("Q̂ = ", Q̂)
     println("pathsolver = ", lcpOpt(M, q, Int(floor(length(q)/3))))
-    # println("Lemke = ", sol)
+    println("Lemke = ", sol)
     return sol
 end
 
