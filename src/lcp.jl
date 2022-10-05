@@ -131,7 +131,7 @@ function oneTimeStep(lcp::Lcp, x1, param; Δt = 0.001)
 
     x_mid   = vcat(qM, uA)
     gn, γn, γt, M, h, Wn, Wt = sysAttributes(lcp, x_mid, param)
-    # println("x = ", x_mid)
+    println("x = ", x_mid)
     λn, λt, λR  = solveLcp(lcp, gn, γn, γt, M, h, Wn, Wt; Δt=Δt)
     x2          = vcat(qM,uA)
 

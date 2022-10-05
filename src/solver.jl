@@ -195,6 +195,7 @@ function lemkeLexi(M, q::Vector{T}) where {T<:Real}
     totalRow = size(M, 1)
     totalCol = size(M, 2)
 
+    # sol = zeros(T, totalCol+1)
     #starting values
     z = -(M\q)
     w = zeros(totalRow)
@@ -226,6 +227,7 @@ function lemkeLexi(M, q::Vector{T}) where {T<:Real}
     α = lexiαRatioTest(hcat(q, Q), c) + 1
     Q̂, M̂, q̂, ŵ, ẑ = lexiPivot(Q̂, M̂, q̂, ŵ, ẑ, α, 1)    #first feasible basic solution
     # push!(pivottedIndices, (α, 1))
+    # sol[α] = q̂[1]
 
     d = α
     isFound     = false
@@ -248,7 +250,7 @@ function lemkeLexi(M, q::Vector{T}) where {T<:Real}
         #Pivotting
         if b == α
 
-            Q̂, M̂, q̂, ŵ, ẑ = lexiPivot(Q̂ , M̂, q̂, ŵ, ẑ, b, d)
+            Q̂, M̂, q̂, ŵ, ẑ = lexiPivot(Q̂ ,M̂, q̂, ŵ, ẑ, b, d)
             push!(pivottedIndices, (b, d))
             # println("Solved")
             isFound = true
@@ -259,6 +261,7 @@ function lemkeLexi(M, q::Vector{T}) where {T<:Real}
             push!(pivottedIndices, (b, d))
             iter += 1
         end
+        # sol[b] = q̂[d]
         d = b               # driving variable is the complement of the current blocking variable
     end     #end while
     
@@ -268,9 +271,14 @@ function lemkeLexi(M, q::Vector{T}) where {T<:Real}
     end
 
     sol = zeros(T, totalCol)
-    for (r, s) in pivottedIndices
-        sol[s-1] = q̂[r]
+    count_unique = []
+    for (r, s) in reverse(pivottedIndices)
+        r ∉ count_unique ? sol[s-1] = q̂[r] : nothing
+        push!(count_unique, r)
     end
+    # if totalCol > 4
+    #     sol[3] = 0.0
+    # end
 
     println("pathsolver = ", lcpOpt(M, q, Int(floor(length(q)/3))))
     println("Lemke = ", sol)
