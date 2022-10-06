@@ -195,7 +195,6 @@ function lemkeLexi(M, q::Vector{T}) where {T<:Real}
     totalRow = size(M, 1)
     totalCol = size(M, 2)
 
-    # sol = zeros(T, totalCol+1)
     #starting values
     z = -(M\q)
     w = zeros(totalRow)
@@ -261,27 +260,83 @@ function lemkeLexi(M, q::Vector{T}) where {T<:Real}
             push!(pivottedIndices, (b, d))
             iter += 1
         end
-        # sol[b] = q̂[d]
         d = b               # driving variable is the complement of the current blocking variable
     end     #end while
     
-    println("Pivotted indices = ", pivottedIndices)
     if iter == MAX_ITER
         println("Exceeded max iteration. Increase your guess for q0")
     end
 
-    sol = zeros(T, totalCol)
-    count_unique = []
-    for (r, s) in reverse(pivottedIndices)
-        r ∉ count_unique ? sol[s-1] = q̂[r] : nothing
-        push!(count_unique, r)
+    #Backtracking algorithm: finds where components of q̂ belong in the solution
+    # start with w0; in the pivottedIndices tuple look if the first index of w (w0) has been pivotted. If it is not, then w0 component of the nonbasic solution is zeros.
+    # if it does have a value, then look for the zi value it pivotted with. Then along the z column of the pivottedIndices, look for the same zi and what it was pivotted with earlier until it is no longer pivotted.
+    # Skematic of operation:
+        # PivottedIndices = (windex, zindex) = (q̂index, finalSolutionIndex)
+        # windex            zindex
+        # w5  
+        # |
+        # w5   <------------- z6
+        #                     |
+        #                     |
+        # w3 ------------->  z6
+
+        #solution: basicSolution[5] = q̂[1]
+
+    basicSol = zeros(T, totalCol+1)
+    pivotLen = length(pivottedIndices)
+    windex = getindex.(pivottedIndices, 1)
+    zindex = getindex.(pivottedIndices, 2)
+    state_i = pivotLen
+
+    for i in range(1, stop = totalCol+1, step=1 )
+        extractionComplete = false
+        m = findlast(x -> x == i, windex[1:state_i])
+        while !extractionComplete
+            if isnothing(m)
+                basicSol[i] = 0.0 
+                extractionComplete = true
+                break
+            else
+                state_i = m-1
+                n = findlast(x -> x == zindex[m], zindex[1:state_i])
+            end   
+
+            if isnothing(n)
+                basicSol[zindex[m]] = q̂[windex[m]] 
+                extractionComplete = true
+                break
+            else
+                i = windex[n]
+                basicSol[zindex[n]] = q̂[windex[n]] 
+                state_i = n-1 
+            end
+            m = findlast(x -> x == i, windex[1:state_i])
+
+            if isnothing(m)
+                break 
+            end
+        end
+        state_i = pivotLen
     end
-    # if totalCol > 4
-    #     sol[3] = 0.0
+
+    basicSol = basicSol[2:end]
+
+    # sol = zeros(T, totalCol)
+    # count_unique = []
+    # for (r, s) in reverse(pivottedIndices)
+    #     r ∉ count_unique ? sol[s-1] = q̂[r] : nothing
+    #     push!(count_unique, r)
     # end
 
-    println("pathsolver = ", lcpOpt(M, q, Int(floor(length(q)/3))))
-    println("Lemke = ", sol)
-    return sol
+    solpathsolver = lcpOpt(M, q, Int(floor(length(q)/3)))
+
+    if any(abs.(basicSol - solpathsolver) .> 0.001)
+        println("Pivotted indices = ", pivottedIndices)
+
+        println("pathsolver = ", solpathsolver)
+        println("Lemke = ", basicSol)
+        println("q̂ = ", q̂)
+    end
+    return basicSol
 end
 

@@ -117,8 +117,8 @@ function control(z, θp; limitcycle=false)
     if limitcycle #working control for limit cycle
         return -θp[1]*(z[2]-0.325) - θp[2]*z[4]
     else
-        # return -θp[1]*(q[4]-0.325) - θp[2]*v[4]
-        return 0.0
+        return -θp[1]*(q[3]-0.325) - θp[2]*v[3]
+        # return 0.0
         # @assert length(θp) == 6 + DiffEqFlux.paramlength(Hd)
         # y = MLBasedESC.controller(npbc, inputLayer(x), θp)
         # y = unn(inputLayer(x), θp)[1]
@@ -191,18 +191,24 @@ end
 function plots(Z, t, Λn, Λt)
     fig1 = plt.figure()
     fig1.clf()
-    subplot(2, 2, 1)
+    subplot(2, 3, 1)
     plot(t, getindex.(Z, 1))
     ylabel("x [m]", fontsize=15)
-    subplot(2, 2, 2)
+    subplot(2, 3, 2)
     plot(t, getindex.(Z, 2))
     ylabel("y [m]", fontsize=15)
-    subplot(2, 2, 3)
+    subplot(2, 3, 3)
     plot(t, getindex.(Z, 5))
     ylabel("vx [m/s]", fontsize=15)
-    subplot(2, 2, 4)
+    subplot(2, 3, 4)
     plot(t, getindex.(Z, 6))
     ylabel("vy [m/s]", fontsize=15)
+    subplot(2, 3, 5)
+    plot(getindex.(Z, 3), getindex.(Z, 7))
+    ylabel(L"\dot{\phi} [rad/s]", fontsize=15)
+    subplot(2, 3, 6)
+    plot(getindex.(Z, 4), getindex.(Z, 8))
+    ylabel(L"\dot{\theta} [rad/s]", fontsize=15)
 
     fig2 = plt.figure()
     fig2.clf()

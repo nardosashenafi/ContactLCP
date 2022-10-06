@@ -100,7 +100,7 @@ function solveLcp(lcp::Lcp, gn::Vector{T}, γn, γt, M, h, Wn, Wt; Δt=0.001) wh
     contactIndex = checkContact(lcp, gn, γn)
     # println("Gn = ", gn[4:5])
     # println("γn = ", γn[4:5])
-    println("ContactIndex = ", contactIndex)
+    # println("ContactIndex = ", contactIndex)
     s            = lcp.current_contact_num
     Λn           = zeros(T, lcp.total_contact_num)
     ΛR           = zeros(T, lcp.total_contact_num)
@@ -131,7 +131,7 @@ function oneTimeStep(lcp::Lcp, x1, param; Δt = 0.001)
 
     x_mid   = vcat(qM, uA)
     gn, γn, γt, M, h, Wn, Wt = sysAttributes(lcp, x_mid, param)
-    println("x = ", x_mid)
+    # println("x = ", x_mid)
     λn, λt, λR  = solveLcp(lcp, gn, γn, γt, M, h, Wn, Wt; Δt=Δt)
     x2          = vcat(qM,uA)
 
