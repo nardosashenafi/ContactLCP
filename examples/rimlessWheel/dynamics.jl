@@ -35,8 +35,7 @@ mutable struct RimlessWheel{T}
         ϵn              = T.(0.0*ones(k))
         ϵt              = T.(0.0*ones(k))
         μ               = T.(0.9*ones(k))
-        θ0              = 0.0
-        x0              = T.([l1*sin(θ0), l1*cos(θ0), 0.0, θ0, 2.0, 0.0, 0.0, 0.0])       
+        x0              = zeros(T, 8)
         #[x, y, ϕ, θ, xdot, ydot, ϕdot, θdot]
         # state x is parallel to the plane, y points normal to the plane
         # θ is that of the spoke in contact with the plane initially
@@ -46,6 +45,20 @@ mutable struct RimlessWheel{T}
         new{T}(m1, m2, I1, I2, mt, l1, l2, g, k, α, γ, ϵn, ϵt, μ, x0, contactIndex, gThreshold)
     end
 
+end
+
+function initialState(sys, θ0, θ0dot, ϕ0, ϕ0dot)
+    @assert -sys.α <= θ0 <= sys.α "Give an initial spoke angle for the spoke in contact"
+    x = sys.l1*sin(θ0)
+    y = sys.l1*cos(θ0)
+    ϕ = ϕ0 
+    θ = θ0 
+    xdot = -sys.l1*cos(θ0) * θ0dot
+    ydot = sys.l1*sin(θ0) * θ0dot
+    ϕdot = ϕ0dot 
+    θdot = θ0dot
+
+    return [x, y, ϕ, θ, xdot, ydot, ϕdot, θdot]
 end
 
 #returns the attributes need to model contact
@@ -188,7 +201,7 @@ function wt(sys::RimlessWheel, z::Vector{T}) where {T<:Real}
 end
 
 
-function plots(Z, t, Λn, Λt)
+function plots(sys, Z, t, Λn, Λt)
     fig1 = plt.figure()
     fig1.clf()
     subplot(2, 3, 1)
@@ -225,4 +238,23 @@ function plots(Z, t, Λn, Λt)
     end
     ticklabel_format(axis="y", style="sci",scilimits=(0,0))
     ylabel(L"$\lambda_{t1} [N]$", fontsize=15)
+
+    fig3 = plt.figure()
+    fig3.clf()
+    θ = spokeInContact(sys, getindex.(Z, 4))
+    plot(θ, getindex.(Z, 8))
+
+end
+
+function spokeInContact(sys, θ)
+    θ_new = deepcopy(θ)
+
+    for i in 1:length(θ_new)
+        if θ_new[i] <= -sys.α
+            θ_new[i:end] .= θ_new[i:end] .+ 2*sys.α
+        elseif θ_new[i] >= sys.α
+            θ_new[i:end] .= θ_new[i:end] .- 2sys.α
+        end
+    end
+    return θ_new
 end

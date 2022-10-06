@@ -46,7 +46,6 @@ function lemke(M, q::Vector{T}) where {T<:Real}
     w = zeros(totalRow)
 
     if all(q .>= 0)
-        w = q 
         return zeros(totalCol)
     end
 
@@ -121,13 +120,13 @@ end
 
 function lexiMin(z1, z2)   # picks the vector with the first zero or strictly negative index
     δz = z1 - z2
-    first(δz[δz .!= 0.0]) < 0.0 ? minz = (z1,1) : minz = (z2,2)
+    first(δz[abs.(δz) .> 1e-5]) < 0.0 ? minz = (z1,1) : minz = (z2,2)
     return minz
 end
 
 function lexiMax(z1, z2)   # picks the vector with the first zero or strictly positive index
     δz = z1 - z2
-    first(δz[δz .!= 0.0]) < 0.0 ? maxz = (z2,2) : maxz = (z1,1)
+    first(δz[abs.(δz) .> 1e-5]) < 0.0 ? maxz = (z2,2) : maxz = (z1,1)
     return maxz
 end
 
@@ -149,12 +148,15 @@ end
 function lexiblockRatioTest(Q::Matrix{T}, m) where {T<:Real}
     minIndex = 1
     m_idIndex = Vector{Int}() 
-    [m[i] < 0.0 ? push!(m_idIndex, i) : nothing for i in 1:length(m)]
+    piv_tol = 1e-8
+    zero_tol = 1e-5
+    [m[i]+piv_tol < 0.0 ? push!(m_idIndex, i) : nothing for i in 1:length(m)]
 
     minIndex = first(m_idIndex)
     for i in 1:length(m_idIndex)-1
         j = m_idIndex[i+1]
-        minlocalIndex = lexiMin(-Q[minIndex,:] ./ m[minIndex], -Q[j,:] ./ m[j])[2] 
+        minlocalIndex = lexiMin((-Q[minIndex,:] .- zero_tol)./ m[minIndex], 
+                                (-Q[j,:] .- zero_tol) ./ m[j])[2] 
         minlocalIndex == 2 ? minIndex = j : nothing 
     end 
 
@@ -190,7 +192,7 @@ function lexiPivot(Q, M, q::Vector{T}, w, z, r, s) where {T<:Real}
     return Q̂, M̂, q̂, ŵ, ẑ
 end
 
-function lemkeLexi(M, q::Vector{T}) where {T<:Real}
+function lemkeLexi(M, q::Vector{T}, x) where {T<:Real}
     # println("Lemke begins")
     totalRow = size(M, 1)
     totalCol = size(M, 2)
@@ -200,15 +202,13 @@ function lemkeLexi(M, q::Vector{T}) where {T<:Real}
     w = zeros(totalRow)
 
     if all(q .>= 0)
-        println("Trivial solution = ", w)
-        println("pathsolver = ", lcpOpt(M, q, Int(floor(length(q)/3))))
         return zeros(totalCol)
     end
 
     #Trivial solution does not apply. Create the augemented form
     pivottedIndices = Vector{Tuple{Int64, Int64}}()
     c  = 1.0f0*ones(totalCol)                  # c > 0
-    q0 = 1000.0f0              #start with sufficiently large scalar q0 >= 0.0
+    q0 = 10000.0f0              #start with sufficiently large scalar q0 >= 0.0
     w0 = 0.0
     z0 = maximum(-q ./ c)
 
@@ -226,16 +226,17 @@ function lemkeLexi(M, q::Vector{T}) where {T<:Real}
     α = lexiαRatioTest(hcat(q, Q), c) + 1
     Q̂, M̂, q̂, ŵ, ẑ = lexiPivot(Q̂, M̂, q̂, ŵ, ẑ, α, 1)    #first feasible basic solution
     # push!(pivottedIndices, (α, 1))
-    # sol[α] = q̂[1]
 
     d = α
     isFound     = false
     infeasible  = false
-    MAX_ITER    = 100
+    MAX_ITER    = 30
     iter        = 1
 
     while !isFound && !infeasible && iter < MAX_ITER
 
+        # println("m = ", M̂[:,d])
+        # println("q̂ = ", q̂)
         #determine blocking variable
         if any(M̂[:,d] .< 0.0f0)
             b = lexiblockRatioTest(Q̂, M̂[:, d])
@@ -260,6 +261,7 @@ function lemkeLexi(M, q::Vector{T}) where {T<:Real}
             push!(pivottedIndices, (b, d))
             iter += 1
         end
+        # println("index = ", pivottedIndices[end])
         d = b               # driving variable is the complement of the current blocking variable
     end     #end while
     
@@ -320,14 +322,6 @@ function lemkeLexi(M, q::Vector{T}) where {T<:Real}
     end
 
     basicSol = basicSol[2:end]
-
-    # sol = zeros(T, totalCol)
-    # count_unique = []
-    # for (r, s) in reverse(pivottedIndices)
-    #     r ∉ count_unique ? sol[s-1] = q̂[r] : nothing
-    #     push!(count_unique, r)
-    # end
-
     solpathsolver = lcpOpt(M, q, Int(floor(length(q)/3)))
 
     if any(abs.(basicSol - solpathsolver) .> 0.001)
@@ -336,6 +330,7 @@ function lemkeLexi(M, q::Vector{T}) where {T<:Real}
         println("pathsolver = ", solpathsolver)
         println("Lemke = ", basicSol)
         println("q̂ = ", q̂)
+        println("x = ", x)
     end
     return basicSol
 end

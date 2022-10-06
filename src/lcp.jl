@@ -64,7 +64,6 @@ function getAb(lcp::Lcp, gn, γn, γt, M, h, Wn, Wt; Δt = 0.001)
 
     s   = lcp.current_contact_num
 
-    # println("Contact detected")
     E = Matrix{Float64}(I, s, s)
 
     A = [Wnt'*(M\(Wnt - Wtt*diagm(0 => μt))) Wnt'*(M\Wtt) zeros(s,s);
@@ -95,12 +94,10 @@ function lcpOpt(A, b, contactNum)
     end
 end
 
-function solveLcp(lcp::Lcp, gn::Vector{T}, γn, γt, M, h, Wn, Wt; Δt=0.001) where {T<:Real}
+function solveLcp(lcp::Lcp, gn::Vector{T}, γn, γt, M, h, Wn, Wt, x; Δt=0.001) where {T<:Real}
 
     contactIndex = checkContact(lcp, gn, γn)
-    # println("Gn = ", gn[4:5])
-    # println("γn = ", γn[4:5])
-    # println("ContactIndex = ", contactIndex)
+
     s            = lcp.current_contact_num
     Λn           = zeros(T, lcp.total_contact_num)
     ΛR           = zeros(T, lcp.total_contact_num)
@@ -108,8 +105,9 @@ function solveLcp(lcp::Lcp, gn::Vector{T}, γn, γt, M, h, Wn, Wt; Δt=0.001) wh
 
     if s > 0
         A, b = getAb(lcp, gn, γn, γt, M, h, Wn, Wt; Δt = Δt)
-        # λ  = lcpOpt(A, b, s)
-        λ =  lemkeLexi(A, b)
+        
+        # λ =  lcpOpt(A, b, s)
+        λ =  lemkeLexi(A, b, x)
 
         Λn[contactIndex .== 1] = λ[1:s]
         ΛR[contactIndex .== 1] = λ[s+1:2s]
@@ -121,7 +119,7 @@ end
 
 function solveLcp(lcp::Lcp, x, param; Δt = 0.001)
     gn, γn, γt, M, h, Wn, Wt = sysAttributes(lcp, x, param)
-    return solveLcp(lcp, gn, γn, γt, M, h, Wn, Wt; Δt=0.001)
+    return solveLcp(lcp, gn, γn, γt, M, h, Wn, Wt, x; Δt=0.001)
 end
 
 function oneTimeStep(lcp::Lcp, x1, param; Δt = 0.001)
@@ -131,8 +129,7 @@ function oneTimeStep(lcp::Lcp, x1, param; Δt = 0.001)
 
     x_mid   = vcat(qM, uA)
     gn, γn, γt, M, h, Wn, Wt = sysAttributes(lcp, x_mid, param)
-    # println("x = ", x_mid)
-    λn, λt, λR  = solveLcp(lcp, gn, γn, γt, M, h, Wn, Wt; Δt=Δt)
+    λn, λt, λR  = solveLcp(lcp, gn, γn, γt, M, h, Wn, Wt, x_mid; Δt=Δt)
     x2          = vcat(qM,uA)
 
     uE = M\((Wn - Wt*diagm(0 => lcp.sys.μ))*λn + Wt*λR + h*Δt) + uA
