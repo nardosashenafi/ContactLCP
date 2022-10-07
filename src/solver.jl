@@ -148,8 +148,8 @@ end
 function lexiblockRatioTest(Q::Matrix{T}, m) where {T<:Real}
     minIndex = 1
     m_idIndex = Vector{Int}() 
-    piv_tol = 1e-8
-    zero_tol = 1e-5
+    piv_tol = 0.0
+    zero_tol = 0.0
     [m[i]+piv_tol < 0.0 ? push!(m_idIndex, i) : nothing for i in 1:length(m)]
 
     minIndex = first(m_idIndex)
@@ -230,7 +230,7 @@ function lemkeLexi(M, q::Vector{T}, x) where {T<:Real}
     d = α
     isFound     = false
     infeasible  = false
-    MAX_ITER    = 30
+    MAX_ITER    = 10
     iter        = 1
 
     while !isFound && !infeasible && iter < MAX_ITER
@@ -286,8 +286,8 @@ function lemkeLexi(M, q::Vector{T}, x) where {T<:Real}
 
     basicSol = zeros(T, totalCol+1)
     pivotLen = length(pivottedIndices)
-    windex = getindex.(pivottedIndices, 1)
-    zindex = getindex.(pivottedIndices, 2)
+    windex  = getindex.(pivottedIndices, 1)
+    zindex  = getindex.(pivottedIndices, 2)
     state_i = pivotLen
 
     for i in range(1, stop = totalCol+1, step=1 )
