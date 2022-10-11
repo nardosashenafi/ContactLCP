@@ -177,6 +177,9 @@ function lexiPivot(Q, M, q::Vector{T}, w, z, r, s) where {T<:Real}
     Q̂ = T.(deepcopy(Q))
     q̂ = T.(deepcopy(q))
 
+    if M[r,s] < 1e-5 
+        println("About to divide by 0")
+    end
     ŵ[r]    = z[s]
     ẑ[s]    = w[r]
     q̂[r]    = -q[r]/M[r, s]
@@ -282,7 +285,7 @@ function lemkeLexi(M, q::Vector{T}, x) where {T<:Real}
         #                     |
         # w3 ------------->  z6
 
-        #solution: basicSolution[5] = q̂[1]
+        #solution: basicSolution[5] = q̂[3]
 
     basicSol = zeros(T, totalCol+1)
     pivotLen = length(pivottedIndices)
@@ -335,3 +338,210 @@ function lemkeLexi(M, q::Vector{T}, x) where {T<:Real}
     return basicSol
 end
 
+function updateComplementPair(basic, nonbasic, oldBasicInd, newBasicIndex)
+    locateComplementOfBasic = basic[oldBasicInd]
+    nonbasic[locateComplementOfBasic] = newBasicIndex
+
+    return nonbasic
+end
+
+function switchBasicWithNonBasic(basic, nonbasic, row, col)
+    nonbasic = updateComplementPair(basic, nonbasic, row, col)
+    basic[row], nonbasic[col] = nonbasic[col], basic[row]
+    return basic, nonbasic
+end
+
+function complementPairIndex(nonbasic, nonbasicIndex)
+    return nonbasic[nonbasicIndex]  #find complement of the dropped variable so we can add it to the basic variables on the next iteration
+end
+
+function switchComplementInDict(basicDict, nonbasicDict, row, col)
+
+    locateComplementOfBasic = basicDict[first(basicDict, row)[row].first]
+    nonbasicDict[first(nonbasicDict, locateComplementOfBasic)[locateComplementOfBasic].first] = col
+
+    tempBasicInd = first(basicDict, row)[row].first
+    tempNonbasicInd = first(nonbasicDict, col)[col].first
+    tempBasic = Dict(tempBasicInd => basicDict[tempBasicInd] )
+    tempNonbasic = Dict(tempNonbasicInd => nonbasicDict[tempNonbasicInd] )
+
+    pop!(basicDict, tempBasicInd)
+    pop!(nonbasicDict, tempNonbasicInd)
+
+    merge!(basicDict, tempNonbasic)
+    merge!(nonbasicDict, tempBasic)
+
+    return basicDict, nonbasicDict
+end
+
+function stepLemke(M, q::Vector{T}, x) where {T<:Real}
+    println("x = ", x)
+
+    totalRow = size(M, 1)
+    totalCol = size(M, 2)
+
+    #starting values
+    z = -(M\q)
+    w = zeros(totalRow)
+
+    if all(q .>= 0)
+        return zeros(totalCol)
+    end
+
+    #Trivial solution does not apply. Create the augemented form
+    pivottedIndices = Vector{Tuple{Int64, Int64}}()
+    c  = ones(totalCol)    
+    q0 = 10000.0f0              #start with sufficiently large scalar q0 >= 0.0
+    w0 = 0.0
+    z0 = maximum(-q ./ c)
+
+    ẑ = vcat(z0, z)
+    # ŵ = vcat(w0, w)
+    # q̂ = vcat(q0, q)
+    ŵ = deepcopy(w)
+    q̂ = deepcopy(q)
+    M̂ = [M c]
+
+    Q = Matrix{Float32}(I, totalRow, totalRow)
+    # Q̂ = zeros(totalRow+1, totalCol+1)
+    # Q̂[:,1] = q̂
+    # Q̂[2:end, 2:end] = Q     # Q̂ = [q0 0; q Q]
+    Q̂ = hcat(q̂, Q)
+
+    # basic = [1, 2, 3]   #the complement pair indices of the basic variables in the nonbasic variables
+    # nonbasic = [1, 2, 3, -1]    #the complement pair indices of the nonbasic variables in the basic variables
+
+    basic = collect(range(1, stop = totalRow, step= 1))
+    nonbasic = collect(range(1, stop = totalCol+1, step= 1))
+    # basicDict = Dict("w1" => 1, "w2" => 2, "w3" => 3)
+    # nonbasicDict = Dict("z1" => 1, "z2" => 2, "z3" => 3, "z0" => -1)
+
+    α = lexiαRatioTest(Q̂, c) 
+    Q̂, M̂, q̂, ŵ, ẑ = lexiPivot(Q̂, M̂, q̂, ŵ, ẑ, α, totalCol+1)    #first feasible basic solution
+    basic, nonbasic = switchBasicWithNonBasic(basic, nonbasic, α, totalCol+1)
+    # basicDict, nonbasicDict = switchComplementInDict(basicDict, nonbasicDict, α, totalCol+1)
+    # push!(pivottedIndices, (α, 1))
+    # println("α = ", α)
+    # Minitial = deepcopy(M̂)
+    # Minitial[:, 1] = zeros(totalRow)
+    # Minitial[α, 1] = 1.0
+
+    B = Matrix{Float32}(I, totalRow, totalRow)
+    # Binv = hcat(q̂, inv(B))
+    d = α
+    isFound     = false
+    infeasible  = false
+    MAX_ITER    = 30
+    iter        = 1
+
+
+    while !isFound && !infeasible && iter < MAX_ITER
+
+        # println("m = ", M̂[:,d])
+        # println("q̂ = ", q̂)
+        #determine blocking variable
+        if any(M̂[:,d] .< 0.0f0)
+            # m = deepcopy((M̂[:,d]))
+            # minIndex = 1
+            # m_idIndex = Vector{Int}() 
+            # piv_tol = 0.0
+            # zero_tol = 0.0
+            # [m[i]+piv_tol < 0.0 ? push!(m_idIndex, i) : nothing for i in 1:length(m)]
+        
+            # println("m = ", m)
+            # println("Relevant Q ratio ", [(-Q̂[j,:] .- zero_tol)./ m[j] for j in m_idIndex])
+
+            # println("Binv = ", Binv)
+            b = lexiblockRatioTest(Q̂, M̂[:, d])
+        else
+            println("Interpret output interms of infeasibility or unsolvability")
+            infeasible = true
+            b = 1                   
+            break            #TODO: handle infeasibility
+        end
+
+        #Pivotting
+        if b == α
+
+            Q̂, M̂, q̂, ŵ, ẑ = lexiPivot(Q̂ ,M̂, q̂, ŵ, ẑ, b, d)
+            push!(pivottedIndices, (b, d))
+            # println("Solved")
+            isFound = true
+
+        else
+            # This does not solve it at once
+            Q̂, M̂, q̂, ŵ, ẑ = lexiPivot(Q̂ ,M̂, q̂, ŵ, ẑ, b, d)
+            push!(pivottedIndices, (b, d))
+            iter += 1
+        end
+        # println("index = ", pivottedIndices[end])
+
+        if !isFound
+            basic, nonbasic = switchBasicWithNonBasic(basic, nonbasic, b, d)
+            d = complementPairIndex(nonbasic, d) 
+        end
+        # basicDict, nonbasicDict = switchComplementInDict(basicDict, nonbasicDict, b, d)
+
+              # driving variable is the complement of the current blocking variable
+        # r, s = pivottedIndices[end]
+        # B[:,r] = -Minitial[:,s] 
+        # Binv = hcat(q̂, inv(B))
+    end     #end while
+    
+    if iter == MAX_ITER
+        println("Exceeded max iteration. Increase your guess for q0")
+    end
+
+
+    basicSol = zeros(T, totalCol+1)
+    pivotLen = length(pivottedIndices)
+    windex  = getindex.(pivottedIndices, 1)
+    zindex  = getindex.(pivottedIndices, 2)
+    state_i = pivotLen
+
+    for i in range(1, stop = totalCol+1, step=1 )
+        extractionComplete = false
+        m = findlast(x -> x == i, windex[1:state_i])
+        while !extractionComplete
+            if isnothing(m)
+                basicSol[i] = 0.0 
+                extractionComplete = true
+                break
+            else
+                state_i = m-1
+                n = findlast(x -> x == zindex[m], zindex[1:state_i])
+            end   
+
+            if isnothing(n)
+                basicSol[zindex[m]] = q̂[windex[m]] 
+                extractionComplete = true
+                break
+            else
+                i = windex[n]
+                # basicSol[zindex[n]] = q̂[windex[n]]    #q̂[windex[n]] belongs to w vector; not needed
+                state_i = n-1 
+            end
+            m = findlast(x -> x == i, windex[1:state_i])
+
+            if isnothing(m)
+                break 
+            end
+        end
+        state_i = pivotLen
+    end
+
+    basicSol = basicSol[1:end-1]
+    # println("Pivotted indices = ", pivottedIndices)
+
+    solpathsolver = lcpOpt(M, q, Int(floor(length(q)/3)))
+
+    if any(abs.(basicSol - solpathsolver) .> 0.001)
+        println("Pivotted indices = ", pivottedIndices)
+
+        println("pathsolver = ", solpathsolver)
+        println("Lemke = ", basicSol)
+        # println("q̂ = ", q̂)
+        # println("x = ", x)
+    end
+    return basicSol
+end
