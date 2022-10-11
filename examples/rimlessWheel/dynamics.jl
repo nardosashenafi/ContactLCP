@@ -177,6 +177,25 @@ function impactMap(sys::RimlessWheel, ϕ)
 
 end
 
+function comparePostImpact(lcp, x, param; Δt = 0.001)
+    
+    ϕ = x[3]
+    θdot, ϕdot = [x[8], x[7]]
+    postImpactMap = impactMap(sys, ϕ) * [θdot, ϕdot]
+
+    gn, γn, γt, M, h, Wn, Wt = sysAttributes(lcp, x, param)
+    λn, λt, λR  = solveLcp(lcp, gn, γn, γt, M, h, Wn, Wt, x; Δt=Δt)
+
+    qM, uA = lcp.sys(x)
+    uE = M\((Wn - Wt*diagm(0 => lcp.sys.μ))*λn + Wt*λR + h*Δt) + uA
+    θdotlcp, ϕdotLcp  = [uE[4], uE[3]]
+
+    println("[θdot-, ϕdot-] = ", [θdot, ϕdot])
+    println("Impact map = ", postImpactMap)
+    println("LCP = ", [θdotlcp, ϕdotLcp])
+
+end
+
 function wn(sys::RimlessWheel, z::Vector{T}) where {T<:Real}
 
     θ        = z[4]
@@ -241,18 +260,19 @@ function plots(sys, Z, t, Λn, Λt)
 
     fig3 = plt.figure()
     fig3.clf()
-    θ = spokeInContact(sys, getindex.(Z, 4))
+    θ = spokeInContact(sys, getindex.(Z, 4), getindex.(Z, 8))
     plot(θ, getindex.(Z, 8))
 
 end
 
-function spokeInContact(sys, θ)
+function spokeInContact(sys, θ, θdot)
     θ_new = deepcopy(θ)
 
-    for i in 1:length(θ_new)
-        if θ_new[i] <= -sys.α       #instead check if new contact occurs
+    for i in 2:length(θ_new)
+        #if velocity jumps, wrap. Checking θ causes the angle to jump when the velocity has not
+        if (abs(θdot[i] - θdot[i-1]) > 0.1) && θdot[i] < 0.0       #instead check if new contact occurs
             θ_new[i:end] .= θ_new[i:end] .+ 2*sys.α
-        elseif θ_new[i] >= sys.α
+        elseif (abs(θdot[i] - θdot[i-1]) > 0.1)  && θdot[i] > 0.0 
             θ_new[i:end] .= θ_new[i:end] .- 2sys.α
         end
     end

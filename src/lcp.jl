@@ -107,8 +107,8 @@ function solveLcp(lcp::Lcp, gn::Vector{T}, γn, γt, M, h, Wn, Wt, x; Δt=0.001)
         A, b = getAb(lcp, gn, γn, γt, M, h, Wn, Wt; Δt = Δt)
         
         # λ =  lcpOpt(A, b, s)
-        # λ =  lemkeLexi(A, b, x)
-        λ = stepLemke(A, b, x)
+        λ =  lemkeLexi(A, b, x)
+        # λ = stepLemke(A, b, x)
 
         Λn[contactIndex .== 1] = λ[1:s]
         ΛR[contactIndex .== 1] = λ[s+1:2s]

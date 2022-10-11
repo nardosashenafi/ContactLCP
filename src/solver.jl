@@ -203,7 +203,6 @@ function lexiPivot(Q, M, q::Vector{T}, w, z, r, s) where {T<:Real}
 end
 
 function lemkeLexi(M, q::Vector{T}, x) where {T<:Real}
-    # println("Lemke begins")
     totalRow = size(M, 1)
     totalCol = size(M, 2)
 
@@ -217,38 +216,38 @@ function lemkeLexi(M, q::Vector{T}, x) where {T<:Real}
 
     #Trivial solution does not apply. Create the augemented form
     pivottedIndices = Vector{Tuple{Int64, Int64}}()
-    c  = 1.0f0*ones(totalCol)                  # c > 0
-    q0 = 10000.0f0              #start with sufficiently large scalar q0 >= 0.0
-    w0 = 0.0
+    c  = ones(totalCol)    
     z0 = maximum(-q ./ c)
 
     ẑ = vcat(z0, z)
-    ŵ = vcat(w0, w)
-    q̂ = vcat(q0, q)
-    M̂ = [0.0f0 -c'; c M]
+    ŵ = deepcopy(w)
+    q̂ = deepcopy(q)
+    M̂ = [M c]
 
     Q = Matrix{Float32}(I, totalRow, totalRow)
-    Q̂ = zeros(totalRow+1, totalCol+1)
-    Q̂[:,1] = q̂
-    Q̂[2:end, 2:end] = Q     # Q̂ = [q0 0; q Q]
-    # Q̂ = hcat(q̂, Q)
+    Q̂ = hcat(q̂, Q)
 
-    α = lexiαRatioTest(hcat(q, Q), c) + 1
-    Q̂, M̂, q̂, ŵ, ẑ = lexiPivot(Q̂, M̂, q̂, ŵ, ẑ, α, 1)    #first feasible basic solution
-    # push!(pivottedIndices, (α, 1))
+    basic = collect(range(1, stop = totalRow, step= 1))
+    nonbasic = collect(range(1, stop = totalCol+1, step= 1))
 
+    α = lexiαRatioTest(Q̂, c) 
+    Q̂, M̂, q̂, ŵ, ẑ = lexiPivot(Q̂, M̂, q̂, ŵ, ẑ, α, totalCol+1)    #first feasible basic solution
+    
+    #keep track of the complementary pair indices
+    basic, nonbasic = switchBasicWithNonBasic(basic, nonbasic, α, totalCol+1)
+
+    B = Matrix{Float32}(I, totalRow, totalRow)
+    # Binv = hcat(q̂, inv(B))
     d = α
     isFound     = false
     infeasible  = false
-    MAX_ITER    = 10
+    MAX_ITER    = 30
     iter        = 1
 
+    piv_tol = 1e-5  
     while !isFound && !infeasible && iter < MAX_ITER
 
-        # println("m = ", M̂[:,d])
-        # println("q̂ = ", q̂)
-        #determine blocking variable
-        if any(M̂[:,d] .< 0.0f0)
+        if any(M̂[:,d] .< -piv_tol)
             b = lexiblockRatioTest(Q̂, M̂[:, d])
         else
             println("Interpret output interms of infeasibility or unsolvability")
@@ -272,27 +271,18 @@ function lemkeLexi(M, q::Vector{T}, x) where {T<:Real}
             iter += 1
         end
         # println("index = ", pivottedIndices[end])
-        d = b               # driving variable is the complement of the current blocking variable
+
+        if !isFound
+            basic, nonbasic = switchBasicWithNonBasic(basic, nonbasic, b, d)
+            d = complementPairIndex(nonbasic, d) 
+        end
+
     end     #end while
     
     if iter == MAX_ITER
         println("Exceeded max iteration. Increase your guess for q0")
     end
 
-    #Backtracking algorithm: finds where components of q̂ belong in the solution
-    # start with w0; in the pivottedIndices tuple look if the first index of w (w0) has been pivotted. If it is not, then w0 component of the nonbasic solution is zeros.
-    # if it does have a value, then look for the zi value it pivotted with. Then along the z column of the pivottedIndices, look for the same zi and what it was pivotted with earlier until it is no longer pivotted.
-    # Skematic of operation:
-        # PivottedIndices = (windex, zindex) = (q̂index, finalSolutionIndex)
-        # windex            zindex
-        # w5  
-        # |
-        # w5   <------------- z6
-        #                     |
-        #                     |
-        # w3 ------------->  z6
-
-        #solution: basicSolution[5] = q̂[3]
 
     basicSol = zeros(T, totalCol+1)
     pivotLen = length(pivottedIndices)
@@ -319,7 +309,7 @@ function lemkeLexi(M, q::Vector{T}, x) where {T<:Real}
                 break
             else
                 i = windex[n]
-                basicSol[zindex[n]] = q̂[windex[n]] 
+                # basicSol[zindex[n]] = q̂[windex[n]]    #q̂[windex[n]] belongs to w vector; not needed
                 state_i = n-1 
             end
             m = findlast(x -> x == i, windex[1:state_i])
@@ -331,17 +321,20 @@ function lemkeLexi(M, q::Vector{T}, x) where {T<:Real}
         state_i = pivotLen
     end
 
-    basicSol = basicSol[2:end]
-    solpathsolver = lcpOpt(M, q, Int(floor(length(q)/3)))
+    basicSol = basicSol[1:end-1]
+    # println("Pivotted indices = ", pivottedIndices)
 
-    if any(abs.(basicSol - solpathsolver) .> 0.001)
-        println("Pivotted indices = ", pivottedIndices)
+    # solpathsolver = lcpOpt(M, q, Int(floor(length(q)/3)))
 
-        println("pathsolver = ", solpathsolver)
-        println("Lemke = ", basicSol)
-        println("q̂ = ", q̂)
-        println("x = ", x)
-    end
+    # if any(abs.(basicSol - solpathsolver) .> 0.001)
+    #     println("Pivotted indices = ", pivottedIndices)
+
+    #     println("pathsolver = ", solpathsolver)
+    #     println("Lemke = ", basicSol)
+    #     println("q̂ = ", q̂)
+    #     println("x = ", x)
+    # end
+
     return basicSol
 end
 
@@ -360,25 +353,6 @@ end
 
 function complementPairIndex(nonbasic, nonbasicIndex)
     return nonbasic[nonbasicIndex]  #find complement of the dropped variable so we can add it to the basic variables on the next iteration
-end
-
-function switchComplementInDict(basicDict, nonbasicDict, row, col)
-
-    locateComplementOfBasic = basicDict[first(basicDict, row)[row].first]
-    nonbasicDict[first(nonbasicDict, locateComplementOfBasic)[locateComplementOfBasic].first] = col
-
-    tempBasicInd = first(basicDict, row)[row].first
-    tempNonbasicInd = first(nonbasicDict, col)[col].first
-    tempBasic = Dict(tempBasicInd => basicDict[tempBasicInd] )
-    tempNonbasic = Dict(tempNonbasicInd => nonbasicDict[tempNonbasicInd] )
-
-    pop!(basicDict, tempBasicInd)
-    pop!(nonbasicDict, tempNonbasicInd)
-
-    merge!(basicDict, tempNonbasic)
-    merge!(nonbasicDict, tempBasic)
-
-    return basicDict, nonbasicDict
 end
 
 function stepLemke(M, q::Vector{T}, x) where {T<:Real}

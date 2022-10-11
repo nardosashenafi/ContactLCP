@@ -6,7 +6,7 @@ include("dynamics.jl")
 include("../../src/lcp.jl")
 include("../../src/solver.jl")
 
-param = Float64[100.0, 20.0]
+param = Float64[50.0, 10.0]
 # param = Float64[0.0, 0.0]
 
 sys  = RimlessWheel(Float64)
