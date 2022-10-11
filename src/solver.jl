@@ -120,7 +120,14 @@ end
 
 function lexiMin(z1, z2)   # picks the vector with the first zero or strictly negative index
     δz = z1 - z2
-    first(δz[abs.(δz) .> 1e-5]) < 0.0 ? minz = (z1,1) : minz = (z2,2)
+
+    if isempty(δz[abs.(δz) .> 1e-5])
+        #vectors are equal! pick one 
+        minz = (z1,1)
+    else
+        first(δz[abs.(δz) .> 1e-5]) < 0.0 ? minz = (z1,1) : minz = (z2,2)
+    end
+
     return minz
 end
 
@@ -148,9 +155,9 @@ end
 function lexiblockRatioTest(Q::Matrix{T}, m) where {T<:Real}
     minIndex = 1
     m_idIndex = Vector{Int}() 
-    piv_tol = 0.0
+    piv_tol = 1e-5      #prevents it from selecting a pivot element that is almost zero
     zero_tol = 0.0
-    [m[i]+piv_tol < 0.0 ? push!(m_idIndex, i) : nothing for i in 1:length(m)]
+    [m[i] < -piv_tol ? push!(m_idIndex, i) : nothing for i in 1:length(m)]
 
     minIndex = first(m_idIndex)
     for i in 1:length(m_idIndex)-1
@@ -177,8 +184,8 @@ function lexiPivot(Q, M, q::Vector{T}, w, z, r, s) where {T<:Real}
     Q̂ = T.(deepcopy(Q))
     q̂ = T.(deepcopy(q))
 
-    if M[r,s] < 1e-5 
-        println("About to divide by 0")
+    if abs.(M[r,s]) < 1e-5 
+        println("About to divide by ", M[r,s])
     end
     ŵ[r]    = z[s]
     ẑ[s]    = w[r]
@@ -375,7 +382,7 @@ function switchComplementInDict(basicDict, nonbasicDict, row, col)
 end
 
 function stepLemke(M, q::Vector{T}, x) where {T<:Real}
-    println("x = ", x)
+    # println("x = ", x)
 
     totalRow = size(M, 1)
     totalCol = size(M, 2)
@@ -434,13 +441,13 @@ function stepLemke(M, q::Vector{T}, x) where {T<:Real}
     MAX_ITER    = 30
     iter        = 1
 
-
+    piv_tol = 1e-5  
     while !isFound && !infeasible && iter < MAX_ITER
 
         # println("m = ", M̂[:,d])
         # println("q̂ = ", q̂)
         #determine blocking variable
-        if any(M̂[:,d] .< 0.0f0)
+        if any(M̂[:,d] .< -piv_tol)
             # m = deepcopy((M̂[:,d]))
             # minIndex = 1
             # m_idIndex = Vector{Int}() 
@@ -540,8 +547,8 @@ function stepLemke(M, q::Vector{T}, x) where {T<:Real}
 
         println("pathsolver = ", solpathsolver)
         println("Lemke = ", basicSol)
-        # println("q̂ = ", q̂)
-        # println("x = ", x)
+        println("q̂ = ", q̂)
+        println("x = ", x)
     end
     return basicSol
 end

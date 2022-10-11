@@ -34,7 +34,7 @@ mutable struct RimlessWheel{T}
         γ               = T(0.0*pi/180.0)
         ϵn              = T.(0.0*ones(k))
         ϵt              = T.(0.0*ones(k))
-        μ               = T.(0.9*ones(k))
+        μ               = T.(0.6*ones(k))
         x0              = zeros(T, 8)
         #[x, y, ϕ, θ, xdot, ydot, ϕdot, θdot]
         # state x is parallel to the plane, y points normal to the plane
@@ -128,9 +128,9 @@ function control(z, θp; limitcycle=false)
     q, v = sys(z)
 
     if limitcycle #working control for limit cycle
-        return -θp[1]*(z[2]-0.325) - θp[2]*z[4]
+        return -θp[1]*(q[3]-0.5) - θp[2]*v[3]
     else
-        return -θp[1]*(q[3]-0.325) - θp[2]*v[3]
+        return -θp[1]*(q[3]-0.35) - θp[2]*v[3]
         # return 0.0
         # @assert length(θp) == 6 + DiffEqFlux.paramlength(Hd)
         # y = MLBasedESC.controller(npbc, inputLayer(x), θp)
@@ -250,7 +250,7 @@ function spokeInContact(sys, θ)
     θ_new = deepcopy(θ)
 
     for i in 1:length(θ_new)
-        if θ_new[i] <= -sys.α
+        if θ_new[i] <= -sys.α       #instead check if new contact occurs
             θ_new[i:end] .= θ_new[i:end] .+ 2*sys.α
         elseif θ_new[i] >= sys.α
             θ_new[i:end] .= θ_new[i:end] .- 2sys.α
