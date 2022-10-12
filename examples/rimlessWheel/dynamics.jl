@@ -124,13 +124,14 @@ end
 
 inputLayer(x) = [cos(x[1]), sin(x[1]), cos(x[2]), sin(x[2]), x[3], x[4]]
 
-function control(z, θp; limitcycle=false)
+function control(z, θp::Vector{T}; limitcycle=false, satu = Inf) where {T<:Real}
     q, v = sys(z)
 
     if limitcycle #working control for limit cycle
-        return -θp[1]*(q[3]-0.5) - θp[2]*v[3]
+        return -θp[1]*(q[3]-0.5f0) - θp[2]*v[3]
     else
-        return -θp[1]*(q[3]-0.38) - θp[2]*v[3]
+        u = -θp[1]*(q[3]-0.38f0) - θp[2]*v[3]
+        return clamp(u, -satu, satu)
         # return 0.0
         # @assert length(θp) == 6 + DiffEqFlux.paramlength(Hd)
         # y = MLBasedESC.controller(npbc, inputLayer(x), θp)
@@ -139,23 +140,23 @@ function control(z, θp; limitcycle=false)
     end
 end
 
-function genForces(sys::RimlessWheel, z, param; limitcycle=false)
+function genForces(sys::RimlessWheel, z, param::Vector{T}; limitcycle=false) where {T<:Real}
 
     q, v = sys(z)
     x, y, ϕ, θ = q
     xdot, ydot, ϕdot, θdot = v
     #h = Bu - C qdot - G
-    B = [0.0, 0.0, 1.0, -1.0] 
+    B = [0.0f0, 0.0f0, 1.0f0, -1.0f0]
 
-    C = [0.0 0.0 -sys.m2*sys.l2*sin(ϕ)*ϕdot 0.0;
-        0.0 0.0 sys.m2*sys.l2*cos(ϕ)*ϕdot 0.0;
-        -sys.m2*sys.l2*sin(ϕ)*ϕdot sys.m2*sys.l2*cos(ϕ)*ϕdot 0.0 0.0;
-        0.0 0.0 0.0 0.0]
+    C = [0.0f0 0.0f0 -sys.m2*sys.l2*sin(ϕ)*ϕdot 0.0f0;
+        0.0f0 0.0f0 sys.m2*sys.l2*cos(ϕ)*ϕdot 0.0f0;
+        -sys.m2*sys.l2*sin(ϕ)*ϕdot sys.m2*sys.l2*cos(ϕ)*ϕdot 0.0f0 0.0f0;
+        0.0f0 0.0f0 0.0f0 0.0f0]
 
     G = [-sys.mt*sys.g*sin(sys.γ), 
         sys.mt*sys.g*cos(sys.γ), 
         sys.m2*sys.g*sys.l2*sin(ϕ - sys.γ),
-        0.0]
+        0.0f0]
 
     return B*control(z, param; limitcycle=limitcycle) - C*v - G
 end

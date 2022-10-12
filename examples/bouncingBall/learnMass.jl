@@ -7,19 +7,19 @@ include("bouncing_ball.jl")
 # include("../../src/lcp.jl")
 # include("../../src/solver.jl")
 
-Δt = 0.001; totalTimeStep = 1500
-θ0 = Float64[0.2]
-x0 = [0.0,0.5,0.2,-0.2]
+Δt = 0.001f0; totalTimeStep = 1500
+θ0 = Float32[0.2]
+x0 = Float32[0.0,0.5,0.2,-0.2]
 
 sys  = BouncingBall(Float64)
 lcp  = ContactLCP.Lcp(Float64, sys)
 
 function loss(lcp, θ, x0, Sθd, λθd)
     Sθ, λθ, _ = trajectory(lcp, x0, θ)
-    return 50.0/length(Sθ) * ( 0.5*dot(Sθd - Sθ , Sθd - Sθ) + 0.5*dot(λθd - λθ, λθd - λθ) )
+    return 50.0f0/length(Sθ) * ( 0.5f0*dot(Sθd - Sθ , Sθd - Sθ) + 0.5f0*dot(λθd - λθ, λθd - λθ) )
 end
 
-function oneStep(lcp::ContactLCP.Lcp, x1, θm::Vector{T}; Δt = 0.001) where {T<:Real}
+function oneStep(lcp::ContactLCP.Lcp, x1, θm::Vector{T}; Δt = 0.001f0) where {T<:Real}
 
     qA, uA  = lcp.sys(x1)
     qM      = qA + 0.5f0*Δt*uA
@@ -32,7 +32,7 @@ function oneStep(lcp::ContactLCP.Lcp, x1, θm::Vector{T}; Δt = 0.001) where {T<
     h = [0.0, -θm[1]*lcp.sys.g]
   
     λn, λt, λR  = ContactLCP.solveLcp(lcp, gn, γn, γt, M, h, Wn, Wt; Δt=Δt) 
-    x2          = vcat(qM,uA)
+    # x2          = vcat(qM,uA)
 
     uE = M\((Wn - Wt*diagm(0 => lcp.sys.μ))*λn + Wt*λR + h*Δt) + uA
     qE = qM + 0.5f0*Δt*uE
@@ -41,7 +41,7 @@ function oneStep(lcp::ContactLCP.Lcp, x1, θm::Vector{T}; Δt = 0.001) where {T<
 
 end
 
-function trajectory(lcp::ContactLCP.Lcp, x0, θm::Vector{T}; Δt = 0.001, totalTimeStep = 1500) where {T<:Real}
+function trajectory(lcp::ContactLCP.Lcp, x0, θm::Vector{T}; Δt = 0.001f0, totalTimeStep = 1500) where {T<:Real}
 
     X       = Vector{Vector{T}}(undef, totalTimeStep)
     Λn      = Vector{Vector{T}}(undef, totalTimeStep)

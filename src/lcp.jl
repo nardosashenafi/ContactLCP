@@ -58,7 +58,7 @@ function trimAttributes(lcp::Lcp, gn, γn, γt, Wn, Wt)
     return gnt, ϵnt, ϵtt, μt, γnt, γtt, Wnt, Wtt
 end
 
-function getAb(lcp::Lcp, gn, γn, γt, M, h, Wn, Wt; Δt = 0.001)
+function getAb(lcp::Lcp, gn, γn, γt, M, h, Wn, Wt; Δt = 0.001f0)
 
     gnt, ϵnt, ϵtt, μt, γnt, γtt, Wnt, Wtt = trimAttributes(lcp, gn, γn, γt, Wn, Wt)
 
@@ -94,7 +94,7 @@ function lcpOpt(A, b, contactNum)
     end
 end
 
-function solveLcp(lcp::Lcp, gn::Vector{T}, γn, γt, M, h, Wn, Wt, x; Δt=0.001) where {T<:Real}
+function solveLcp(lcp::Lcp, gn::Vector{T}, γn, γt, M, h, Wn, Wt; Δt=0.001f0) where {T<:Real}
 
     contactIndex = checkContact(lcp, gn, γn)
 
@@ -105,10 +105,7 @@ function solveLcp(lcp::Lcp, gn::Vector{T}, γn, γt, M, h, Wn, Wt, x; Δt=0.001)
 
     if s > 0
         A, b = getAb(lcp, gn, γn, γt, M, h, Wn, Wt; Δt = Δt)
-        
-        # λ =  lcpOpt(A, b, s)
-        λ =  lemkeLexi(A, b, x)
-        # λ = stepLemke(A, b, x)
+        λ =  lemkeLexi(A, b)
 
         Λn[contactIndex .== 1] = λ[1:s]
         ΛR[contactIndex .== 1] = λ[s+1:2s]
@@ -120,7 +117,7 @@ end
 
 function solveLcp(lcp::Lcp, x, param; Δt = 0.001)
     gn, γn, γt, M, h, Wn, Wt = sysAttributes(lcp, x, param)
-    return solveLcp(lcp, gn, γn, γt, M, h, Wn, Wt, x; Δt=0.001)
+    return solveLcp(lcp, gn, γn, γt, M, h, Wn, Wt; Δt=0.001)
 end
 
 function oneTimeStep(lcp::Lcp, x1, param; Δt = 0.001)
@@ -130,8 +127,8 @@ function oneTimeStep(lcp::Lcp, x1, param; Δt = 0.001)
 
     x_mid   = vcat(qM, uA)
     gn, γn, γt, M, h, Wn, Wt = sysAttributes(lcp, x_mid, param)
-    λn, λt, λR  = solveLcp(lcp, gn, γn, γt, M, h, Wn, Wt, x_mid; Δt=Δt)
-    x2          = vcat(qM,uA)
+    λn, λt, λR  = solveLcp(lcp, gn, γn, γt, M, h, Wn, Wt; Δt=Δt)
+    # x2          = vcat(qM,uA)
 
     uE = M\((Wn - Wt*diagm(0 => lcp.sys.μ))*λn + Wt*λR + h*Δt) + uA
     qE = qM + 0.5f0*Δt*uE
@@ -139,7 +136,7 @@ function oneTimeStep(lcp::Lcp, x1, param; Δt = 0.001)
     return vcat(qE,uE), λn, λt
 end
 
-function fulltimestep(lcp::Lcp, x0::Vector{T}, param; Δt = 0.001, totalTimeStep = 500) where {T<:Real}
+function fulltimestep(lcp::Lcp, x0::Vector{T}, param; Δt = 0.001f0, totalTimeStep = 500) where {T<:Real}
 
     X       = Vector{Vector{T}}(undef, totalTimeStep+1)
     Λn      = Vector{Vector{T}}(undef, totalTimeStep+1)
@@ -147,7 +144,7 @@ function fulltimestep(lcp::Lcp, x0::Vector{T}, param; Δt = 0.001, totalTimeStep
     t       = Vector{T}(undef, totalTimeStep+1)
     x       = deepcopy(x0)
     X[1]    = x
-    t[1]    = 0.0
+    t[1]    = 0.0f0
     Λn[1]   = zeros(T, lcp.total_contact_num)
     Λt[1]   = zeros(T, lcp.total_contact_num)
 

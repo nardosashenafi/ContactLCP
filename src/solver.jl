@@ -157,7 +157,7 @@ function lexiblockRatioTest(Q::Matrix{T}, m) where {T<:Real}
     m_idIndex = Vector{Int}() 
     piv_tol = 1e-5      #prevents it from selecting a pivot element that is almost zero
     zero_tol = 0.0
-    [m[i] < -piv_tol ? push!(m_idIndex, i) : nothing for i in 1:length(m)]
+    [m[i] < -piv_tol ? push!(m_idIndex, i) : nothing for i in eachindex(m)]
 
     minIndex = first(m_idIndex)
     for i in 1:length(m_idIndex)-1
@@ -170,16 +170,14 @@ function lexiblockRatioTest(Q::Matrix{T}, m) where {T<:Real}
     return minIndex  
 end
 
-function lexiPivot(Q, M, q::Vector{T}, w, z, r, s) where {T<:Real}
+function lexiPivot(Q, M, q::Vector{T}, r, s) where {T<:Real}
 
-    totalRow = range(1, stop=length(w), step=1)
-    totalCol = range(1, stop=length(z), step=1)
+    totalRow = range(1, stop=size(M, 1), step=1)
+    totalCol = range(1, stop=size(M, 2), step=1)
     i = totalRow[totalRow .!= r]
     j = totalCol[totalCol .!= s]
 
     #copy current state to update with new states
-    ŵ = T.(deepcopy(w))
-    ẑ = T.(deepcopy(z))
     M̂ = T.(deepcopy(M))
     Q̂ = T.(deepcopy(Q))
     q̂ = T.(deepcopy(q))
@@ -187,8 +185,7 @@ function lexiPivot(Q, M, q::Vector{T}, w, z, r, s) where {T<:Real}
     if abs.(M[r,s]) < 1e-5 
         println("About to divide by ", M[r,s])
     end
-    ŵ[r]    = z[s]
-    ẑ[s]    = w[r]
+
     q̂[r]    = -q[r]/M[r, s]
     q̂[i]    = q[i] - (M[i, s]/M[r,s])*q[r]
     M̂[r, s] = 1/M[r,s]
@@ -199,16 +196,15 @@ function lexiPivot(Q, M, q::Vector{T}, w, z, r, s) where {T<:Real}
     Q̂[r,:]  = -Q[r,:]/M[r,s]
     Q̂[i,:]  = Q[i,:] - (M[i,s]/M[r,s])*Q[r,:]'
 
-    return Q̂, M̂, q̂, ŵ, ẑ
+    return Q̂, M̂, q̂
 end
 
-function lemkeLexi(M, q::Vector{T}, x) where {T<:Real}
+function lemkeLexi(M, q::Vector{T}) where {T<:Real}
     totalRow = size(M, 1)
     totalCol = size(M, 2)
 
     #starting values
-    z = -(M\q)
-    w = zeros(totalRow)
+    #z = -(M\q)
 
     if all(q .>= 0)
         return zeros(totalCol)
@@ -216,22 +212,20 @@ function lemkeLexi(M, q::Vector{T}, x) where {T<:Real}
 
     #Trivial solution does not apply. Create the augemented form
     pivottedIndices = Vector{Tuple{Int64, Int64}}()
-    c  = ones(totalCol)    
-    z0 = maximum(-q ./ c)
+    c  = ones(T, totalCol)    
+    #z0 = maximum(-q ./ c)
 
-    ẑ = vcat(z0, z)
-    ŵ = deepcopy(w)
     q̂ = deepcopy(q)
     M̂ = [M c]
 
-    Q = Matrix{Float32}(I, totalRow, totalRow)
+    Q = Matrix{T}(I, totalRow, totalRow)
     Q̂ = hcat(q̂, Q)
 
-    basic = collect(range(1, stop = totalRow, step= 1))
+    basic    = collect(range(1, stop = totalRow, step= 1))
     nonbasic = collect(range(1, stop = totalCol+1, step= 1))
 
-    α = lexiαRatioTest(Q̂, c) 
-    Q̂, M̂, q̂, ŵ, ẑ = lexiPivot(Q̂, M̂, q̂, ŵ, ẑ, α, totalCol+1)    #first feasible basic solution
+    α       = lexiαRatioTest(Q̂, c) 
+    Q̂, M̂, q̂ = lexiPivot(Q̂, M̂, q̂, α, totalCol+1)    #first feasible basic solution
     
     #keep track of the complementary pair indices
     basic, nonbasic = switchBasicWithNonBasic(basic, nonbasic, α, totalCol+1)
@@ -242,7 +236,7 @@ function lemkeLexi(M, q::Vector{T}, x) where {T<:Real}
     MAX_ITER    = 30
     iter        = 1
 
-    piv_tol = 1e-5  
+    piv_tol     = 1e-5  
     while !isFound && !infeasible && iter < MAX_ITER
 
         if any(M̂[:,d] .< -piv_tol)
@@ -256,19 +250,15 @@ function lemkeLexi(M, q::Vector{T}, x) where {T<:Real}
 
         #Pivotting
         if b == α
-
-            Q̂, M̂, q̂, ŵ, ẑ = lexiPivot(Q̂ ,M̂, q̂, ŵ, ẑ, b, d)
+            Q̂, M̂, q̂ = lexiPivot(Q̂ ,M̂, q̂, b, d)
             push!(pivottedIndices, (b, d))
-            # println("Solved")
             isFound = true
-
         else
             # This does not solve it at once
-            Q̂, M̂, q̂, ŵ, ẑ = lexiPivot(Q̂ ,M̂, q̂, ŵ, ẑ, b, d)
+            Q̂, M̂, q̂ = lexiPivot(Q̂ ,M̂, q̂, b, d)
             push!(pivottedIndices, (b, d))
             iter += 1
         end
-        # println("index = ", pivottedIndices[end])
 
         if !isFound
             basic, nonbasic = switchBasicWithNonBasic(basic, nonbasic, b, d)
@@ -320,18 +310,6 @@ function lemkeLexi(M, q::Vector{T}, x) where {T<:Real}
     end
 
     basicSol = basicSol[1:end-1]
-    # println("Pivotted indices = ", pivottedIndices)
-
-    # solpathsolver = lcpOpt(M, q, Int(floor(length(q)/3)))
-
-    # if any(abs.(basicSol - solpathsolver) .> 0.001)
-    #     println("Pivotted indices = ", pivottedIndices)
-
-    #     println("pathsolver = ", solpathsolver)
-    #     println("Lemke = ", basicSol)
-    #     println("q̂ = ", q̂)
-    #     println("x = ", x)
-    # end
 
     return basicSol
 end
