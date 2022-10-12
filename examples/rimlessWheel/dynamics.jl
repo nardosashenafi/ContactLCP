@@ -62,12 +62,12 @@ function initialState(sys, θ0, θ0dot, ϕ0, ϕ0dot)
 end
 
 #returns the attributes need to model contact
-function (sys::RimlessWheel)(x::Vector{T}, θ; limitcycle=false) where {T<:Real}
+function (sys::RimlessWheel)(x::Vector{T}, θ; expert=false) where {T<:Real}
     gn  = gap(sys, x)  
     γn  = vnormal(sys, x)
     γt  = vtang(sys, x)
     M   = massMatrix(sys, x)
-    h   = genForces(sys, x, θ;  limitcycle=limitcycle)
+    h   = genForces(sys, x, θ; expert=expert)
     Wn  = wn(sys, x)
     Wt  = wt(sys, x)
 
@@ -124,11 +124,11 @@ end
 
 inputLayer(x) = [cos(x[1]), sin(x[1]), cos(x[2]), sin(x[2]), x[3], x[4]]
 
-function control(z, θp::Vector{T}; limitcycle=false, satu = Inf) where {T<:Real}
+function control(z, θp::Vector{T}; expert=false, satu = Inf) where {T<:Real}
     q, v = sys(z)
 
-    if limitcycle #working control for limit cycle
-        return -θp[1]*(q[3]-0.5f0) - θp[2]*v[3]
+    if expert #working expert controller
+        return -θp[1]*(q[3]-0.38f0) - θp[2]*v[3]
     else
         u = -θp[1]*(q[3]-0.38f0) - θp[2]*v[3]
         return clamp(u, -satu, satu)
@@ -140,7 +140,7 @@ function control(z, θp::Vector{T}; limitcycle=false, satu = Inf) where {T<:Real
     end
 end
 
-function genForces(sys::RimlessWheel, z, param::Vector{T}; limitcycle=false) where {T<:Real}
+function genForces(sys::RimlessWheel, z, param::Vector{T}; expert=false) where {T<:Real}
 
     q, v = sys(z)
     x, y, ϕ, θ = q
@@ -158,7 +158,7 @@ function genForces(sys::RimlessWheel, z, param::Vector{T}; limitcycle=false) whe
         sys.m2*sys.g*sys.l2*sin(ϕ - sys.γ),
         0.0f0]
 
-    return B*control(z, param; limitcycle=limitcycle) - C*v - G
+    return B*control(z, param; expert=expert) - C*v - G
 end
 
 function impactMap(sys::RimlessWheel, ϕ)

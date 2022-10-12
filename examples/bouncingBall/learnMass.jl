@@ -95,7 +95,9 @@ function checkGradient(lcp::ContactLCP.Lcp, x0::Vector{T}) where {T<:Real}
     l1    = l(θ1)
     l2    = l(θ2)
 
-    lg      = ForwardDiff.gradient(l, θ1)
+    # lg      = ForwardDiff.gradient(l, θ1)
+    l, back = Zygote.pullback(l, θ1)
+    lg = back(1)
 
     fd_l = (l2 - l1) / (θ2 - θ1)
     error_grad = abs.(fd_l - lg)
