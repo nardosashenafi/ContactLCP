@@ -6,19 +6,12 @@ include("dynamics.jl")
 include("../../src/lcp.jl")
 include("../../src/solver.jl")
 
-param = Float64[50.0, 10.0]
+param = Float64[30.0, 5.0]
 # param = Float64[0.0, 0.0]
 
 sys  = RimlessWheel(Float64)
-x0 = initialState(sys, 0.0, -0.5f0, 0.0f0, 0.0f0)
-# x0 =   [0.08035215340930911
-# 0.2482699308407366
-# 0.29506445059426006
-# -0.31420206637617604
-# -0.010289938728842103
-# 0.0033441274048094227
-# 0.029285686470857678
-# 0.041614251929509606]
+x0 = initialState(sys, 0.0f0, -0.5f0, 0.0f0, 0.0f0)
+# x0 = initialState(sys, rand(-sys.α:0.05:0.0), rand(-2.0:0.05:0.0), 0.0f0, 0.0f0)
 # x0 = [0.0, 0.26, 0.0, 0.0, 2.0, 0.0, 0.0, 0.0]
 lcp  = Lcp(Float64, sys)
 

@@ -130,7 +130,7 @@ function control(z, θp; limitcycle=false)
     if limitcycle #working control for limit cycle
         return -θp[1]*(q[3]-0.5) - θp[2]*v[3]
     else
-        return -θp[1]*(q[3]-0.35) - θp[2]*v[3]
+        return -θp[1]*(q[3]-0.38) - θp[2]*v[3]
         # return 0.0
         # @assert length(θp) == 6 + DiffEqFlux.paramlength(Hd)
         # y = MLBasedESC.controller(npbc, inputLayer(x), θp)
@@ -270,9 +270,9 @@ function spokeInContact(sys, θ, θdot)
 
     for i in 2:length(θ_new)
         #if velocity jumps, wrap. Checking θ causes the angle to jump when the velocity has not
-        if (abs(θdot[i] - θdot[i-1]) > 0.1) && θdot[i] < 0.0       #instead check if new contact occurs
+        if (abs(θdot[i] - θdot[i-1]) > 0.1) && abs.(θ_new[i] + sys.α) < 0.005       #instead check if new contact occurs
             θ_new[i:end] .= θ_new[i:end] .+ 2*sys.α
-        elseif (abs(θdot[i] - θdot[i-1]) > 0.1)  && θdot[i] > 0.0 
+        elseif (abs(θdot[i] - θdot[i-1]) > 0.1)  && abs.(θ_new[i] - sys.α) < 0.005      
             θ_new[i:end] .= θ_new[i:end] .- 2sys.α
         end
     end

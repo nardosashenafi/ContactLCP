@@ -236,8 +236,6 @@ function lemkeLexi(M, q::Vector{T}, x) where {T<:Real}
     #keep track of the complementary pair indices
     basic, nonbasic = switchBasicWithNonBasic(basic, nonbasic, α, totalCol+1)
 
-    B = Matrix{Float32}(I, totalRow, totalRow)
-    # Binv = hcat(q̂, inv(B))
     d = α
     isFound     = false
     infeasible  = false
