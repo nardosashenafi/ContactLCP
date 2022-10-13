@@ -86,18 +86,18 @@ end
 function checkGradient(lcp::ContactLCP.Lcp, x0::Vector{T}) where {T<:Real}
 
     θm_actual = [0.2]
-    θ1 = [0.5]
-    θ2 = θ1 .+ 0.001
+    θ1        = [0.5]
+    θ2        = θ1 .+ 0.001
 
     Sθd, _, λθd = trajectory(lcp, x0, θm_actual)
-    l(θ)    = loss(lcp, θ, x0, Sθd, λθd)
+    l(θ)        = loss(lcp, θ, x0, Sθd, λθd)
 
     l1    = l(θ1)
     l2    = l(θ2)
 
     # lg      = ForwardDiff.gradient(l, θ1)
     l, back = Zygote.pullback(l, θ1)
-    lg = back(1)
+    lg      = back(1)
 
     fd_l = (l2 - l1) / (θ2 - θ1)
     error_grad = abs.(fd_l - lg)

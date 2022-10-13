@@ -62,7 +62,7 @@ function initialState(sys, θ0, θ0dot, ϕ0, ϕ0dot)
 end
 
 #returns the attributes need to model contact
-function (sys::RimlessWheel)(x::Vector{T}, θ; expert=false) where {T<:Real}
+function (sys::RimlessWheel)(x, θ::Vector{T}; expert=false) where {T<:Real}
     gn  = gap(sys, x)  
     γn  = vnormal(sys, x)
     γt  = vtang(sys, x)
@@ -185,7 +185,7 @@ function comparePostImpact(lcp, x, param; Δt = 0.001)
     postImpactMap = impactMap(sys, ϕ) * [θdot, ϕdot]
 
     gn, γn, γt, M, h, Wn, Wt = sysAttributes(lcp, x, param)
-    λn, λt, λR  = solveLcp(lcp, gn, γn, γt, M, h, Wn, Wt, x; Δt=Δt)
+    λn, λt, λR  = solveLcp(lcp, gn, γn, γt, M, h, Wn, Wt; Δt=Δt)
 
     qM, uA = lcp.sys(x)
     uE = M\((Wn - Wt*diagm(0 => lcp.sys.μ))*λn + Wt*λR + h*Δt) + uA
@@ -220,6 +220,20 @@ function wt(sys::RimlessWheel, z::Vector{T}) where {T<:Real}
     return Wt
 end
 
+function plots(sys, Z)
+    fig1 = plt.figure()
+    fig1.clf()
+    subplot(2, 1, 1)
+    plot(getindex.(Z, 3), getindex.(Z, 7))
+    ylabel(L"\dot{\phi} [rad/s]", fontsize=15)
+    subplot(2, 1, 2)
+    plot(getindex.(Z, 4), getindex.(Z, 8))
+    ylabel(L"\dot{\theta} [rad/s]", fontsize=15)
+    fig2 = plt.figure()
+    fig2.clf()
+    θ = spokeInContact(sys, getindex.(Z, 4), getindex.(Z, 8))
+    plot(θ, getindex.(Z, 8))
+end
 
 function plots(sys, Z, t, Λn, Λt)
     fig1 = plt.figure()
@@ -271,9 +285,9 @@ function spokeInContact(sys, θ, θdot)
 
     for i in 2:length(θ_new)
         #if velocity jumps, wrap. Checking θ causes the angle to jump when the velocity has not
-        if (abs(θdot[i] - θdot[i-1]) > 0.1) && abs.(θ_new[i] + sys.α) < 0.005       #instead check if new contact occurs
+        if (abs(θdot[i] - θdot[i-1]) > 0.1) && abs(floor(abs.(θ_new[i]/sys.α)) - abs.(θ_new[i]/sys.α)) < 0.01       #instead check if new contact occurs
             θ_new[i:end] .= θ_new[i:end] .+ 2*sys.α
-        elseif (abs(θdot[i] - θdot[i-1]) > 0.1)  && abs.(θ_new[i] - sys.α) < 0.005      
+        elseif (abs(θdot[i] - θdot[i-1]) > 0.1)  && abs(floor(abs.(θ_new[i]/sys.α)) - abs.(θ_new[i]/sys.α)) < 0.01      
             θ_new[i:end] .= θ_new[i:end] .- 2sys.α
         end
     end

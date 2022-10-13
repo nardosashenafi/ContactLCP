@@ -94,7 +94,7 @@ function lcpOpt(A, b, contactNum)
     end
 end
 
-function solveLcp(lcp::Lcp, gn::Vector{T}, γn, γt, M, h, Wn, Wt; Δt=0.001f0) where {T<:Real}
+function solveLcp(lcp::Lcp, gn, γn, γt, M, h::Vector{T}, Wn, Wt; Δt=0.001f0) where {T<:Real}
 
     contactIndex = checkContact(lcp, gn, γn)
 
@@ -120,7 +120,7 @@ function solveLcp(lcp::Lcp, x, param; Δt = 0.001)
     return solveLcp(lcp, gn, γn, γt, M, h, Wn, Wt; Δt=0.001)
 end
 
-function oneTimeStep(lcp::Lcp, x1, param; Δt = 0.001)
+function oneTimeStep(lcp::Lcp, x1, param::Vector{T}; Δt = 0.001) where {T<:Real}
 
     qA, uA  = lcp.sys(x1)
     qM      = qA + 0.5f0*Δt*uA
@@ -136,7 +136,7 @@ function oneTimeStep(lcp::Lcp, x1, param; Δt = 0.001)
     return vcat(qE,uE), λn, λt
 end
 
-function fulltimestep(lcp::Lcp, x0::Vector{T}, param; Δt = 0.001f0, totalTimeStep = 500) where {T<:Real}
+function fulltimestep(lcp::Lcp, x0, param::Vector{T}; Δt = 0.001f0, totalTimeStep = 500) where {T<:Real}
 
     X       = Vector{Vector{T}}(undef, totalTimeStep+1)
     Λn      = Vector{Vector{T}}(undef, totalTimeStep+1)
