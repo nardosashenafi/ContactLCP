@@ -27,7 +27,7 @@ end
 
 function testControl(lcp::Lcp, x0, ps, grad, fig1; timeSteps=1000)
 
-    X, t, Λn, Λt = fulltimestep(lcp, x0, ps; Δt = 0.001, totalTimeStep = timeSteps);
+    X, t, Λn, Λt = rwTrajectory(lcp, x0, ps; totalTimeStep = timeSteps);
     loss = hipSpeedLoss(lcp, X)
 
     plots(lcp.sys, X, fig1)
@@ -99,7 +99,7 @@ end
 
 function trackExpert(lcp::Lcp, x0::Vector{T}) where {T<:Real}
 
-    function perpLoss(lcp, param, x0; totalTime = 500)
+    function lossToExpert(lcp, param, x0; totalTime = 500)
         S, λ, _ = rwTrajectory(lcp, x0, param; totalTimeStep=totalTime)
         θ, θdot, ϕ, ϕdot = getindex.(S, 4), getindex.(S, 8), getindex.(S, 3), getindex.(S, 7)
         Sd, λd, _ = rwTrajectory(lcp, x0, param_expert; totalTimeStep=totalTime); 
@@ -125,7 +125,7 @@ function trackExpert(lcp::Lcp, x0::Vector{T}) where {T<:Real}
             X0 = sampleInitialStates(lcp, param; totalTime=1000)
         end
         for xi in X0
-            l(θ)  = perpLoss(lcp, θ, xi; totalTime = 500)
+            l(θ)  = lossToExpert(lcp, θ, xi; totalTime = 500)
             lg    = ForwardDiff.gradient(l, param)
 
             l1    = l(param)
