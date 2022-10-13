@@ -122,21 +122,20 @@ function massMatrix(sys::RimlessWheel, z)
     return M
 end
 
-inputLayer(x) = [cos(x[1]), sin(x[1]), cos(x[2]), sin(x[2]), x[3], x[4]]
+inputLayer(x) = [x[1], x[2], cos(x[3]), sin(x[3]), cos(x[4]), sin(x[4]), 
+                x[5], x[6], x[7], x[8]]
 
-function control(z, θp::Vector{T}; expert=false, satu = Inf) where {T<:Real}
+function control(z, θp::Vector{T}; expert=false) where {T<:Real}
     q, v = sys(z)
 
     if expert #working expert controller
         return -θp[1]*(q[3]-0.38f0) - θp[2]*v[3]
     else
         u = -θp[1]*(q[3]-0.38f0) - θp[2]*v[3]
-        return clamp(u, -satu, satu)
-        # return 0.0
         # @assert length(θp) == 6 + DiffEqFlux.paramlength(Hd)
-        # y = MLBasedESC.controller(npbc, inputLayer(x), θp)
-        # y = unn(inputLayer(x), θp)[1]
-        # return clamp(y, -satu, satu)
+        # u = MLBasedESC.controller(npbc, inputLayer(x), θp)
+        # u = unn(inputLayer(z), θp)[1]
+        return clamp(u, -satu, satu)
     end
 end
 
@@ -222,21 +221,28 @@ end
 
 function plots(sys, Z)
     fig1 = plt.figure()
+    plots(sys, Z, fig1)
+
+end
+
+function plots(sys, Z, fig1)
     fig1.clf()
     subplot(2, 1, 1)
     plot(getindex.(Z, 3), getindex.(Z, 7))
     ylabel(L"\dot{\phi} [rad/s]", fontsize=15)
     subplot(2, 1, 2)
-    plot(getindex.(Z, 4), getindex.(Z, 8))
-    ylabel(L"\dot{\theta} [rad/s]", fontsize=15)
-    fig2 = plt.figure()
-    fig2.clf()
     θ = spokeInContact(sys, getindex.(Z, 4), getindex.(Z, 8))
     plot(θ, getindex.(Z, 8))
 end
 
 function plots(sys, Z, t, Λn, Λt)
     fig1 = plt.figure()
+    fig2 = plt.figure()
+    fig3 = plt.figure()
+    plots(sys, Z, t, Λn, Λt, fig1, fig2, fig3)
+end
+
+function plots(sys, Z, t, Λn, Λt, fig1, fig2, fig3)
     fig1.clf()
     subplot(2, 3, 1)
     plot(t, getindex.(Z, 1))
@@ -257,7 +263,6 @@ function plots(sys, Z, t, Λn, Λt)
     plot(getindex.(Z, 4), getindex.(Z, 8))
     ylabel(L"\dot{\theta} [rad/s]", fontsize=15)
 
-    fig2 = plt.figure()
     fig2.clf()
     subplot(2, 1, 1)
     for i in 1:length(Λn[1])
@@ -273,7 +278,6 @@ function plots(sys, Z, t, Λn, Λt)
     ticklabel_format(axis="y", style="sci",scilimits=(0,0))
     ylabel(L"$\lambda_{t1} [N]$", fontsize=15)
 
-    fig3 = plt.figure()
     fig3.clf()
     θ = spokeInContact(sys, getindex.(Z, 4), getindex.(Z, 8))
     plot(θ, getindex.(Z, 8))

@@ -117,7 +117,7 @@ end
 
 function solveLcp(lcp::Lcp, x, param; Δt = 0.001)
     gn, γn, γt, M, h, Wn, Wt = sysAttributes(lcp, x, param)
-    return solveLcp(lcp, gn, γn, γt, M, h, Wn, Wt; Δt=0.001)
+    return solveLcp(lcp, gn, γn, γt, M, h, Wn, Wt; Δt=Δt)
 end
 
 function oneTimeStep(lcp::Lcp, x1, param::Vector{T}; Δt = 0.001) where {T<:Real}
@@ -128,7 +128,6 @@ function oneTimeStep(lcp::Lcp, x1, param::Vector{T}; Δt = 0.001) where {T<:Real
     x_mid   = vcat(qM, uA)
     gn, γn, γt, M, h, Wn, Wt = sysAttributes(lcp, x_mid, param)
     λn, λt, λR  = solveLcp(lcp, gn, γn, γt, M, h, Wn, Wt; Δt=Δt)
-    # x2          = vcat(qM,uA)
 
     uE = M\((Wn - Wt*diagm(0 => lcp.sys.μ))*λn + Wt*λR + h*Δt) + uA
     qE = qM + 0.5f0*Δt*uE
