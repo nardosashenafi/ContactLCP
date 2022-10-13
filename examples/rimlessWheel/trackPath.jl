@@ -14,19 +14,6 @@ x0 = initialState(sys, 0.0f0, -0.5f0, 0.0f0, 0.0f0)
 param_expert   = Float32[30.0, 5.0]
 lcp  = Lcp(Float32, sys)
 
-function loss(lcp, param, x0; totalTime = 500)
-    S, λ, _ = rwTrajectory(lcp, x0, param; totalTimeStep=totalTime)
-    θ, θdot, ϕ, ϕdot = getindex.(S, 4), getindex.(S, 8), getindex.(S, 3), getindex.(S, 7)
-    Sd, λd, _ = rwTrajectory(lcp, x0, param_expert; totalTimeStep=totalTime); 
-    θd, θdotd, ϕd, ϕdotd = getindex.(Sd, 4), getindex.(Sd, 8), getindex.(Sd, 3), getindex.(Sd, 7)
-
-    return 500.0f0/length(S) * ( 
-            2.0f0*dot(θd - θ , θd - θ) +
-            2.0f0*dot(θdotd - θdot , θdotd - θdot) + 
-            2.0f0*dot(ϕd - ϕ , ϕd - ϕ) + 
-            2.0f0*dot(ϕdotd - ϕdot , ϕdotd - ϕdot) +  
-            0.0f0*dot(λd - λ, λd - λ) )
-end
 
 function rwTrajectory(lcp::Lcp, x0, param::Vector{T}; Δt = 0.001f0, totalTimeStep = 1000) where {T<:Real}
 
@@ -41,8 +28,53 @@ function rwTrajectory(lcp::Lcp, x0, param::Vector{T}; Δt = 0.001f0, totalTimeSt
         Λn[i]   = λn
         Λt[i]   = λt
     end
+    isStumbling(X) ? println("We got stumbling! Beware of gradient jumps") : nothing
 
     return X, Λn, Λt
+end
+
+function perpLoss(lcp, param, x0; totalTime = 500)
+    S, λ, _ = rwTrajectory(lcp, x0, param; totalTimeStep=totalTime)
+    θ, θdot, ϕ, ϕdot = getindex.(S, 4), getindex.(S, 8), getindex.(S, 3), getindex.(S, 7)
+    Sd, λd, _ = rwTrajectory(lcp, x0, param_expert; totalTimeStep=totalTime); 
+    θd, θdotd, ϕd, ϕdotd = getindex.(Sd, 4), getindex.(Sd, 8), getindex.(Sd, 3), getindex.(Sd, 7)
+
+    return 500.0f0/length(S) * ( 
+            2.0f0*dot(θd - θ , θd - θ) +
+            2.0f0*dot(θdotd - θdot , θdotd - θdot) + 
+            2.0f0*dot(ϕd - ϕ , ϕd - ϕ) + 
+            2.0f0*dot(ϕdotd - ϕdot , ϕdotd - ϕdot) +  
+            0.0f0*dot(λd - λ, λd - λ) )
+end
+
+function hipSpeedLoss(Z)
+
+    #loss of one trajectory
+    β       = 0.2
+    xd_dot  = 0.5
+    freq_d  = 1.0/(2*cm.sys.l1*sin(cm.sys.α)/xd_dot)
+
+    lnorm = 0.0
+    for x in Z
+        #each loop is one continuous part
+        θ       = getindex.(x, 1)
+        θdot    = getindex.(x, 3)
+        l       = xd_dot .+ cm.sys.l1 .* cos.(θ) .* θdot 
+        lnorm   += 1/length(θ)*dot(l, l)
+
+        #add cost on contact frequency
+        if length(x) >= 2   #if a section of the trajectory contains only one state, strikePeriod will be 0 and frequency becomes inf
+            xd_avg        = 1/length(θ)*sum(abs.(-cm.sys.l1 .* cos.(θ) .* θdot))
+            strikePeriod  = 2*cm.sys.l1*sin(cm.sys.α)/xd_avg
+            f             = 1/strikePeriod
+            if f >= (1+β)*freq_d
+                lnorm += 0.1*(f - (1+β) .* freq_d)
+            end
+        end
+
+    end
+
+    return 1.0/length(Z)*lnorm
 end
 
 function isStumbling(x)
@@ -59,6 +91,9 @@ function sampleInitialStates(lcp::Lcp, param::Vector{T}; totalTime=1000) where {
     while length(sampleTrajectories) < 2
 
         x0 = initialState(sys, 0.0f0, -0.5f0, 0.0f0, 0.0f0)
+        # x0 = Float32.(initialState(sys, rand(-lcp.sys.α+0.1:0.05:0.0), 
+        #                               rand(-2.0:0.05:-0.5), 0.0f0, 0.0f0))
+
         S, λ, _ = rwTrajectory(lcp, x0, param; totalTimeStep=totalTime)
         isStumbling(S) ? println("We got stumbling! Beware of gradient jumps") : nothing
         # Z, tz = extractStumbling(X, tx) 
@@ -91,7 +126,7 @@ function trackExpert(lcp::Lcp, x0::Vector{T}) where {T<:Real}
             X0 = sampleInitialStates(lcp, param; totalTime=1000)
         end
         for xi in X0
-            l(θ)  = loss(lcp, θ, xi; totalTime = 500)
+            l(θ)  = perpLoss(lcp, θ, xi; totalTime = 500)
             lg    = ForwardDiff.gradient(l, param)
 
             l1    = l(param)

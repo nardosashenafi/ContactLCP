@@ -285,9 +285,9 @@ function spokeInContact(sys, θ, θdot)
 
     for i in 2:length(θ_new)
         #if velocity jumps, wrap. Checking θ causes the angle to jump when the velocity has not
-        if (abs(θdot[i] - θdot[i-1]) > 0.1) && abs(floor(abs.(θ_new[i]/sys.α)) - abs.(θ_new[i]/sys.α)) < 0.01       #instead check if new contact occurs
+        if (abs(θdot[i] - θdot[i-1]) > 0.1) && abs(round(abs.(θ_new[i]/sys.α)) - abs.(θ_new[i]/sys.α)) < 0.03       #instead check if new contact occurs
             θ_new[i:end] .= θ_new[i:end] .+ 2*sys.α
-        elseif (abs(θdot[i] - θdot[i-1]) > 0.1)  && abs(floor(abs.(θ_new[i]/sys.α)) - abs.(θ_new[i]/sys.α)) < 0.01      
+        elseif (abs(θdot[i] - θdot[i-1]) > 0.1)  && abs(round(abs.(θ_new[i]/sys.α)) - abs.(θ_new[i]/sys.α)) < 0.03      
             θ_new[i:end] .= θ_new[i:end] .- 2sys.α
         end
     end
