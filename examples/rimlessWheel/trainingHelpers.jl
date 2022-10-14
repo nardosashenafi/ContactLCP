@@ -15,7 +15,7 @@ param_expert   = Float32[30.0, 5.0]
 lcp  = Lcp(Float32, sys)
 
 
-function rwTrajectory(lcp::Lcp, x0, param::Vector{T}; Δt = 0.001f0, totalTimeStep = 1000) where {T<:Real}
+function rwTrajectory(lcp::Lcp, x0, param::Vector{T}; expert=false, Δt = 0.001f0, totalTimeStep = 1000) where {T<:Real}
 
     X       = Vector{Vector{T}}(undef, totalTimeStep)
     Λn      = Vector{Vector{T}}(undef, totalTimeStep)
@@ -23,7 +23,7 @@ function rwTrajectory(lcp::Lcp, x0, param::Vector{T}; Δt = 0.001f0, totalTimeSt
     x       = deepcopy(x0)
 
     for i in 1:totalTimeStep
-        x, λn, λt  = oneTimeStep(lcp, x, param; Δt=Δt)
+        x, λn, λt  = oneTimeStep(lcp, x, param; Δt=Δt, expert=expert)
         X[i]    = x
         Λn[i]   = λn
         Λt[i]   = λt

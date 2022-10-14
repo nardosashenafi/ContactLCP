@@ -8,9 +8,9 @@ sys            = RimlessWheel(Float32)
 x0             = initialState(sys, 0.0f0, -0.5f0, 0.0f0, 0.0f0)
 param_expert   = Float32[30.0, 5.0]
 lcp            = Lcp(Float32, sys)
-unn            = FastChain(FastDense(10, 8, elu), FastDense(8, 1))
-ps             = 0.005*randn(DiffEqFlux.paramlength(unn))
-const satu     = Inf
+unn            = FastChain(FastDense(6, 8, elu), FastDense(8, 1))
+ps             = 0.01*randn(DiffEqFlux.paramlength(unn))
+const satu     = 1.5
 
 function trajLoss(lcp::Lcp, X0, param::Vector{T}; totalTime=500) where {T<:Real}
 
@@ -27,12 +27,12 @@ end
 
 function testControl(lcp::Lcp, x0, ps, grad, fig1; timeSteps=1000)
 
-    X, t, Λn, Λt = rwTrajectory(lcp, x0, ps; totalTimeStep = timeSteps);
-    loss = hipSpeedLoss(lcp, X)
+    S, λ, _ = rwTrajectory(lcp, x0, ps; totalTimeStep = timeSteps);
+    loss    = hipSpeedLoss(lcp, S)
 
-    plots(lcp.sys, X, fig1)
+    plots(lcp.sys, S, fig1)
 
-    println("loss = ", round(loss, digits=4) , " | hip speed = ", round.(mean(getindex.(X, 5)), digits=4) )
+    println("loss = ", round(loss, digits=4) , " | grad ", mean(grad), " | hip speed = ", round.(mean(getindex.(S, 5)), digits=4) )
     # println("loss = ", round(l1(param), digits=4),  " | p = ", round.(param, digits=4), " | hip speed = ", round.(mean(-cm.sys.l1 .* cos.(getindex.(Z, 1)) .* getindex.(Z, 3)), digits=4) )
 end
 
@@ -46,9 +46,9 @@ function hipSpeedLoss(lcp::Lcp, X)
     xd_dot  = 0.5f0
     # freq_d  = 1.0f0/(2.0f0*lcp.sys.l1*sin(lcp.sys.α)/xd_dot)
 
-    # θ       = getindex.(X, 4)
-    xdot    = getindex.(X, 5)
-    l       = xd_dot .- xdot
+    θ       = getindex.(X, 4)
+    θdot    = getindex.(X, 8)
+    l       = xd_dot .+ lcp.sys.l1 .* cos.(θ) .* θdot 
     lnorm   = dot(l, l)
 
     #add cost on contact frequency
@@ -61,58 +61,60 @@ function hipSpeedLoss(lcp::Lcp, X)
     #     end
     # end
 
-    return 1.0f0/length(X)*lnorm
+    return 500.0f0/length(X)*lnorm
 end
 
 function controlToHipSpeed(lcp::Lcp, x0::Vector{T}, ps) where {T<:Real}
     
-    opt         = Adam(0.01)
+    opt         = Adam(0.001)
 
     l1          = Inf
     counter     = 0
     X0          = Vector{Vector{T}}()
     fig1        = plt.figure()
+    param       = deepcopy(ps)
 
-    for i in 1:400
+    for i in 1:1000
         while isempty(X0)
-            X0 = sampleInitialStates(lcp, ps; totalTime=1000)
+            X0 = sampleInitialStates(lcp, param; totalTime=1000)
         end
 
         l(θ)  = trajLoss(lcp, X0, θ;  totalTime=500)
-        lg    = ForwardDiff.gradient(l, ps)
+        lg    = ForwardDiff.gradient(l, param)
 
         if counter > 10
-            testControl(lcp, X0[1], ps, lg, fig1)
+            testControl(lcp, X0[1], param, lg, fig1)
             counter = 0
         end
         counter += 1
 
-        Flux.update!(opt, ps, lg)
+        Flux.update!(opt, param, lg)
 
     end
-    return ps
+    return param
 end
 #################################################################
 
 #tracking expert trajectory
 ################################################################
 
+function lossToExpert(lcp, param, x0; totalTime = 500)
+
+    S, λ, _ = rwTrajectory(lcp, x0, param; totalTimeStep=totalTime)
+    θ, θdot, ϕ, ϕdot = getindex.(S, 4), getindex.(S, 8), getindex.(S, 3), getindex.(S, 7)
+    Sd, λd, _ = rwTrajectory(lcp, x0, param_expert; totalTimeStep=totalTime, expert=true); 
+    θd, θdotd, ϕd, ϕdotd = getindex.(Sd, 4), getindex.(Sd, 8), getindex.(Sd, 3), getindex.(Sd, 7)
+
+    return 500.0f0/length(S) * ( 
+            2.0f0*dot(θd - θ , θd - θ) +
+            2.0f0*dot(θdotd - θdot , θdotd - θdot) + 
+            0.0f0*dot(ϕd - ϕ , ϕd - ϕ) + 
+            0.0f0*dot(ϕdotd - ϕdot , ϕdotd - ϕdot) +  
+            0.0f0*dot(λd - λ, λd - λ) )
+end
+
 function trackExpert(lcp::Lcp, x0::Vector{T}) where {T<:Real}
 
-    function lossToExpert(lcp, param, x0; totalTime = 500)
-        S, λ, _ = rwTrajectory(lcp, x0, param; totalTimeStep=totalTime)
-        θ, θdot, ϕ, ϕdot = getindex.(S, 4), getindex.(S, 8), getindex.(S, 3), getindex.(S, 7)
-        Sd, λd, _ = rwTrajectory(lcp, x0, param_expert; totalTimeStep=totalTime); 
-        θd, θdotd, ϕd, ϕdotd = getindex.(Sd, 4), getindex.(Sd, 8), getindex.(Sd, 3), getindex.(Sd, 7)
-    
-        return 500.0f0/length(S) * ( 
-                2.0f0*dot(θd - θ , θd - θ) +
-                2.0f0*dot(θdotd - θdot , θdotd - θdot) + 
-                0.0f0*dot(ϕd - ϕ , ϕd - ϕ) + 
-                0.0f0*dot(ϕdotd - ϕdot , ϕdotd - ϕdot) +  
-                0.0f0*dot(λd - λ, λd - λ) )
-    end
-    
     param       = Float32[25.0, 2.0]
     opt         = Adam(0.01)
 
@@ -140,4 +142,20 @@ function trackExpert(lcp::Lcp, x0::Vector{T}) where {T<:Real}
     end
     println("param_expert= ", param_expert, " param_learned = ", param )
     return param
+end
+
+function gradientTest1(lcp, z, ps)
+
+    #test the gradient of xdot wrt torque inputs
+    function takeGradOf(lcp, z, param)
+        S, λ, _ = rwTrajectory(lcp, z, param; totalTimeStep=500)
+        # l = hipSpeedLoss(lcp, S)
+        # u = control(z, param)
+        # return l
+        return sum(getindex.(S, 4))
+    end
+
+    l(θ) = takeGradOf(lcp, z, θ)
+    lg   = ForwardDiff.gradient(l, ps)
+
 end

@@ -18,8 +18,8 @@ mutable struct Lcp{T, TSYS}
     end
 end
 
-function sysAttributes(lcp::Lcp, x, param)
-    return lcp.sys(x, param)
+function sysAttributes(lcp::Lcp, x, param; kwargs...)
+    return lcp.sys(x, param; kwargs...)
 end
 
 function checkContact(lcp::Lcp, gn, γn)
@@ -120,13 +120,13 @@ function solveLcp(lcp::Lcp, x, param; Δt = 0.001)
     return solveLcp(lcp, gn, γn, γt, M, h, Wn, Wt; Δt=Δt)
 end
 
-function oneTimeStep(lcp::Lcp, x1, param::Vector{T}; Δt = 0.001) where {T<:Real}
+function oneTimeStep(lcp::Lcp, x1, param::Vector{T}; Δt = 0.001, kwargs...) where {T<:Real}
 
     qA, uA  = lcp.sys(x1)
     qM      = qA + 0.5f0*Δt*uA
 
     x_mid   = vcat(qM, uA)
-    gn, γn, γt, M, h, Wn, Wt = sysAttributes(lcp, x_mid, param)
+    gn, γn, γt, M, h, Wn, Wt = sysAttributes(lcp, x_mid, param; kwargs...)
     λn, λt, λR  = solveLcp(lcp, gn, γn, γt, M, h, Wn, Wt; Δt=Δt)
 
     uE = M\((Wn - Wt*diagm(0 => lcp.sys.μ))*λn + Wt*λR + h*Δt) + uA

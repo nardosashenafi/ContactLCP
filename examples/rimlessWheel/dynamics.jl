@@ -122,8 +122,7 @@ function massMatrix(sys::RimlessWheel, z)
     return M
 end
 
-inputLayer(x) = [x[1], x[2], cos(x[3]), sin(x[3]), cos(x[4]), sin(x[4]), 
-                x[5], x[6], x[7], x[8]]
+inputLayer(x) = [cos(x[3]), sin(x[3]), cos(x[4]), sin(x[4]), x[7], x[8]]
 
 function control(z, θp::Vector{T}; expert=false) where {T<:Real}
     q, v = sys(z)
@@ -131,10 +130,10 @@ function control(z, θp::Vector{T}; expert=false) where {T<:Real}
     if expert #working expert controller
         return -θp[1]*(q[3]-0.38f0) - θp[2]*v[3]
     else
-        u = -θp[1]*(q[3]-0.38f0) - θp[2]*v[3]
-        # @assert length(θp) == 6 + DiffEqFlux.paramlength(Hd)
+        # u = -θp[1]*(q[3]-0.38f0) - θp[2]*v[3]
+        @assert length(θp) == DiffEqFlux.paramlength(unn)
         # u = MLBasedESC.controller(npbc, inputLayer(x), θp)
-        # u = unn(inputLayer(z), θp)[1]
+        u = unn(inputLayer(z), θp)[1]
         return clamp(u, -satu, satu)
     end
 end
@@ -220,12 +219,13 @@ function wt(sys::RimlessWheel, z::Vector{T}) where {T<:Real}
 end
 
 function plots(sys, Z)
-    fig1 = plt.figure()
+    fig1 = plt.figure(1)
     plots(sys, Z, fig1)
 
 end
 
 function plots(sys, Z, fig1)
+    PyPlot.figure(1)
     fig1.clf()
     subplot(2, 1, 1)
     plot(getindex.(Z, 3), getindex.(Z, 7))
@@ -236,13 +236,14 @@ function plots(sys, Z, fig1)
 end
 
 function plots(sys, Z, t, Λn, Λt)
-    fig1 = plt.figure()
-    fig2 = plt.figure()
-    fig3 = plt.figure()
+    fig1 = plt.figure(1)
+    fig2 = plt.figure(2)
+    fig3 = plt.figure(3)
     plots(sys, Z, t, Λn, Λt, fig1, fig2, fig3)
 end
 
 function plots(sys, Z, t, Λn, Λt, fig1, fig2, fig3)
+    PyPlot.figure(1)
     fig1.clf()
     subplot(2, 3, 1)
     plot(t, getindex.(Z, 1))
@@ -263,6 +264,7 @@ function plots(sys, Z, t, Λn, Λt, fig1, fig2, fig3)
     plot(getindex.(Z, 4), getindex.(Z, 8))
     ylabel(L"\dot{\theta} [rad/s]", fontsize=15)
 
+    PyPlot.figure(2)
     fig2.clf()
     subplot(2, 1, 1)
     for i in 1:length(Λn[1])
@@ -278,10 +280,10 @@ function plots(sys, Z, t, Λn, Λt, fig1, fig2, fig3)
     ticklabel_format(axis="y", style="sci",scilimits=(0,0))
     ylabel(L"$\lambda_{t1} [N]$", fontsize=15)
 
+    PyPlot.figure(3)
     fig3.clf()
     θ = spokeInContact(sys, getindex.(Z, 4), getindex.(Z, 8))
     plot(θ, getindex.(Z, 8))
-
 end
 
 function spokeInContact(sys, θ, θdot)
