@@ -44,14 +44,13 @@ function sampleInitialStates(lcp::Lcp, param::Vector{T}; totalTime=1000) where {
     #generate 5 long trajectories
     while length(sampleTrajectories) < 2
 
-        x0 = initialState(sys, 0.0f0, -0.5f0, 0.0f0, 0.0f0)
-        # x0 = Float32.(initialState(sys, rand(-lcp.sys.α+0.1:0.05:0.0), 
-        #                               rand(-2.0:0.05:-0.5), 
-        #                               0.0f0, 0.0f0))
+        # x0 = initialState(sys, 0.0f0, -0.5f0, 0.0f0, 0.0f0)
+        x0 = Float32.(initialState(sys, rand(-lcp.sys.α:0.05:lcp.sys.α), 
+                                      rand(-2.0:0.05:-0.5), 
+                                      rand(-pi/2:0.1:pi/2), 
+                                      rand(-1.0:0.05:1.0)) )
 
         S, λ, _ = rwTrajectory(lcp, x0, param; totalTimeStep=totalTime)
-        # isStumbling(S) ? println("We got stumbling! Beware of gradient jumps") : nothing
-        # Z, tz = extractStumbling(X, tx) 
         push!(sampleTrajectories, S)
 
     end

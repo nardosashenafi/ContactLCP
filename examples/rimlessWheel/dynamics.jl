@@ -218,6 +218,45 @@ function wt(sys::RimlessWheel, z::Vector{T}) where {T<:Real}
     return Wt
 end
 
+function animate(sys, X)
+
+    θ = getindex.(X, 1)
+    ϕ = getindex.(X, 2)
+    θdot = getindex.(X, 3)
+    ϕdot = getindex.(X, 4)
+
+    fig = figure("MyFigure",figsize=(1,1))
+    ax = plt.axes(xlim = (-7,7),ylim=(0,2))
+
+    #plane
+    planeLength = 1
+    planex = [-planeLength/2, planeLength/2]
+    planey = [0.0, planeLength * sin(sys.γ)]
+
+
+    x1(θ) = 0.0
+    y1(θ) = tan(sys.γ) ./ (planeLength/2.0)  
+
+    # x2(θ) = x1(θ) + sys.l1*sin(θ - sys.γ)
+    x2(θ) = x1(θ) + sys.l1*sin(-θ)
+    y2(θ) = y1(θ) + sys.l1*cos(θ)
+
+    step = 10
+
+    function animate(i)
+        clf()
+        x_spoke = [x1(θ[step*i+1]), x2(θ[step*i+1])]
+        y_spoke = [y1(θ[step*i+1]), y2(θ[step*i+1])]
+        plot(planex, planey)
+        plot(x_spoke,y_spoke)
+    end
+
+    myanim = anim.FuncAnimation(fig, animate, frames=length(X)-1)
+    plt.show()
+    # myanim[:save]("animation.gif", writer="PillowWriter", fps=2)
+    # display("text/html", html_video("test1.mp4"))
+end
+
 function plots(sys, Z)
     fig1 = plt.figure(1)
     plots(sys, Z, fig1)
@@ -287,13 +326,20 @@ function plots(sys, Z, t, Λn, Λt, fig1, fig2, fig3)
 end
 
 function spokeInContact(sys, θ, θdot)
-    θ_new = deepcopy(θ)
+    θ_new = deepcopy(θ);
 
     for i in 2:length(θ_new)
         #if velocity jumps, wrap. Checking θ causes the angle to jump when the velocity has not
-        if (abs(θdot[i] - θdot[i-1]) > 0.1) && abs(round(abs.(θ_new[i]/sys.α)) - abs.(θ_new[i]/sys.α)) < 0.03       #instead check if new contact occurs
+        if (abs(θdot[i] - θdot[i-1]) > 0.1) && 
+            θdot[i] < 0.0  &&
+            abs(round(abs.(θ_new[i]/sys.α)) - abs.(θ_new[i]/sys.α)) < 0.03       #instead check if new contact occurs
+            
             θ_new[i:end] .= θ_new[i:end] .+ 2*sys.α
-        elseif (abs(θdot[i] - θdot[i-1]) > 0.1)  && abs(round(abs.(θ_new[i]/sys.α)) - abs.(θ_new[i]/sys.α)) < 0.03      
+
+        elseif (abs(θdot[i] - θdot[i-1]) > 0.1) &&
+            θdot[i] > 0.0 && 
+            abs(round(abs.(θ_new[i]/sys.α)) - abs.(θ_new[i]/sys.α)) < 0.03      
+            
             θ_new[i:end] .= θ_new[i:end] .- 2sys.α
         end
     end

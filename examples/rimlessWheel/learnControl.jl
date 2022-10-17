@@ -18,8 +18,8 @@ function trajLoss(lcp::Lcp, X0, param::Vector{T}; totalTime=500) where {T<:Real}
     for x0 in X0
         S, λ, _ = rwTrajectory(lcp, x0, param; totalTimeStep=totalTime)
         # X, tx   = extractStumbling(X, tx)
-        l += hipSpeedLoss(lcp, S)
-        l += 1.0/length(S)*sum([abs.(unn(inputLayer(s), param)[1]) for s in S])
+        l       += hipSpeedLoss(lcp, S)
+        l       += 0.05/length(S)*sum([abs.(unn(inputLayer(s), param)[1]) for s in S])
     end
 
     return sum(l)/length(X0)
@@ -29,8 +29,10 @@ end
 function testControl(lcp::Lcp, x0, ps, grad, fig1; timeSteps=1000)
 
     S, λ, _ = rwTrajectory(lcp, x0, ps; totalTimeStep = timeSteps);
-    loss    = hipSpeedLoss(lcp, S)
-    loss  += 1.0/length(S)*sum([abs.(unn(inputLayer(s), param)[1]) for s in S])
+    # loss    = hipSpeedLoss(lcp, S)
+    # loss  += 1.0/length(S)*sum([abs.(unn(inputLayer(s), param)[1]) for s in S])
+
+    loss = trajLoss(lcp, [x0], ps; totalTime=timeSteps)
 
     plots(lcp.sys, S, fig1)
 
@@ -81,18 +83,17 @@ function controlToHipSpeed(lcp::Lcp, x0::Vector{T}, ps) where {T<:Real}
             X0 = sampleInitialStates(lcp, param; totalTime=1000)
         end
 
-        # for x0 in X0
-            l(θ)  = trajLoss(lcp, X0, θ;  totalTime=500)
-            lg    = ForwardDiff.gradient(l, param)
+        l(θ)  = trajLoss(lcp, X0, θ;  totalTime=500)
+        lg    = ForwardDiff.gradient(l, param)
 
-            if counter > 10
-                testControl(lcp, x0, param, lg, fig1)
-                counter = 0
-            end
-            counter += 1
+        if counter > 10
+            testControl(lcp, x0, param, lg, fig1)
+            counter = 0
+        end
 
-            Flux.update!(opt, param, lg)
-        # end
+        counter += 1
+
+        Flux.update!(opt, param, lg)
 
     end
     return param
