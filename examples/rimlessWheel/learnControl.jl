@@ -9,7 +9,7 @@ x0             = initialState(sys, 0.0f0, -0.5f0, 0.0f0, 0.0f0)
 param_expert   = Float32[30.0, 5.0]
 lcp            = Lcp(Float32, sys)
 unn            = FastChain(FastDense(6, 8, elu), FastDense(8, 1))
-ps             = 0.01*randn(DiffEqFlux.paramlength(unn))
+ps             = 0.05*randn(DiffEqFlux.paramlength(unn))
 const satu     = 1.5
 
 function trajLoss(lcp::Lcp, X0, param::Vector{T}; totalTime=500) where {T<:Real}
@@ -19,6 +19,7 @@ function trajLoss(lcp::Lcp, X0, param::Vector{T}; totalTime=500) where {T<:Real}
         S, λ, _ = rwTrajectory(lcp, x0, param; totalTimeStep=totalTime)
         # X, tx   = extractStumbling(X, tx)
         l += hipSpeedLoss(lcp, S)
+        l += 1.0/length(S)*sum([abs.(unn(inputLayer(s), param)[1]) for s in S])
     end
 
     return sum(l)/length(X0)
@@ -29,10 +30,11 @@ function testControl(lcp::Lcp, x0, ps, grad, fig1; timeSteps=1000)
 
     S, λ, _ = rwTrajectory(lcp, x0, ps; totalTimeStep = timeSteps);
     loss    = hipSpeedLoss(lcp, S)
+    loss  += 1.0/length(S)*sum([abs.(unn(inputLayer(s), param)[1]) for s in S])
 
     plots(lcp.sys, S, fig1)
 
-    println("loss = ", round(loss, digits=4) , " | grad ", mean(grad), " | hip speed = ", round.(mean(getindex.(S, 5)), digits=4) )
+    println("loss = ", round(loss, digits=4) , " | grad ", norm(grad, 2), " | hip speed = ", round.(mean(getindex.(S, 5)), digits=4) )
     # println("loss = ", round(l1(param), digits=4),  " | p = ", round.(param, digits=4), " | hip speed = ", round.(mean(-cm.sys.l1 .* cos.(getindex.(Z, 1)) .* getindex.(Z, 3)), digits=4) )
 end
 
@@ -61,7 +63,7 @@ function hipSpeedLoss(lcp::Lcp, X)
     #     end
     # end
 
-    return 500.0f0/length(X)*lnorm
+    return 10.0f0/length(X)*lnorm
 end
 
 function controlToHipSpeed(lcp::Lcp, x0::Vector{T}, ps) where {T<:Real}
@@ -79,16 +81,18 @@ function controlToHipSpeed(lcp::Lcp, x0::Vector{T}, ps) where {T<:Real}
             X0 = sampleInitialStates(lcp, param; totalTime=1000)
         end
 
-        l(θ)  = trajLoss(lcp, X0, θ;  totalTime=500)
-        lg    = ForwardDiff.gradient(l, param)
+        # for x0 in X0
+            l(θ)  = trajLoss(lcp, X0, θ;  totalTime=500)
+            lg    = ForwardDiff.gradient(l, param)
 
-        if counter > 10
-            testControl(lcp, X0[1], param, lg, fig1)
-            counter = 0
-        end
-        counter += 1
+            if counter > 10
+                testControl(lcp, x0, param, lg, fig1)
+                counter = 0
+            end
+            counter += 1
 
-        Flux.update!(opt, param, lg)
+            Flux.update!(opt, param, lg)
+        # end
 
     end
     return param

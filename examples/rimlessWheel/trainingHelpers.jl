@@ -46,7 +46,8 @@ function sampleInitialStates(lcp::Lcp, param::Vector{T}; totalTime=1000) where {
 
         x0 = initialState(sys, 0.0f0, -0.5f0, 0.0f0, 0.0f0)
         # x0 = Float32.(initialState(sys, rand(-lcp.sys.α+0.1:0.05:0.0), 
-        #                               rand(-2.0:0.05:-0.5), 0.0f0, 0.0f0))
+        #                               rand(-2.0:0.05:-0.5), 
+        #                               0.0f0, 0.0f0))
 
         S, λ, _ = rwTrajectory(lcp, x0, param; totalTimeStep=totalTime)
         # isStumbling(S) ? println("We got stumbling! Beware of gradient jumps") : nothing
