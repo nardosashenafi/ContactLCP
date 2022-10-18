@@ -121,11 +121,11 @@ end
 function lexiMin(z1, z2)   # picks the vector with the first zero or strictly negative index
     δz = z1 - z2
 
-    if isempty(δz[abs.(δz) .> 1e-5])
-        #vectors are equal! pick one 
+    if isempty(δz[abs.(δz) .> 1e-10])
+        # println("vectors are equal! pick one")
         minz = (z1,1)
     else
-        first(δz[abs.(δz) .> 1e-5]) < 0.0 ? minz = (z1,1) : minz = (z2,2)
+        first(δz[abs.(δz) .> 1e-10]) < 0.0 ? minz = (z1,1) : minz = (z2,2)
     end
 
     return minz
@@ -133,7 +133,7 @@ end
 
 function lexiMax(z1, z2)   # picks the vector with the first zero or strictly positive index
     δz = z1 - z2
-    first(δz[abs.(δz) .> 1e-5]) < 0.0 ? maxz = (z2,2) : maxz = (z1,1)
+    first(δz[abs.(δz) .> 1e-10]) < 0.0 ? maxz = (z2,2) : maxz = (z1,1)
     return maxz
 end
 
@@ -280,7 +280,8 @@ function lemkeLexi(M, q::Vector{T}) where {T<:Real}
 
     for i in range(1, stop = totalCol+1, step=1 )
         extractionComplete = false
-        m = findlast(x -> x == i, windex[1:state_i])
+        basicSolRow = i
+        m = findlast(x -> x == basicSolRow, windex[1:state_i])
         while !extractionComplete
             if isnothing(m)
                 basicSol[i] = 0.0 
@@ -292,15 +293,15 @@ function lemkeLexi(M, q::Vector{T}) where {T<:Real}
             end   
 
             if isnothing(n)
-                basicSol[zindex[m]] = q̂[windex[m]] 
+                basicSol[zindex[m]] = q̂[i] 
                 extractionComplete = true
                 break
             else
-                i = windex[n]
+                basicSolRow = windex[n]
                 # basicSol[zindex[n]] = q̂[windex[n]]    #q̂[windex[n]] belongs to w vector; not needed
                 state_i = n-1 
             end
-            m = findlast(x -> x == i, windex[1:state_i])
+            m = findlast(x -> x == basicSolRow, windex[1:state_i])
 
             if isnothing(m)
                 break 

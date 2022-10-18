@@ -39,28 +39,24 @@ end
 
 function sampleInitialStates(lcp::Lcp, param::Vector{T}; totalTime=1000) where {T<:Real}
 
-    sampleTrajectories = Vector{Vector{Vector{T}}}()
+    # sampleTrajectories = Vector{Vector{Vector{T}}}()
 
-    #generate 5 long trajectories
-    while length(sampleTrajectories) < 2
 
-        # x0 = initialState(sys, 0.0f0, -0.5f0, 0.0f0, 0.0f0)
-        x0 = Float32.(initialState(sys, rand(-lcp.sys.α:0.05:lcp.sys.α), 
-                                      rand(-2.0:0.05:-0.5), 
-                                      rand(-pi/2:0.1:pi/2), 
-                                      rand(-1.0:0.05:1.0)) )
+    # x0 = initialState(sys, 0.0f0, -0.5f0, 0.0f0, 0.0f0)
+    x0 = Float32.(initialState(sys, rand(-lcp.sys.α:0.05:lcp.sys.α), 
+                                    rand(-2.0:0.05:-0.5), 
+                                    0.0, 
+                                    0.0) )
 
-        S, λ, _ = rwTrajectory(lcp, x0, param; totalTimeStep=totalTime)
-        push!(sampleTrajectories, S)
-
-    end
+    S, _, _ = rwTrajectory(lcp, x0, param; totalTimeStep=totalTime)
+    # push!(sampleTrajectories, S)
 
     #sample 10 initial states from the long trajectories
     X0 = Vector{Vector{T}}()
-    sampleNum = 4
+    sampleNum = 5
 
     for i in 1:sampleNum
-        push!(X0, rand(rand(sampleTrajectories)))
+        push!(X0, rand(S))
     end
 
     return X0

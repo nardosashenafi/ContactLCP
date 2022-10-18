@@ -8,35 +8,35 @@ sys            = RimlessWheel(Float32)
 x0             = initialState(sys, 0.0f0, -0.5f0, 0.0f0, 0.0f0)
 param_expert   = Float32[30.0, 5.0]
 lcp            = Lcp(Float32, sys)
-unn            = FastChain(FastDense(6, 8, elu), FastDense(8, 1))
-ps             = 0.05*randn(DiffEqFlux.paramlength(unn))
-const satu     = 1.5
+unn            = FastChain(FastDense(6, 10, elu), 
+                            FastDense(10, 1))
+ps             = 0.05f0*randn(Float32, DiffEqFlux.paramlength(unn))
+const satu     = 1.0f0
 
 function trajLoss(lcp::Lcp, X0, param::Vector{T}; totalTime=500) where {T<:Real}
 
-    l = 0.0
+    l = 0.0f0
     for x0 in X0
         S, λ, _ = rwTrajectory(lcp, x0, param; totalTimeStep=totalTime)
         # X, tx   = extractStumbling(X, tx)
         l       += hipSpeedLoss(lcp, S)
-        l       += 0.05/length(S)*sum([abs.(unn(inputLayer(s), param)[1]) for s in S])
+        l       += 1.0f0/length(S)*sum([abs.(unn(inputLayer(s), param)[1]) for s in S])
     end
 
     return sum(l)/length(X0)
 end
 
+function testControl(lcp::Lcp, X0, ps, grad, fig1; timeSteps=5000)
 
-function testControl(lcp::Lcp, x0, ps, grad, fig1; timeSteps=1000)
-
-    S, λ, _ = rwTrajectory(lcp, x0, ps; totalTimeStep = timeSteps);
+    S, λ, _ = rwTrajectory(lcp, X0[1], ps; totalTimeStep = timeSteps);
     # loss    = hipSpeedLoss(lcp, S)
     # loss  += 1.0/length(S)*sum([abs.(unn(inputLayer(s), param)[1]) for s in S])
 
-    loss = trajLoss(lcp, [x0], ps; totalTime=timeSteps)
+    loss = trajLoss(lcp, X0, ps; totalTime=timeSteps)
 
     plots(lcp.sys, S, fig1)
 
-    println("loss = ", round(loss, digits=4) , " | grad ", norm(grad, 2), " | hip speed = ", round.(mean(getindex.(S, 5)), digits=4) )
+    println("loss = ", round(loss, digits=4) , " | grad ", norm(grad, 2), " | hip speed = ", round.(mean(getindex.(X, 5)), digits=4) )
     # println("loss = ", round(l1(param), digits=4),  " | p = ", round.(param, digits=4), " | hip speed = ", round.(mean(-cm.sys.l1 .* cos.(getindex.(Z, 1)) .* getindex.(Z, 3)), digits=4) )
 end
 
@@ -70,29 +70,35 @@ end
 
 function controlToHipSpeed(lcp::Lcp, x0::Vector{T}, ps) where {T<:Real}
     
-    opt         = Adam(0.001)
+    opt           = Adam(0.001)
+  
+    l1            = Inf
+    counter       = 0
+    X0            = Vector{Vector{T}}()
+    replaybuffer  = Vector{Vector{T}}()
+    samples       = Vector{Vector{T}}()
+    fig1          = plt.figure()
+    param         = deepcopy(ps)
 
-    l1          = Inf
-    counter     = 0
-    X0          = Vector{Vector{T}}()
-    fig1        = plt.figure()
-    param       = deepcopy(ps)
+    for i in 1:10000
 
-    for i in 1:1000
-        while isempty(X0)
-            X0 = sampleInitialStates(lcp, param; totalTime=1000)
-        end
+        X0 = sampleInitialStates(lcp, param; totalTime=5000)
+        # push!(replaybuffer, X0...)
 
-        l(θ)  = trajLoss(lcp, X0, θ;  totalTime=500)
+        # [push!(samples, rand(rand(replaybuffer))) for i in minibatchSize]
+        l(θ)  = trajLoss(lcp, X0, θ; totalTime=1000)
         lg    = ForwardDiff.gradient(l, param)
 
         if counter > 10
-            testControl(lcp, x0, param, lg, fig1)
+            # x0 = Float32.(initialState(sys, rand(-lcp.sys.α:0.05:lcp.sys.α), 
+            #                             rand(-2.0:0.05:-0.5), 
+            #                             0.0, 
+            #                             rand(-0.5:0.05:0.5)) )
+            testControl(lcp, X0[1], param, lg, fig1; timeSteps=5000)
             counter = 0
         end
 
         counter += 1
-
         Flux.update!(opt, param, lg)
 
     end

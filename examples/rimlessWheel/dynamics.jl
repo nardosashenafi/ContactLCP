@@ -93,9 +93,9 @@ end
 
 function gap(sys::RimlessWheel, z)
     
-    k_range = range(1, stop=sys.k, step=1)
+    k_range = range(0, stop=sys.k-1, step=1)
     y, θ = (z[2], z[4])
-    return y .+ sys.l1*cos.(θ .+ 2*sys.α*k_range) 
+    return y .- sys.l1*cos.(θ .+ 2*sys.α*k_range) 
 end
 
 function vnormal(sys::RimlessWheel, z)
@@ -198,10 +198,10 @@ end
 function wn(sys::RimlessWheel, z::Vector{T}) where {T<:Real}
 
     θ        = z[4]
-    k_range  = range(1, stop=sys.k, step=1)
+    k_range  = range(0, stop=sys.k-1, step=1)
     Wn       = zeros(T, 4, sys.k)
     Wn[2, :] = ones(T, sys.k)
-    Wn[4, :] = -sys.l1 .* sin.(θ .+ 2.0*sys.α.*k_range)
+    Wn[4, :] = sys.l1 .* sin.(θ .+ 2.0*sys.α.*k_range)
 
    return Wn 
 
@@ -210,10 +210,10 @@ end
 function wt(sys::RimlessWheel, z::Vector{T}) where {T<:Real}
 
     θ        = z[4]
-    k_range  = range(1, stop=sys.k, step=1)
+    k_range  = range(0, stop=sys.k-1, step=1)
     Wt       = zeros(T, 4, sys.k)
     Wt[1, :] = ones(T, sys.k)
-    Wt[4, :] = -sys.l1 .* cos.(θ .+ 2.0*sys.α.*k_range)
+    Wt[4, :] = sys.l1 .* cos.(θ .+ 2.0*sys.α.*k_range)
 
     return Wt
 end
