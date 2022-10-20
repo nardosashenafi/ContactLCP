@@ -1,107 +1,120 @@
 
 using DiffEqFlux
 using Statistics
+# using MeshCat
+# using GeometryBasics
+# using CoordinateTransformations
+# using ColorTypes
 include("trainingHelpers.jl")
 
 Δt = 0.001f0; totalTimeStep = 1500
-sys            = RimlessWheel(Float32)
-x0             = initialState(sys, 0.0f0, -0.5f0, 0.0f0, 0.0f0)
-param_expert   = Float32[30.0, 5.0]
-lcp            = Lcp(Float32, sys)
-unn            = FastChain(FastDense(6, 10, elu), 
-                            FastDense(10, 1))
-ps             = 0.05f0*randn(Float32, DiffEqFlux.paramlength(unn))
-const satu     = 1.0f0
 
-function trajLoss(lcp::Lcp, X0, param::Vector{T}; totalTime=500) where {T<:Real}
+x0             = initialState(pi, -1.0f0, 0.0f0, 0.0f0)
+param_expert   = Float32[30.0, 5.0]
+unn            = FastChain(FastDense(6, 8, elu), 
+                            FastDense(8, 5, elu),
+                            FastDense(5, 1))
+
+ps             = 0.1f0*randn(Float32, DiffEqFlux.paramlength(unn))
+const satu     = 1.5f0
+
+function trajLoss(X0, param::Vector{T}; totalTime=500) where {T<:Real}
 
     l = 0.0f0
     for x0 in X0
-        S, λ, _ = rwTrajectory(lcp, x0, param; totalTimeStep=totalTime)
-        # X, tx   = extractStumbling(X, tx)
-        l       += hipSpeedLoss(lcp, S)
-        l       += 1.0f0/length(S)*sum([abs.(unn(inputLayer(s), param)[1]) for s in S])
+        S, _, _ = trajectory(x0, param; totalTimeStep=totalTime)
+        l       += hipSpeedLoss(S)
+        # l       += 3.0f0/length(S)*sum([abs.(unn(inputLayer(s), param)[1]) for s in S])
     end
 
     return sum(l)/length(X0)
 end
 
-function testControl(lcp::Lcp, X0, ps, grad, fig1; timeSteps=5000)
+function testControl(X0, ps, grad, fig1; timeSteps=5000)
 
-    S, λ, _ = rwTrajectory(lcp, X0[1], ps; totalTimeStep = timeSteps);
-    # loss    = hipSpeedLoss(lcp, S)
-    # loss  += 1.0/length(S)*sum([abs.(unn(inputLayer(s), param)[1]) for s in S])
+    S, _, _ = trajectory(X0[1], ps; totalTimeStep = timeSteps);
+    loss    = trajLoss(X0, ps; totalTime=timeSteps)
 
-    loss = trajLoss(lcp, X0, ps; totalTime=timeSteps)
+    plots(S, fig1)
 
-    plots(lcp.sys, S, fig1)
-
-    println("loss = ", round(loss, digits=4) , " | grad ", norm(grad, 2), " | hip speed = ", round.(mean(getindex.(X, 5)), digits=4) )
+    println("loss = ", round(loss, digits=4) , " | grad = ", mean(grad), " | hip speed = ", round.(mean(getindex.(S, 5)), digits=4) )
     # println("loss = ", round(l1(param), digits=4),  " | p = ", round.(param, digits=4), " | hip speed = ", round.(mean(-cm.sys.l1 .* cos.(getindex.(Z, 1)) .* getindex.(Z, 3)), digits=4) )
 end
 
 ############################################################
 #control to hip speed
 
-function hipSpeedLoss(lcp::Lcp, X)
+function hipSpeedLoss(Z; gThreshold=gThreshold, k=k, α=α)
 
     #loss of one trajectory
-    # β       = 0.2f0
     xd_dot  = 0.5f0
+
+    loss = 0.0f0
+    ki_prev = 0
+
+    for z in Z
+        gn = gap(z)
+        contactIndex, _ = checkContact(gn, gThreshold, k)
+
+        if any(contactIndex .> 0.0) 
+            ki = findfirst(x -> x == 1.0, contactIndex) - 1
+            loss += xd_dot - (l1 * cos(z[4] + 2*α*ki) * z[8])
+            ki_prev = ki
+        else
+            loss += (xd_dot - (l1 * cos(z[4] + 2*α*ki_prev) * z[8]))
+        end
+    end
+
+    lmag   = dot(loss, loss)
+
+    ϕdot = getindex.(Z, 7)
+    lmag += 1.0f0*dot(ϕdot, ϕdot)
+
+    # #add cost on contact frequency
+    # β       = 0.2f0
     # freq_d  = 1.0f0/(2.0f0*lcp.sys.l1*sin(lcp.sys.α)/xd_dot)
 
-    θ       = getindex.(X, 4)
-    θdot    = getindex.(X, 8)
-    l       = xd_dot .+ lcp.sys.l1 .* cos.(θ) .* θdot 
-    lnorm   = dot(l, l)
-
-    #add cost on contact frequency
-    # if length(x) >= 2   #if a section of the trajectory contains only one state, strikePeriod will be 0 and frequency becomes inf
-    #     xd_avg        = 1/length(θ)*sum(x)
-    #     strikePeriod  = 2*cm.sys.l1*sin(cm.sys.α)/xd_avg  #TODO: assumes  if the spoke in contact
-    #     f             = 1/strikePeriod
-    #     if f >= (1+β)*freq_d
-    #         lnorm += 0.1f0*(f - (1+β) .* freq_d)
-    #     end
+    # xdot          = getindex.(X, 5)
+    # xddot_avg     = 1.0f0/length(θ)*sum(xdot)
+    # strikePeriod  = 2.0f0*l1*sin(α)/xddot_avg  #TODO: assumes  if the spoke in contact
+    # f             = 1.0f0/strikePeriod
+    # if f >= (1+β)*freq_d
+    #     lmag += 0.1f0*(f - (1+β) .* freq_d)
     # end
 
-    return 10.0f0/length(X)*lnorm
+    return 1.0f0/length(Z)*lmag
 end
 
-function controlToHipSpeed(lcp::Lcp, x0::Vector{T}, ps) where {T<:Real}
+function controlToHipSpeed(ps) where {T<:Real}
     
     opt           = Adam(0.001)
   
-    l1            = Inf
     counter       = 0
     X0            = Vector{Vector{T}}()
     replaybuffer  = Vector{Vector{T}}()
     samples       = Vector{Vector{T}}()
     fig1          = plt.figure()
     param         = deepcopy(ps)
+    minibatchSize = 4
+
+    test(X, θ, grad)  = testControl(X, θ, grad, fig1; timeSteps=3000)
 
     for i in 1:10000
 
-        X0 = sampleInitialStates(lcp, param; totalTime=5000)
+        X0 = sampleInitialStates(param, minibatchSize; totalTime=2000)
         # push!(replaybuffer, X0...)
-
         # [push!(samples, rand(rand(replaybuffer))) for i in minibatchSize]
-        l(θ)  = trajLoss(lcp, X0, θ; totalTime=1000)
-        lg    = ForwardDiff.gradient(l, param)
 
-        if counter > 10
-            # x0 = Float32.(initialState(sys, rand(-lcp.sys.α:0.05:lcp.sys.α), 
-            #                             rand(-2.0:0.05:-0.5), 
-            #                             0.0, 
-            #                             rand(-0.5:0.05:0.5)) )
-            testControl(lcp, X0[1], param, lg, fig1; timeSteps=5000)
+        l(θ)  = trajLoss(X0, θ; totalTime=500)
+        lg    = ForwardDiff.gradient(l, param)
+        if counter > 2
+            test([X0[1]], param, lg)
             counter = 0
         end
-
-        counter += 1
         Flux.update!(opt, param, lg)
-
+        counter += 1
     end
+
     return param
 end
 #################################################################
@@ -132,10 +145,11 @@ function trackExpert(lcp::Lcp, x0::Vector{T}) where {T<:Real}
     l1          = Inf
     counter     = 0
     X0          = Vector{Vector{T}}()
+    minibatchSize = 4
 
     for i in 1:400
         while isempty(X0)
-            X0 = sampleInitialStates(lcp, param; totalTime=1000)
+            X0 = sampleInitialStates(param, minibatchSize; totalTime=1000)
         end
         for xi in X0
             l(θ)  = lossToExpert(lcp, θ, xi; totalTime = 500)

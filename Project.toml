@@ -4,12 +4,16 @@ authors = ["nardosashenafi <nardosashenafi@u.boisestate.edu>"]
 version = "0.1.0"
 
 [deps]
+ColorTypes = "3da002f7-5984-5a60-b8a6-cbb66c0b333f"
+CoordinateTransformations = "150eb455-5306-5404-9cee-2592286d6298"
 DiffEqFlux = "aae7a2af-3d4f-5e19-a356-7da93b79d9d0"
 Flux = "587475ba-b771-5e3f-ad9e-33799f191a9c"
 ForwardDiff = "f6369f11-7733-5829-9624-2563aa707210"
+GeometryBasics = "5c1252a2-5f33-56bf-86c9-59e7332b4326"
 JuMP = "4076af6c-e467-56ae-b986-b466b2749572"
 LaTeXStrings = "b964fa9f-0449-5b57-a5c2-d3ea65f4040f"
 LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
+MeshCat = "283c5d60-a78f-5afe-a0af-af636b173e11"
 Mosek = "6405355b-0ac2-5fba-af84-adbd65488c0e"
 MosekTools = "1ec41992-ff65-5c91-ac43-2df89e9693a4"
 PATHSolver = "f5f7c340-0bb3-5c69-969a-41884d311d1b"

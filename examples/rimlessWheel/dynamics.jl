@@ -1,60 +1,33 @@
 export RimlessWheel
 
-mutable struct RimlessWheel{T}  
-    m1              ::T         #wheel 
-    m2              ::T         #torso
-    I1              ::T 
-    I2              ::T
-    mt              ::T
-    l1              ::T
-    l2              ::T 
-    g               ::T 
-    k               ::Int
-    α               ::T
-    γ               ::T
-    ϵn              ::Vector{T}
-    ϵt              ::Vector{T}
-    μ               ::Vector{T}
-    x0              ::Vector{T}
-    contactIndex    ::Vector{T}
-    gThreshold      ::T
+const m1           = 2.32f0    
+const m2           = 4.194f0 
+const I1           = 0.0784160f0
+const I2           = 0.0380256f0
+const mt           = m1 + m2
+const l1           = 0.26f0        #wheel
+const l2           = 0.05f0          #torso
+const g            = 9.81f0
+const k            = 10
+const α            = Float32(360.0/k/2.0 * pi/180.0)
+const γ            = Float32(0.0*pi/180.0)
+const ϵn_const     = 0.0f0*ones(Float32, k)
+const ϵt_const     = 0.0f0*ones(Float32, k)
+const μ_const      = 0.6f0*ones(Float32, k)
+const gThreshold   = 0.001f0
 
-    function RimlessWheel(T)
-
-        m1              = 2.32     
-        m2              = 4.194 
-        I1              = 0.0784160
-        I2              = 0.0380256
-        mt              = m1 + m2
-        l1              = 0.26          #wheel
-        l2              = 0.05          #torso
-        g               = T(9.81)
-        k               = 10
-        α               = T(360.0/k/2.0 * pi/180.0)
-        γ               = T(0.0*pi/180.0)
-        ϵn              = T.(0.0*ones(k))
-        ϵt              = T.(0.0*ones(k))
-        μ               = T.(0.6*ones(k))
-        x0              = zeros(T, 8)
-        #[x, y, ϕ, θ, xdot, ydot, ϕdot, θdot]
-        # state x is parallel to the plane, y points normal to the plane
-        # θ is that of the spoke in contact with the plane initially
-        contactIndex    = zeros(T, k)
-        gThreshold      = T.(0.001)
-
-        new{T}(m1, m2, I1, I2, mt, l1, l2, g, k, α, γ, ϵn, ϵt, μ, x0, contactIndex, gThreshold)
-    end
-
+struct RimlessWheel{}  
 end
 
-function initialState(sys, θ0, θ0dot, ϕ0, ϕ0dot)
-    @assert -sys.α <= θ0 <= sys.α "Give an initial spoke angle for the spoke in contact"
-    x = sys.l1*sin(θ0)
-    y = sys.l1*cos(θ0)
+function initialState(θ0, θ0dot, ϕ0, ϕ0dot)
+    @assert pi-α <= θ0 <= pi+α "Give an initial spoke angle for the spoke in contact. This will help set the rimless wheel in contact with the surface"
+    
+    x = l1*sin(pi-θ0)
+    y = l1*cos(pi-θ0)
     ϕ = ϕ0 
     θ = θ0 
-    xdot = -sys.l1*cos(θ0) * θ0dot
-    ydot = sys.l1*sin(θ0) * θ0dot
+    xdot = -l1*cos(pi-θ0) * θ0dot
+    ydot = l1*sin(pi-θ0) * θ0dot
     ϕdot = ϕ0dot 
     θdot = θ0dot
 
@@ -62,62 +35,56 @@ function initialState(sys, θ0, θ0dot, ϕ0, ϕ0dot)
 end
 
 #returns the attributes need to model contact
-function (sys::RimlessWheel)(x, θ::Vector{T}; expert=false) where {T<:Real}
-    gn  = gap(sys, x)  
-    γn  = vnormal(sys, x)
-    γt  = vtang(sys, x)
-    M   = massMatrix(sys, x)
-    h   = genForces(sys, x, θ; expert=expert)
-    Wn  = wn(sys, x)
-    Wt  = wt(sys, x)
+function (sys::RimlessWheel)(x, θ::Vector{T}; ϵn=ϵn_const, ϵt=ϵt_const, μ=μ_const, gThreshold=gThreshold, expert=false) where {T<:Real}
+    gn  = gap(x)  
+    γn  = vnormal(x)
+    γt  = vtang(x)
+    M   = massMatrix(x)
+    h   = genForces(x, θ; expert=expert)
+    Wn  = wn(x)
+    Wt  = wt(x)
 
-    return gn, γn, γt, M, h, Wn, Wt
+    return gn, γn, γt, M, h, Wn, Wt, ϵn, ϵt, μ, gThreshold
 end
 
 #parses out the poses and velocities from the state vector
 function (sys::RimlessWheel)(x::Vector{T}) where {T<:Real}
+    return parseStates(x)
+end
+
+function parseStates(x::Vector{T}) where {T<:Real}
     q = x[1:4]      #[x, y, ϕ, θ]
     u = x[5:8]      #[xdot, ydot, ϕdot, θdot]
     return q, u
 end
 
-function setCoefficients(sys::RimlessWheel, ϵn, ϵt, μ)
-    sys.ϵn  = ϵn
-    sys.ϵt  = ϵt
-    sys.μ   = μ
-end
-
-function setInitial(sys::RimlessWheel, z)
-    sys.x0 = x
-end
-
-function gap(sys::RimlessWheel, z)
+function gap(z)
     
-    k_range = range(0, stop=sys.k-1, step=1)
+    k_range = range(0, stop=k-1, step=1)
     y, θ = (z[2], z[4])
-    return y .- sys.l1*cos.(θ .+ 2*sys.α*k_range) 
+    return y .+ l1*cos.(θ .+ 2*α*k_range) 
 end
 
-function vnormal(sys::RimlessWheel, z)
-    Wn = wn(sys, z)
-    _, v = sys(z)
+function vnormal(z)
+    Wn = wn(z)
+    _, v = parseStates(z)
     return Wn'*v
 end
 
-function vtang(sys::RimlessWheel, z)
-    Wt = wt(sys, z)
-    _, v = sys(z)
+function vtang(z)
+    Wt = wt(z)
+    _, v = parseStates(z)
     return Wt'*v
 end
 
-function massMatrix(sys::RimlessWheel, z)
-    q, v = sys(z)
+function massMatrix(z)
+    q, v = parseStates(z)
     x, y, ϕ, θ = q
     
-    M = [sys.mt 0.0 sys.m2*sys.l2*cos(ϕ) 0.0;
-        0.0 sys.mt sys.m2*sys.l2*sin(ϕ) 0.0;
-        sys.m2*sys.l2*cos(ϕ) sys.m2*sys.l2*sin(ϕ) sys.I2+sys.m2*sys.l2^2 0.0;
-        0.0 0.0 0.0 sys.I1]
+    M = [mt 0.0 m2*l2*cos(ϕ) 0.0;
+        0.0 mt m2*l2*sin(ϕ) 0.0;
+        m2*l2*cos(ϕ) m2*l2*sin(ϕ) I2+m2*l2^2 0.0;
+        0.0 0.0 0.0 I1]
 
     return M
 end
@@ -125,9 +92,10 @@ end
 inputLayer(x) = [cos(x[3]), sin(x[3]), cos(x[4]), sin(x[4]), x[7], x[8]]
 
 function control(z, θp::Vector{T}; expert=false) where {T<:Real}
-    q, v = sys(z)
+    q, v = parseStates(z)
 
     if expert #working expert controller
+        @assert length(θp) == 2
         return -θp[1]*(q[3]-0.38f0) - θp[2]*v[3]
     else
         # u = -θp[1]*(q[3]-0.38f0) - θp[2]*v[3]
@@ -138,38 +106,38 @@ function control(z, θp::Vector{T}; expert=false) where {T<:Real}
     end
 end
 
-function genForces(sys::RimlessWheel, z, param::Vector{T}; expert=false) where {T<:Real}
+function genForces(z, param::Vector{T}; expert=false) where {T<:Real}
 
-    q, v = sys(z)
+    q, v = parseStates(z)
     x, y, ϕ, θ = q
     xdot, ydot, ϕdot, θdot = v
     #h = Bu - C qdot - G
     B = [0.0f0, 0.0f0, 1.0f0, -1.0f0]
 
-    C = [0.0f0 0.0f0 -sys.m2*sys.l2*sin(ϕ)*ϕdot 0.0f0;
-        0.0f0 0.0f0 sys.m2*sys.l2*cos(ϕ)*ϕdot 0.0f0;
-        -sys.m2*sys.l2*sin(ϕ)*ϕdot sys.m2*sys.l2*cos(ϕ)*ϕdot 0.0f0 0.0f0;
+    C = [0.0f0 0.0f0 -m2*l2*sin(ϕ)*ϕdot 0.0f0;
+        0.0f0 0.0f0 m2*l2*cos(ϕ)*ϕdot 0.0f0;
+        -m2*l2*sin(ϕ)*ϕdot m2*l2*cos(ϕ)*ϕdot 0.0f0 0.0f0;
         0.0f0 0.0f0 0.0f0 0.0f0]
 
-    G = [-sys.mt*sys.g*sin(sys.γ), 
-        sys.mt*sys.g*cos(sys.γ), 
-        sys.m2*sys.g*sys.l2*sin(ϕ - sys.γ),
+    G = [-mt*g*sin(γ), 
+        mt*g*cos(γ), 
+        m2*g*l2*sin(ϕ - γ),
         0.0f0]
 
     return B*control(z, param; expert=expert) - C*v - G
 end
 
-function impactMap(sys::RimlessWheel, ϕ)
+function impactMap(ϕ)
 
-    det = sys.I1*sys.I2 + sys.I1*sys.m2*sys.l2^2 + sys.I2*sys.mt*sys.l1^2 + 
-            sys.m2*sys.l1^2*sys.l2^2*(sys.m1 + sys.m2*(sin(sys.α - ϕ))^2)
+    det = I1*I2 + I1*m2*l2^2 + I2*mt*l1^2 + 
+            m2*l1^2*l2^2*(m1 + m2*(sin(α - ϕ))^2)
 
-    ξ1 = 1/det * ((sys.I1*sys.I2 + sys.I1*sys.m2*sys.l2^2) + 
-            (sys.I2*sys.mt*sys.l1^2 + sys.m2*sys.l1^2*sys.l2^2*(sys.m1 +0.5* sys.m2))*cos(2sys.α) -
-            1/2*sys.m2^2*sys.l1^2*sys.l2^2*cos(2ϕ))
+    ξ1 = 1/det * ((I1*I2 + I1*m2*l2^2) + 
+            (I2*mt*l1^2 + m2*l1^2*l2^2*(m1 +0.5* m2))*cos(2α) -
+            1/2*m2^2*l1^2*l2^2*cos(2ϕ))
 
-    ξ2 = 1/det *(sys.m2*sys.l1*sys.l2*(sys.I1*(cos(sys.α - ϕ) - cos(sys.α + ϕ)) + 
-            sys.mt*sys.l1^2*(cos(2sys.α)*cos(sys.α - ϕ) - cos(sys.α + ϕ))) )
+    ξ2 = 1/det *(m2*l1*l2*(I1*(cos(α - ϕ) - cos(α + ϕ)) + 
+            mt*l1^2*(cos(2α)*cos(α - ϕ) - cos(α + ϕ))) )
 
     return [ξ1 0;
             ξ2 1]
@@ -180,13 +148,13 @@ function comparePostImpact(lcp, x, param; Δt = 0.001)
     
     ϕ = x[3]
     θdot, ϕdot = [x[8], x[7]]
-    postImpactMap = impactMap(sys, ϕ) * [θdot, ϕdot]
+    postImpactMap = impactMap(ϕ) * [θdot, ϕdot]
 
-    gn, γn, γt, M, h, Wn, Wt = sysAttributes(lcp, x, param)
-    λn, λt, λR  = solveLcp(lcp, gn, γn, γt, M, h, Wn, Wt; Δt=Δt)
+    gn, γn, γt, M, h, Wn, Wt, ϵn, ϵt, μ, gThreshold = sysAttributes(lcp, x, param)
+    λn, λt, λR  = solveLcp(gn, γn, γt, M, h, Wn, Wt, ϵn, ϵt, μ, gThreshold; Δt=Δt)
 
-    qM, uA = lcp.sys(x)
-    uE = M\((Wn - Wt*diagm(0 => lcp.sys.μ))*λn + Wt*λR + h*Δt) + uA
+    qM, uA = sys(x)
+    uE = M\((Wn - Wt*diagm(0 => lcp.μ))*λn + Wt*λR + h*Δt) + uA
     θdotlcp, ϕdotLcp  = [uE[4], uE[3]]
 
     println("[θdot-, ϕdot-] = ", [θdot, ϕdot])
@@ -195,93 +163,99 @@ function comparePostImpact(lcp, x, param; Δt = 0.001)
 
 end
 
-function wn(sys::RimlessWheel, z::Vector{T}) where {T<:Real}
+function wn(z::Vector{T}) where {T<:Real}
 
     θ        = z[4]
-    k_range  = range(0, stop=sys.k-1, step=1)
-    Wn       = zeros(T, 4, sys.k)
-    Wn[2, :] = ones(T, sys.k)
-    Wn[4, :] = sys.l1 .* sin.(θ .+ 2.0*sys.α.*k_range)
+    k_range  = range(0, stop=k-1, step=1)
+    Wn       = zeros(T, 4, k)
+    Wn[2, :] = ones(T, k)
+    Wn[4, :] = -l1 .* sin.(θ .+ 2.0*α.*k_range)
 
    return Wn 
 
 end
 
-function wt(sys::RimlessWheel, z::Vector{T}) where {T<:Real}
+function wt(z::Vector{T}) where {T<:Real}
 
     θ        = z[4]
-    k_range  = range(0, stop=sys.k-1, step=1)
-    Wt       = zeros(T, 4, sys.k)
-    Wt[1, :] = ones(T, sys.k)
-    Wt[4, :] = sys.l1 .* cos.(θ .+ 2.0*sys.α.*k_range)
+    k_range  = range(0, stop=k-1, step=1)
+    Wt       = zeros(T, 4, k)
+    Wt[1, :] = ones(T, k)
+    Wt[4, :] = -l1 .* cos.(θ .+ 2.0*α.*k_range)
 
     return Wt
 end
 
-function animate(sys, X)
+# function createAnimateObject(x, y, ϕ, θ; k=k, α=α)
+#     vspokes = vis[:spokes]
 
-    θ = getindex.(X, 1)
-    ϕ = getindex.(X, 2)
-    θdot = getindex.(X, 3)
-    ϕdot = getindex.(X, 4)
+#     for ki in k
+#         vki = vspokes[Symbol("spoke" * String("$ki"))]
 
-    fig = figure("MyFigure",figsize=(1,1))
-    ax = plt.axes(xlim = (-7,7),ylim=(0,2))
+#         setobject!(vki, MeshObject(
+#             Cylinder(Point(0, 0, 0), Point(-l1*sin(θ+2*α*ki), l1*cos(θ+2*α*ki), 0.0), 0.05),
+#             MeshLambertMaterial(color=colorant"black")))
+#             settransform!(vki, Translation(x, y, 0.0))
+#     end
 
-    #plane
-    planeLength = 1
-    planex = [-planeLength/2, planeLength/2]
-    planey = [0.0, planeLength * sin(sys.γ)]
+#     vtorso = vis[:torso]
+#     setobject!(vtorso[:link], MeshObject(
+#         Cylinder(Point(0, 0, 0), Point(l2*sin(ϕ), -l2*cos(ϕ), 0.0), 0.05),
+#         MeshLambertMaterial(color=colorant"blue")))
+#         settransform!(vtorso[:link], Translation(x, y, 0.0))
 
+#     setobject!(vtorso[:bob], MeshObject(
+#         HyperSphere(Point(l2*sin(ϕ), -l2*cos(ϕ), 0.0), 0.1),
+#         MeshLambertMaterial(color=colorant"red")))
+#         settransform!(vtorso[:bob], Translation(x, y, 0.0))
+   
+#     return vspokes, vtorso
+# end
 
-    x1(θ) = 0.0
-    y1(θ) = tan(sys.γ) ./ (planeLength/2.0)  
+# function animate(Z)
+#     x0, y0, ϕ0, θ0 = Z[1][1:4]
+#     vspokes, vtorso = createAnimateObject(x0, y0, ϕ0, θ0)
+#     for z in Z
+#         x, y, ϕ, θ = z[1:4]
+#         for ki in k
+#             vki = vspokes[Symbol("spoke" * String("$ki"))]
+#             settransform!(vki, Translation(x, y, 0.0) ∘ LinearMap(RotZ(θ)) )
+#         end
+#         settransform!(vtorso[:link], Translation(x, y, 0.0))
+#         settransform!(vtorso[:bob], Translation(x, y, 0.0))
+#     end
 
-    # x2(θ) = x1(θ) + sys.l1*sin(θ - sys.γ)
-    x2(θ) = x1(θ) + sys.l1*sin(-θ)
-    y2(θ) = y1(θ) + sys.l1*cos(θ)
+# end
 
-    step = 10
-
-    function animate(i)
-        clf()
-        x_spoke = [x1(θ[step*i+1]), x2(θ[step*i+1])]
-        y_spoke = [y1(θ[step*i+1]), y2(θ[step*i+1])]
-        plot(planex, planey)
-        plot(x_spoke,y_spoke)
-    end
-
-    myanim = anim.FuncAnimation(fig, animate, frames=length(X)-1)
-    plt.show()
-    # myanim[:save]("animation.gif", writer="PillowWriter", fps=2)
-    # display("text/html", html_video("test1.mp4"))
-end
-
-function plots(sys, Z)
+function plots(Z)
     fig1 = plt.figure(1)
-    plots(sys, Z, fig1)
+    plots(Z, fig1)
 
 end
 
-function plots(sys, Z, fig1)
+function plots(Z, fig1)
     PyPlot.figure(1)
     fig1.clf()
-    subplot(2, 1, 1)
+    subplot(2, 2, 1)
     plot(getindex.(Z, 3), getindex.(Z, 7))
     ylabel(L"\dot{\phi} [rad/s]", fontsize=15)
-    subplot(2, 1, 2)
-    θ = spokeInContact(sys, getindex.(Z, 4), getindex.(Z, 8))
+    subplot(2, 2, 2)
+    θ = spokeInContact(Z)
     plot(θ, getindex.(Z, 8))
+    ylabel(L"\dot{\theta} [rad/s]", fontsize=15)
+    subplot(2, 2, 3)
+    plot(getindex.(Z, 5))
+    ylabel("vx [m/s]", fontsize=15)
 end
 
-function plots(sys, Z, t, Λn, Λt)
+function plots(Z, t, Λn, Λt)
     fig1 = plt.figure(1)
     fig2 = plt.figure(2)
     fig3 = plt.figure(3)
-    plots(sys, Z, t, Λn, Λt, fig1, fig2, fig3)
+    plots(Z, t, Λn, Λt, fig1, fig2, fig3)
 end
 
-function plots(sys, Z, t, Λn, Λt, fig1, fig2, fig3)
+function plots(Z, t, Λn, Λt, fig1, fig2, fig3)
     PyPlot.figure(1)
     fig1.clf()
     subplot(2, 3, 1)
@@ -321,26 +295,48 @@ function plots(sys, Z, t, Λn, Λt, fig1, fig2, fig3)
 
     PyPlot.figure(3)
     fig3.clf()
-    θ = spokeInContact(sys, getindex.(Z, 4), getindex.(Z, 8))
+    θ = spokeInContact(Z)
     plot(θ, getindex.(Z, 8))
 end
 
-function spokeInContact(sys, θ, θdot)
-    θ_new = deepcopy(θ);
+# function spokeInContact(Z; gThreshold=gThreshold, k=k, α=α)
+
+#     θ = getindex.(Z, 4)
+#     θ_new = deepcopy(θ)
+#     i     = 1
+
+#     for z in Z
+#         gn = gap(z)
+#         contactIndex, _ = checkContact(gn, gThreshold, k)
+
+#         if any(contactIndex .> 0.0)
+#             ki = findfirst(x -> x == 1.0, contactIndex) - 1
+#             θ_new[i:end] = θ[i:end] .+ 2*α*ki
+#         end
+#         i += 1
+#     end
+
+#     return θ_new
+# end
+
+
+function spokeInContact(Z)
+    θ_new = getindex.(Z, 4)
+    θdot = getindex.(Z, 8)
 
     for i in 2:length(θ_new)
         #if velocity jumps, wrap. Checking θ causes the angle to jump when the velocity has not
         if (abs(θdot[i] - θdot[i-1]) > 0.1) && 
             θdot[i] < 0.0  &&
-            abs(round(abs.(θ_new[i]/sys.α)) - abs.(θ_new[i]/sys.α)) < 0.03       #instead check if new contact occurs
+            abs(round(abs.(θ_new[i]/α)) - abs.(θ_new[i]/α)) < 0.03       #instead check if new contact occurs
             
-            θ_new[i:end] .= θ_new[i:end] .+ 2*sys.α
+            θ_new[i:end] .= θ_new[i:end] .+ 2*α
 
         elseif (abs(θdot[i] - θdot[i-1]) > 0.1) &&
             θdot[i] > 0.0 && 
-            abs(round(abs.(θ_new[i]/sys.α)) - abs.(θ_new[i]/sys.α)) < 0.03      
+            abs(round(abs.(θ_new[i]/α)) - abs.(θ_new[i]/α)) < 0.03      
             
-            θ_new[i:end] .= θ_new[i:end] .- 2sys.α
+            θ_new[i:end] .= θ_new[i:end] .- 2*α
         end
     end
     return θ_new

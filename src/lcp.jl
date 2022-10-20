@@ -1,20 +1,7 @@
-mutable struct Lcp{T, TSYS}
-    sys                 ::TSYS 
-    total_contact_num   ::Int
-    current_contact_num ::Int
-    ϵn                  ::Vector{T}
-    ϵt                  ::Vector{T}
-    μ                   ::Vector{T}
-
+struct Lcp{T, TSYS}
+    sys ::TSYS 
     function Lcp(T, sys)
-
-        total_contact_num           = length(sys.contactIndex)
-        current_contact_num         = sum(sys.contactIndex)
-        ϵn                          = sys.ϵn
-        ϵt                          = sys.ϵt
-        μ                           = sys.μ
-
-        new{T, typeof(sys)}(sys, total_contact_num, current_contact_num, ϵn, ϵt, μ)
+        new{T, typeof(sys)}(sys)
     end
 end
 
@@ -22,31 +9,22 @@ function sysAttributes(lcp::Lcp, x, param; kwargs...)
     return lcp.sys(x, param; kwargs...)
 end
 
-function checkContact(lcp::Lcp, gn, γn)
+function checkContact(gn::Vector{T}, gThreshold, total_contact_num) where {T<:Real}
      
-    contactIndex = zeros(lcp.total_contact_num)
+    contactIndex = zeros(T, total_contact_num)
 
-    for i in 1:lcp.total_contact_num
-        # if (gn[i] < lcp.sys.gThreshold) && (γn[i] <= 0.0)
-        if (gn[i] < lcp.sys.gThreshold) 
+    for i in 1:total_contact_num
+        if (gn[i] < gThreshold) 
             contactIndex[i] = 1 
         end
     end
+    current_contact_num = Int(sum(contactIndex))
 
-    lcp.current_contact_num = sum(contactIndex)
-    return contactIndex
+    return contactIndex, current_contact_num
 end
 
-#the coefficients are trimmed inorder to construct A matrix and b vector. This function resets the coefficients
-function resetCoefficients(lcp::Lcp)
-    return lcp.sys.ϵn, lcp.sys.ϵt, lcp.sys.μ
-end
+function trimAttributes(gn, γn, γt, Wn, Wt, ϵn, ϵt, μ, contactIndex)
 
-function trimAttributes(lcp::Lcp, gn, γn, γt, Wn, Wt)
-
-    contactIndex = checkContact(lcp, gn, γn)
-
-    ϵn, ϵt, μ   = resetCoefficients(lcp)
     gnt         = gn[contactIndex .== 1]
     Wnt         = Wn[:, contactIndex .== 1]   #pick out the ones in contact
     Wtt         = Wt[:, contactIndex .== 1]
@@ -58,21 +36,19 @@ function trimAttributes(lcp::Lcp, gn, γn, γt, Wn, Wt)
     return gnt, ϵnt, ϵtt, μt, γnt, γtt, Wnt, Wtt
 end
 
-function getAb(lcp::Lcp, gn, γn, γt, M, h, Wn, Wt; Δt = 0.001f0)
+function getAb(gn, γn, γt, M, h, Wn, Wt, ϵn, ϵt, μ, contactIndex, current_contact_num; Δt = 0.001f0)
 
-    gnt, ϵnt, ϵtt, μt, γnt, γtt, Wnt, Wtt = trimAttributes(lcp, gn, γn, γt, Wn, Wt)
+    gnt, ϵnt, ϵtt, μt, γnt, γtt, Wnt, Wtt = trimAttributes(gn, γn, γt, Wn, Wt, ϵn, ϵt, μ, contactIndex)
+    s = current_contact_num
+    E = Matrix{Float32}(I, s, s)
 
-    s   = lcp.current_contact_num
-
-    E = Matrix{Float64}(I, s, s)
-
-    A = [Wnt'*(M\(Wnt - Wtt*diagm(0 => μt))) Wnt'*(M\Wtt) zeros(s,s);
+    A = [Wnt'*(M\(Wnt - Wtt*diagm(0 => μt))) Wnt'*(M\Wtt) zeros(Float32, s,s);
         Wtt'*(M\(Wnt - Wtt*diagm(0 => μt))) Wtt'*(M\Wtt) E;
-        2.0*diagm(0 => μt) -E zeros(s, s)]
+        2.0f0*diagm(0 => μt) -E zeros(Float32, s, s)]
 
     b = [Wnt'*(M \ h*Δt) + (E + diagm(0 => ϵnt))*γnt;
         Wtt'*(M \ h*Δt) + (E + diagm(0 => ϵtt))*γtt;
-        zeros(s)]
+        zeros(Float32, s)]
 
     return A, b
 end
@@ -94,31 +70,26 @@ function lcpOpt(A, b, contactNum)
     end
 end
 
-function solveLcp(lcp::Lcp, gn, γn, γt, M, h::Vector{T}, Wn, Wt; Δt=0.001f0) where {T<:Real}
+function solveLcp(gn, γn, γt, M, h::Vector{T}, Wn, Wt, ϵn, ϵt, μ, gThreshold; Δt=0.001f0) where {T<:Real}
 
-    contactIndex = checkContact(lcp, gn, γn)
+    total_contact_num = length(gn)
+    contactIndex, s = checkContact(gn, gThreshold, total_contact_num)
 
-    s            = lcp.current_contact_num
-    Λn           = zeros(T, lcp.total_contact_num)
-    ΛR           = zeros(T, lcp.total_contact_num)
-    Λt           = zeros(T, lcp.total_contact_num)
+    Λn           = zeros(T, total_contact_num)
+    ΛR           = zeros(T, total_contact_num)
+    Λt           = zeros(T, total_contact_num)
 
     if s > 0
-        A, b = getAb(lcp, gn, γn, γt, M, h, Wn, Wt; Δt = Δt)
+        A, b = getAb(gn, γn, γt, M, h, Wn, Wt, ϵn, ϵt, μ, contactIndex, s; Δt = Δt)
         λ =  lemkeLexi(A, b)
         # λ = lcpOpt(A, b, s)
 
         Λn[contactIndex .== 1] = λ[1:s]
         ΛR[contactIndex .== 1] = λ[s+1:2s]
-        Λt[contactIndex .== 1] = λ[s+1:2s] - diagm(0 => lcp.sys.μ[contactIndex .== 1])*λ[1:s]
+        Λt[contactIndex .== 1] = λ[s+1:2s] - diagm(0 => μ[contactIndex .== 1])*λ[1:s]
     end
 
     return Λn, Λt, ΛR
-end
-
-function solveLcp(lcp::Lcp, x, param; Δt = 0.001)
-    gn, γn, γt, M, h, Wn, Wt = sysAttributes(lcp, x, param)
-    return solveLcp(lcp, gn, γn, γt, M, h, Wn, Wt; Δt=Δt)
 end
 
 function oneTimeStep(lcp::Lcp, x1, param::Vector{T}; Δt = 0.001, kwargs...) where {T<:Real}
@@ -127,33 +98,38 @@ function oneTimeStep(lcp::Lcp, x1, param::Vector{T}; Δt = 0.001, kwargs...) whe
     qM      = qA + 0.5f0*Δt*uA
 
     x_mid   = vcat(qM, uA)
-    gn, γn, γt, M, h, Wn, Wt = sysAttributes(lcp, x_mid, param; kwargs...)
-    λn, λt, λR  = solveLcp(lcp, gn, γn, γt, M, h, Wn, Wt; Δt=Δt)
+    gn, γn, γt, M, h, Wn, Wt, ϵn, ϵt, μ, gThreshold = sysAttributes(lcp, x_mid, param; kwargs...)
+    λn, λt, λR  = solveLcp(gn, γn, γt, M, h, Wn, Wt, ϵn, ϵt, μ, gThreshold; Δt=Δt)
 
-    uE = M\((Wn - Wt*diagm(0 => lcp.sys.μ))*λn + Wt*λR + h*Δt) + uA
+    uE = M\((Wn - Wt*diagm(0 => μ))*λn + Wt*λR + h*Δt) + uA
     qE = qM + 0.5f0*Δt*uE
 
     return vcat(qE,uE), λn, λt
 end
 
-function fulltimestep(lcp::Lcp, x0, param::Vector{T}; Δt = 0.001f0, totalTimeStep = 500) where {T<:Real}
+function fulltimestep(sys, x0, param::Vector{T}, total_contact_num; Δt = 0.001f0, totalTimeStep = 500) where {T<:Real}
+    lcp = Lcp(T, sys)
+    fulltimestep(lcp, x0, param, total_contact_num; Δt = Δt, totalTimeStep = totalTimeStep) 
+end
 
-    X       = Vector{Vector{T}}(undef, totalTimeStep+1)
-    Λn      = Vector{Vector{T}}(undef, totalTimeStep+1)
-    Λt      = Vector{Vector{T}}(undef, totalTimeStep+1)
-    t       = Vector{T}(undef, totalTimeStep+1)
+function fulltimestep(lcp::Lcp, x0, param::Vector{T}; Δt = 0.001f0, totalTimeStep = 500, kwargs...) where {T<:Real}
+
+    X       = Vector{Vector{T}}(undef, totalTimeStep)
+    Λn      = Vector{Vector{T}}(undef, totalTimeStep)
+    Λt      = Vector{Vector{T}}(undef, totalTimeStep)
+    t       = Vector{T}(undef, totalTimeStep)
     x       = deepcopy(x0)
-    X[1]    = x
-    t[1]    = 0.0f0
-    Λn[1]   = zeros(T, lcp.total_contact_num)
-    Λt[1]   = zeros(T, lcp.total_contact_num)
+    ti      = 0.0f0
 
-    for i in 2:totalTimeStep+1
-        x, λn, λt  = oneTimeStep(lcp, x, param; Δt=Δt)
+    oneStep(x, param) = oneTimeStep(lcp, x, param; Δt=Δt, kwargs...)
+
+    for i in 1:totalTimeStep
+        x, λn, λt  = oneStep(x, param)
         X[i]    = x
         Λn[i]   = λn
         Λt[i]   = λt
-        t[i]    = t[i-1]+Δt
+        ti      = ti+Δt
+        t[i]    = ti
     end
 
     return X, t, Λn, Λt

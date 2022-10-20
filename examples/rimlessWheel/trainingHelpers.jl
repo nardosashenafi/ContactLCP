@@ -8,22 +8,20 @@ include("dynamics.jl")
 include("../../src/lcp.jl")
 include("../../src/solver.jl")
 
-Δt = 0.001f0; totalTimeStep = 1500
-sys  = RimlessWheel(Float32)
-x0 = initialState(sys, 0.0f0, -0.5f0, 0.0f0, 0.0f0)
-param_expert   = Float32[30.0, 5.0]
-lcp  = Lcp(Float32, sys)
+sys            = RimlessWheel()
+lcp            = Lcp(Float32, sys)
 
+oneStep(x, θ; kwargs...) = oneTimeStep(lcp, x, θ; kwargs...)
 
-function rwTrajectory(lcp::Lcp, x0, param::Vector{T}; expert=false, Δt = 0.001f0, totalTimeStep = 1000) where {T<:Real}
+function trajectory(x0, param::Vector{T}; expert=false, Δt = 0.001f0, totalTimeStep = 1000) where {T<:Real}
 
     X       = Vector{Vector{T}}(undef, totalTimeStep)
     Λn      = Vector{Vector{T}}(undef, totalTimeStep)
     Λt      = Vector{Vector{T}}(undef, totalTimeStep)
     x       = deepcopy(x0)
-
+ 
     for i in 1:totalTimeStep
-        x, λn, λt  = oneTimeStep(lcp, x, param; Δt=Δt, expert=expert)
+        x, λn, λt  = oneStep(x, param; Δt=Δt, expert=expert)
         X[i]    = x
         Λn[i]   = λn
         Λt[i]   = λt
@@ -37,26 +35,34 @@ function isStumbling(x)
     any(getindex.(x, 8) .> 0.0) 
 end
 
-function sampleInitialStates(lcp::Lcp, param::Vector{T}; totalTime=1000) where {T<:Real}
+function sampleInitialStates(param::Vector{T}, sampleNum; α=α, totalTime=1000) where {T<:Real}
 
-    # sampleTrajectories = Vector{Vector{Vector{T}}}()
+    sampleTrajectories = Vector{Vector{Vector{T}}}()
 
-
-    # x0 = initialState(sys, 0.0f0, -0.5f0, 0.0f0, 0.0f0)
-    x0 = Float32.(initialState(sys, rand(-lcp.sys.α:0.05:lcp.sys.α), 
-                                    rand(-2.0:0.05:-0.5), 
+    for i in 1:2
+        # x0 = initialState(pi-0.0f0, -0.5f0, 0.0f0, 0.0f0)
+        x0 = Float32.(initialState(rand(pi-α:0.05:pi+α), 
+                                    rand(-3.0:0.05:-0.5), 
                                     0.0, 
-                                    0.0) )
+                                    rand(-1.0:0.1:1.0)) )
 
-    S, _, _ = rwTrajectory(lcp, x0, param; totalTimeStep=totalTime)
-    # push!(sampleTrajectories, S)
+        S, _, _ = trajectory(x0, param; totalTimeStep=totalTime)
+        push!(sampleTrajectories, S)
+    end
 
     #sample 10 initial states from the long trajectories
     X0 = Vector{Vector{T}}()
-    sampleNum = 5
 
     for i in 1:sampleNum
-        push!(X0, rand(S))
+        if rand() < 0.7 
+            push!(X0, rand(rand(sampleTrajectories)))
+        else
+            x0 = Float32.(initialState(rand(pi-α:0.05:pi+α), 
+                                        rand(-3.0:0.05:-0.5), 
+                                        0.0, 
+                                        rand(-1.0:0.1:1.0)) )
+            push!(X0, x0)
+        end 
     end
 
     return X0
@@ -67,13 +73,14 @@ end
 # plots(X, t, Λn, Λt)
 # solveM(lcp, x0)
 
-function checkRWGradient(lcp::Lcp, x0::Vector{T}) where {T<:Real}
+function checkRWGradient(x0::Vector{T}, ps) where {T<:Real}
  
 
-    θ1     = Float32[10.0, 2.0]
-    θ2     = θ1 .+ Float32[0.0001, 0.0]
+    θ1     = ps
+    θ2     = deepcopy(θ1)
+    θ2[1]  = θ2[1] + 0.0001
 
-    l(θ)   = loss(lcp, θ, x0)
+    l(θ)   = trajLoss([x0], θ; totalTime=500)
 
     l1    = l(θ1)
     l2    = l(θ2)
