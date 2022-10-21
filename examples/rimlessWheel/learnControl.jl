@@ -1,11 +1,17 @@
 
 using DiffEqFlux
 using Statistics
-# using MeshCat
-# using GeometryBasics
-# using CoordinateTransformations
-# using ColorTypes
+using MeshCat
+using GeometryBasics
+using CoordinateTransformations
+using ColorTypes
+using Blink
+using Rotations
+
 include("trainingHelpers.jl")
+# window = Window()
+# vis = Visualizer()
+# open(vis, window)
 
 Δt = 0.001f0; totalTimeStep = 1500
 
@@ -61,7 +67,7 @@ function hipSpeedLoss(Z; gThreshold=gThreshold, k=k, α=α)
             loss += xd_dot - (l1 * cos(z[4] + 2*α*ki) * z[8])
             ki_prev = ki
         else
-            loss += (xd_dot - (l1 * cos(z[4] + 2*α*ki_prev) * z[8]))
+            loss += (xd_dot - (l1 * cos(z[4] + 2*α*ki_prev) * z[8]))    #the closest estimate to the hip speed when the spokes are not in contact
         end
     end
 

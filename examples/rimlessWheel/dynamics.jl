@@ -186,46 +186,48 @@ function wt(z::Vector{T}) where {T<:Real}
     return Wt
 end
 
-# function createAnimateObject(x, y, ϕ, θ; k=k, α=α)
-#     vspokes = vis[:spokes]
+function createAnimateObject(x, y, ϕ, θ; k=k, α=α)
+    vspokes = vis[:spokes]
 
-#     for ki in k
-#         vki = vspokes[Symbol("spoke" * String("$ki"))]
+    for ki in range(0, stop=k-1, step=1)
+        vki = vspokes[Symbol("spoke" * String("$ki"))]
 
-#         setobject!(vki, MeshObject(
-#             Cylinder(Point(0, 0, 0), Point(-l1*sin(θ+2*α*ki), l1*cos(θ+2*α*ki), 0.0), 0.05),
-#             MeshLambertMaterial(color=colorant"black")))
-#             settransform!(vki, Translation(x, y, 0.0))
-#     end
+        setobject!(vki, MeshObject(
+            Cylinder(Point(0.0, 0.0, 0.0), Point(0.0, 0.0, l1), 0.015),
+            MeshLambertMaterial(color=RGBA{Float32}(0.0, 0.0, 0.0, 0.25))))
+        settransform!(vki, Translation(0.0, x, y) ∘ LinearMap(RotX(θ+2*α*ki)))
+    end
 
-#     vtorso = vis[:torso]
-#     setobject!(vtorso[:link], MeshObject(
-#         Cylinder(Point(0, 0, 0), Point(l2*sin(ϕ), -l2*cos(ϕ), 0.0), 0.05),
-#         MeshLambertMaterial(color=colorant"blue")))
-#         settransform!(vtorso[:link], Translation(x, y, 0.0))
+    vtorso = vis[:torso]
+    setobject!(vtorso[:link], MeshObject(
+        Cylinder(Point(0.0, 0.0, 0.0), Point(0.0, 0.0, -l2), 0.005),
+        MeshLambertMaterial(color=RGBA{Float32}(1.0, 0.0, 0.0, 1.0))))
+    settransform!(vtorso[:link], Translation(0.0, x, y) ∘ LinearMap(RotX(ϕ)))
 
-#     setobject!(vtorso[:bob], MeshObject(
-#         HyperSphere(Point(l2*sin(ϕ), -l2*cos(ϕ), 0.0), 0.1),
-#         MeshLambertMaterial(color=colorant"red")))
-#         settransform!(vtorso[:bob], Translation(x, y, 0.0))
+    setobject!(vtorso[:bob], MeshObject(
+        HyperSphere(Point(0.0, 0.0, -l2), 0.015),
+        MeshLambertMaterial(color=RGBA{Float32}(0.0, 0.0, 1.0, 1.0))))
+    settransform!(vtorso[:bob], Translation(0.0, x, y) ∘ LinearMap(RotX(ϕ)))
    
-#     return vspokes, vtorso
-# end
+    return vspokes, vtorso
+end
 
-# function animate(Z)
-#     x0, y0, ϕ0, θ0 = Z[1][1:4]
-#     vspokes, vtorso = createAnimateObject(x0, y0, ϕ0, θ0)
-#     for z in Z
-#         x, y, ϕ, θ = z[1:4]
-#         for ki in k
-#             vki = vspokes[Symbol("spoke" * String("$ki"))]
-#             settransform!(vki, Translation(x, y, 0.0) ∘ LinearMap(RotZ(θ)) )
-#         end
-#         settransform!(vtorso[:link], Translation(x, y, 0.0))
-#         settransform!(vtorso[:bob], Translation(x, y, 0.0))
-#     end
+function animate(Z)
 
-# end
+    x0, y0, ϕ0, θ0 = Z[1][1:4]
+    vspokes, vtorso = createAnimateObject(x0, y0, ϕ0, θ0)
+    for z in Z[1:50:end]
+        x, y, ϕ, θ = z[1:4]
+        for ki in range(0, stop=k-1, step=1)
+            vki = vspokes[Symbol("spoke" * String("$ki"))]
+            settransform!(vki, Translation(0.0, x, y) ∘ LinearMap(RotX(θ+2*α*ki)))
+        end
+        settransform!(vtorso[:link], Translation(0.0, x, y) ∘ LinearMap(RotX(ϕ)))
+        settransform!(vtorso[:bob], Translation(0.0, x, y) ∘ LinearMap(RotX(ϕ)))
+        sleep(0.04)
+    end
+
+end
 
 function plots(Z)
     fig1 = plt.figure(1)
