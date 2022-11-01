@@ -17,9 +17,9 @@ include("trainingHelpers.jl")
 
 x0             = initialState(pi, -1.0f0, 0.0f0, 0.0f0)
 param_expert   = Float32[30.0, 5.0]
-unn            = FastChain(FastDense(6, 8, elu), 
-                            FastDense(8, 5, elu),
-                            FastDense(5, 1))
+unn            = FastChain(FastDense(6, 10, elu), 
+                            FastDense(10, 8, elu),
+                            FastDense(8, 1))
 
 ps             = 0.1f0*randn(Float32, DiffEqFlux.paramlength(unn))
 const satu     = 1.5f0
@@ -74,7 +74,7 @@ function hipSpeedLoss(Z; gThreshold=gThreshold, k=k, α=α)
     lmag   = dot(loss, loss)
 
     ϕdot = getindex.(Z, 7)
-    lmag += 1.0f0*dot(ϕdot, ϕdot)
+    lmag += 2.0f0*dot(ϕdot, ϕdot)
 
     # #add cost on contact frequency
     # β       = 0.2f0
