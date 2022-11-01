@@ -231,6 +231,17 @@ function animate(Z)
 
 end
 
+function animate_random(lcp, param; totalTimeStep = 5000)
+    x0 = Float32.(initialState(rand(pi-α:0.01:pi+α), 
+                                        #  rand(-3.0:0.05:-0.5),
+                                        0.0, 
+                                         0.0, 
+                                         0.0) )
+
+    X, _, _, _ = fulltimestep(lcp, x0, param; Δt = 0.001f0, totalTimeStep = totalTimeStep);                            
+    animate(X)
+end
+
 function plots(Z)
     fig1 = plt.figure(1)
     plots(Z, fig1)

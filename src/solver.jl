@@ -224,13 +224,13 @@ function lemkeLexi(M, q::Vector{T}, x) where {T<:Real}
     basic    = collect(range(1, stop = totalRow, step= 1))
     nonbasic = collect(range(1, stop = totalCol+1, step= 1))
 
-    α       = lexiαRatioTest(Q̂, c) 
-    Q̂, M̂, q̂ = lexiPivot(Q̂, M̂, q̂, α, totalCol+1)    #first feasible basic solution
+    alpha       = lexiαRatioTest(Q̂, c) 
+    Q̂, M̂, q̂ = lexiPivot(Q̂, M̂, q̂, alpha, totalCol+1)    #first feasible basic solution
     
     #keep track of the complementary pair indices
-    basic, nonbasic = switchBasicWithNonBasic(basic, nonbasic, α, totalCol+1)
+    basic, nonbasic = switchBasicWithNonBasic(basic, nonbasic, alpha, totalCol+1)
 
-    d = α
+    d = alpha
     isFound     = false
     infeasible  = false
     MAX_ITER    = 30
@@ -250,7 +250,7 @@ function lemkeLexi(M, q::Vector{T}, x) where {T<:Real}
         end
 
         #Pivotting
-        if b == α
+        if b == alpha
             Q̂, M̂, q̂ = lexiPivot(Q̂ ,M̂, q̂, b, d)
             push!(pivottedIndices, (b, d))
             isFound = true
