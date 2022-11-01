@@ -99,9 +99,11 @@ function control(z, θp::Vector{T}; expert=false) where {T<:Real}
         return -θp[1]*(q[3]-0.38f0) - θp[2]*v[3]
     else
         # u = -θp[1]*(q[3]-0.38f0) - θp[2]*v[3]
-        @assert length(θp) == DiffEqFlux.paramlength(unn)
-        # u = MLBasedESC.controller(npbc, inputLayer(x), θp)
-        u = unn(inputLayer(z), θp)[1]
+        # @assert length(θp) == DiffEqFlux.paramlength(unn) 
+        # u = unn(inputLayer(z), θp)[1]
+        @assert length(θp) == DiffEqFlux.paramlength(Hd) + N
+        u = MLBasedESC.controller(npbc, inputLayer(z), θp)
+        
         return clamp(u, -satu, satu)
     end
 end

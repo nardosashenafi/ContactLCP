@@ -54,7 +54,7 @@ function sampleInitialStates(param::Vector{T}, sampleNum; α=α, totalTime=1000)
     X0 = Vector{Vector{T}}()
 
     for i in 1:sampleNum
-        if rand() < 0.7 
+        if rand() < 0.5 
             push!(X0, rand(rand(sampleTrajectories)))
         else
             x0 = Float32.(initialState(rand(pi-α:0.05:pi+α), 

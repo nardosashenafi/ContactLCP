@@ -1,5 +1,6 @@
 
 using DiffEqFlux
+using MLBasedESC
 using Statistics
 using MeshCat
 using GeometryBasics
@@ -17,11 +18,19 @@ include("trainingHelpers.jl")
 
 x0             = initialState(pi, -1.0f0, 0.0f0, 0.0f0)
 param_expert   = Float32[30.0, 5.0]
-unn            = FastChain(FastDense(6, 10, elu), 
-                            FastDense(10, 8, elu),
-                            FastDense(8, 1))
+# unn            = FastChain(FastDense(6, 8, elu), 
+#                             FastDense(8, 5, elu),
+#                             FastDense(5, 1))
+# ps             = 0.1f0*randn(Float32, DiffEqFlux.paramlength(unn))
 
-ps             = 0.1f0*randn(Float32, DiffEqFlux.paramlength(unn))
+Hd              = FastChain(FastDense(6, 8, elu), 
+                  FastDense(8, 5, elu),
+                  FastDense(5, 1))
+const N         = 6
+npbc            = MLBasedESC.NeuralPBC(N, Hd)
+ps              = 0.1f0*randn(Float32, DiffEqFlux.paramlength(Hd)+N)
+ps[end-N+1:end] = 0.1*rand(N)
+
 const satu     = 1.5f0
 
 function trajLoss(X0, param::Vector{T}; totalTime=500) where {T<:Real}
@@ -63,15 +72,15 @@ function hipSpeedLoss(Z; gThreshold=gThreshold, k=k, α=α)
         contactIndex, _ = checkContact(gn, gThreshold, k)
 
         if any(contactIndex .> 0.0) 
-            ki = findfirst(x -> x == 1.0, contactIndex) - 1
-            loss += xd_dot - (l1 * cos(z[4] + 2*α*ki) * z[8])
+            ki      = findfirst(x -> x == 1.0, contactIndex) - 1
+            loss    += xd_dot - (l1 * cos(z[4] + 2*α*ki) * z[8])
             ki_prev = ki
         else
-            loss += (xd_dot - (l1 * cos(z[4] + 2*α*ki_prev) * z[8]))    #the closest estimate to the hip speed when the spokes are not in contact
+            loss    += (xd_dot - (l1 * cos(z[4] + 2*α*ki_prev) * z[8]))    #the closest estimate to the hip speed when the spokes are not in contact
         end
     end
 
-    lmag   = dot(loss, loss)
+    lmag = dot(loss, loss)
 
     ϕdot = getindex.(Z, 7)
     lmag += 2.0f0*dot(ϕdot, ϕdot)

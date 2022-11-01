@@ -199,7 +199,7 @@ function lexiPivot(Q, M, q::Vector{T}, r, s) where {T<:Real}
     return Q̂, M̂, q̂
 end
 
-function lemkeLexi(M, q::Vector{T}) where {T<:Real}
+function lemkeLexi(M, q::Vector{T}, x) where {T<:Real}
     totalRow = size(M, 1)
     totalCol = size(M, 2)
 
@@ -243,6 +243,7 @@ function lemkeLexi(M, q::Vector{T}) where {T<:Real}
             b = lexiblockRatioTest(Q̂, M̂[:, d])
         else
             println("Interpret output interms of infeasibility or unsolvability")
+            println("x = ", x)
             infeasible = true
             b = 1                   
             break            #TODO: handle infeasibility

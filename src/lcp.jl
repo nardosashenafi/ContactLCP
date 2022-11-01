@@ -81,7 +81,30 @@ function solveLcp(gn, γn, γt, M, h::Vector{T}, Wn, Wt, ϵn, ϵt, μ, gThreshol
 
     if s > 0
         A, b = getAb(gn, γn, γt, M, h, Wn, Wt, ϵn, ϵt, μ, contactIndex, s; Δt = Δt)
-        λ =  lemkeLexi(A, b)
+        λ    =  lemkeLexi(A, b, [])
+        # λ = lcpOpt(A, b, s)
+
+        Λn[contactIndex .== 1] = λ[1:s]
+        ΛR[contactIndex .== 1] = λ[s+1:2s]
+        Λt[contactIndex .== 1] = λ[s+1:2s] - diagm(0 => μ[contactIndex .== 1])*λ[1:s]
+    end
+
+    return Λn, Λt, ΛR
+end
+
+
+function solveLcp(gn, γn, γt, M, h::Vector{T}, Wn, Wt, ϵn, ϵt, μ, gThreshold, x; Δt=0.001f0) where {T<:Real}
+
+    total_contact_num = length(gn)
+    contactIndex, s = checkContact(gn, gThreshold, total_contact_num)
+
+    Λn           = zeros(T, total_contact_num)
+    ΛR           = zeros(T, total_contact_num)
+    Λt           = zeros(T, total_contact_num)
+
+    if s > 0
+        A, b = getAb(gn, γn, γt, M, h, Wn, Wt, ϵn, ϵt, μ, contactIndex, s; Δt = Δt)
+        λ =  lemkeLexi(A, b, x)
         # λ = lcpOpt(A, b, s)
 
         Λn[contactIndex .== 1] = λ[1:s]
@@ -99,7 +122,7 @@ function oneTimeStep(lcp::Lcp, x1, param::Vector{T}; Δt = 0.001, kwargs...) whe
 
     x_mid   = vcat(qM, uA)
     gn, γn, γt, M, h, Wn, Wt, ϵn, ϵt, μ, gThreshold = sysAttributes(lcp, x_mid, param; kwargs...)
-    λn, λt, λR  = solveLcp(gn, γn, γt, M, h, Wn, Wt, ϵn, ϵt, μ, gThreshold; Δt=Δt)
+    λn, λt, λR  = solveLcp(gn, γn, γt, M, h, Wn, Wt, ϵn, ϵt, μ, gThreshold, x1; Δt=Δt)
 
     uE = M\((Wn - Wt*diagm(0 => μ))*λn + Wt*λR + h*Δt) + uA
     qE = qM + 0.5f0*Δt*uE
