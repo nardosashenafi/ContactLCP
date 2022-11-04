@@ -9,7 +9,7 @@ const Δt            = 0.05f0
 const totalTimeStep = Int(floor(tspan[2]/Δt))
 
 nn = FastChain(FastDense(2, 5, elu),
-        FastDense(5, 2))
+                    FastDense(5, 2))
 
 const nn_length = DiffEqFlux.paramlength(nn) 
 
@@ -38,11 +38,6 @@ end
 function loss(traj)
     l = 1.0f0/length(traj)*sum(map(x -> dot(x, x), traj))
     # @assert l > 1.0f0 "loss is not normalized" 
-end
-
-function f(x, θ) 
-    # return θ[1]*x[1]^2 + θ[2]*x[2]^2 + θ[3]*x[1]*x[2]
-    return nn(x, θ)
 end
 
 function unstack(p)
@@ -89,13 +84,18 @@ function testTrajectory(x0, par; totalTimeStep = totalTimeStep)
     return l
 end
 
+function bin(x, θ) 
+    # return θ[1]*x[1]^2 + θ[2]*x[2]^2 + θ[3]*x[1]*x[2]
+    return argmax(softmax(nn(x, θ)))
+end
+
 function categorize(x, θ)
     # return rand(Bernoulli(f(X[end], θ)))
     argmax(softmax(f(x, θ))) - 1
     # softmax(f(x, θ))
 end
 
-@model function switchingModel(x0::Vector{Vector{T}}, μθ, σθ; totalTimeStep = totalTimeStep) where {T<:Real}
+@model function rapidSwitchingModel(x0::Vector{T}, μθ, σθ; totalTimeStep = totalTimeStep) where {T<:Real}
 
     #define θ that parameterizes the function that takes states and returns categorical probabilities
     θ = Vector{T}(undef, nn_length)
@@ -103,14 +103,47 @@ end
 
     p = Vector{T}(undef, totalTimeStep-1)
 
-    for xi in x0
+    # for xi in x0
         X = Vector{Vector{T}}()
-        push!(X, xi)
+        push!(X, x0)
 
         for i in 1:totalTimeStep-1
             p[i] = categorize(X[end], θ)
             # p[i] ~ Categorical(softmax(f(X[end], θ)))
-            x    = oneStep(X[end], p[i]-1)
+            x    = oneStep(X[end], p[i])
+            push!(X, x)
+        end
+
+        l = loss(X)
+        # println("loss = ", l)
+        0.0f0 ~ Normal(l, 0.1f0)
+    # end
+
+end
+
+@model function stateBinModel(x0::Vector{Vector{T}}, μθ, σθ; totalTimeStep = totalTimeStep) where {T<:Real}
+
+    #define θ that parameterizes the function that takes states and returns categorical probabilities
+    θ = Vector{T}(undef, nn_length)
+    θ ~ MvNormal(μθ, Flux.softplus.(σθ))
+
+    transition  = Vector{T}(undef, binSize)
+    u           = Vector{T}(undef, binSize)
+    b           = Vector{T}(undef, totalTimeStep)
+    transition  ~ Dirichlet(ones(binSize)/binSize)
+
+    for i in 1:binSize 
+        u[i] ~ Bernoulli(0.5f0)
+    end
+    
+    for xi in x0
+        X = Vector{Vector{T}}()
+        push!(X, xi)
+        b[1] = bin(X[end], θ)
+
+        for i in 2:totalTimeStep
+            b[i] ~ Categorical(transition[b[i-1]])
+            x    = oneStep(X[end], u[b[i]])
             push!(X, x)
         end
 
@@ -123,15 +156,16 @@ end
 
 function sampleInitialState(θ::Vector{T}; totalTimeStep = totalTimeStep, minibatch=4)
     
-    x0 = [rand(-1.5:0.1:1.5), rand(1.5:0.1:1.5)]
-    X  = trajectory(x0, θ)
+    # x0 = [rand(-1.5:0.1:1.5), rand(1.5:0.1:1.5)]
+    # X  = trajectory(x0, θ)
     
-    samples = Vector{Vector{T}}()
-    for i in 1:minibatch
-        push!(samples, rand(X))
-    end
+    # samples = Vector{Vector{T}}()
+    # for i in 1:minibatch
+    #     push!(samples, rand(X))
+    # end
 
-    return samples
+    # return samples
+    return [0.5f0, 0.5f0]
 end
 
 function train()  
@@ -159,15 +193,15 @@ function train()
     for i in 1:5000
 
         m_cur, standev_cur = unstack(θdistParam)
-        # x0 = [rand(-1.5:0.1:1.5), rand(1.5:0.1:1.5)]
-        x0 = sampleInitialState(θdistParam; totalTimeStep=1000, minibatch=minibatch)
+        x0 = [0.5f0, 0.5f0]
+        # x0 = sampleInitialState(θdistParam; totalTimeStep=1000, minibatch=minibatch)
 
-        model   = switchingModel(x0, m_cur, standev_cur; totalTimeStep=Int(floor(3.0/Δt)))
+        model   = rapidSwitchingModel(x0, m_cur, standev_cur; totalTimeStep=500)
         AdvancedVI.grad!(vo, alg, q, model, θdistParam, diff_results, elbo_num)
         ∇       = DiffResults.gradient(diff_results)
 
         if counter > 10
-            l   = testTrajectory(x0[1], θdistParam; totalTimeStep=1000)
+            l   = testTrajectory(x0, θdistParam; totalTimeStep=500)
             println("loss = ", l, " grad = ",  ∇[1])
             counter = 0
         end
