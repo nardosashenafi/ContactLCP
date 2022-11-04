@@ -1,0 +1,11 @@
+[deps]
+AdvancedVI = "b5ca4192-6429-45e5-a2d9-87aec30a685c"
+DiffEqFlux = "aae7a2af-3d4f-5e19-a356-7da93b79d9d0"
+DiffResults = "163ba53b-c6d8-5494-b064-1a9d43ac40c5"
+Distributions = "31c24e10-a181-5473-b8eb-7969acd0382f"
+DistributionsAD = "ced4e74d-a319-5a8a-b0ac-84af2272839c"
+Flux = "587475ba-b771-5e3f-ad9e-33799f191a9c"
+OrdinaryDiffEq = "1dea7af3-3e70-54e6-95c3-0bf5283fa5ed"
+ProgressMeter = "92933f4c-e287-5a05-a399-4b506db050ca"
+PyPlot = "d330b81b-6aea-500a-939a-2ce795aea3ee"
+Turing = "fce5fe82-541a-59a6-adf8-730c64b5f9a0"
