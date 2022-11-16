@@ -129,11 +129,11 @@ function sampleInitialState(par::Vector{T}; totalTimeStep = totalTimeStep, minib
     
     samples = Vector{Vector{T}}()
     for i in 1:minibatch
-        if rand() > 0.2
+        # if rand() > 0.2
             push!(samples, rand(X))
-        else
-            push!(samples, [rand(-0.1:0.001:0.1), rand(-0.1:0.001:0.1)])
-        end
+        # else
+            # push!(samples, [rand(-0.1:0.001:0.1), rand(-0.1:0.001:0.1)])
+        # end
 
     end
 
@@ -143,7 +143,7 @@ end
 
 function trainBayesianStateBinModel()
     
-    mψ          = rand(Float32, nn_length)
+    mψ          = randn(Float32, nn_length)
     θk          = [0.8f0, 0.8f0, 0.2f0, 0.2f0]      
     vo          = Variational.ELBO()
     elbo_num    = 7
@@ -164,7 +164,7 @@ function trainBayesianStateBinModel()
         AdvancedVI.grad!(vo, alg, q, model, par, diff_results, elbo_num)
         ∇       = DiffResults.gradient(diff_results)
 
-        if counter > 20
+        if counter > 10
             l, _   = testBayesian(x0[1], par; totalTimeStep=1000)
             println("loss = ", l, " θk = ", unstackDistParam(par)[2], " grad = ",  ∇[1])
             counter = 0
@@ -178,7 +178,7 @@ end
 
 
 function testBayesian(xi, par; totalTimeStep = totalTimeStep)
-    θ     = rand(q(par))
+    θ     = max(q(par))
     ψ, uk = unstackSamples(θ)
     
     pk = Vector(undef, totalTimeStep)
@@ -213,9 +213,9 @@ function testBayesian(xi, par; totalTimeStep = totalTimeStep)
 end
 
 function plotPartition(ψ, uk, X)
-    width = 20
-    X1 = range(-2.0, 2.0, length=width)
-    X2 = range(-2.0, 2.0, length=width)
+    width = 30
+    X1 = range(-4.0, 4.0, length=width)
+    X2 = range(-4.0, 4.0, length=width)
     
     u = Matrix{Int}(undef, width, width)
     c = Matrix{Int}(undef, width, width)
