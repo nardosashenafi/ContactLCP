@@ -1,6 +1,7 @@
 using Random
 using AdvancedVI
 using Flux
+
 struct PosteriorDistribution{T} <: ContinuousMultivariateDistribution
     mψ::Vector{T}
     σψ::Vector{T}
@@ -15,28 +16,36 @@ struct PosteriorDistribution{T} <: ContinuousMultivariateDistribution
 end
 
 function Distributions.logpdf(d::PosteriorDistribution, y::Vector{T}) where {T<:Real}
-    sum(vcat(logpdf.(Normal.(d.mψ, d.σψ), y[1:length(d.mψ)]), 
-        logpdf.(Bernoulli.(Flux.sigmoid(d.θk)), y[length(d.mψ)+1:end])))
+    yn = y[1:length(d.mψ)]
+    yb = y[length(d.mψ)+1:end]
+
+    return sum(vcat(logpdf(MvNormal(d.mψ, d.σψ), yn), 
+            logpdf.(Bernoulli.(Flux.sigmoid.(d.θk)), yb)))
 end
 
 function Distributions.rand(rng::AbstractRNG, d::PosteriorDistribution)
-    rand.(vcat(Normal.(d.mψ, d.σψ), Bernoulli.(Flux.sigmoid(d.θk))))
+    rn = rand(MvNormal(d.mψ, Flux.softplus.(d.σψ)))
+    rb = rand.(Bernoulli.(Flux.sigmoid.(d.θk)))
+
+    return vcat(rn, rb)
 end
 
 function Distributions.length(d::PosteriorDistribution)
     return sum(length(mψ) + length(θk))
 end
 
-function Distributions.entropy(d::PosteriorDistribution, z)
-    -logpdf(d, z)
+function Distributions.entropy(d::PosteriorDistribution)
+    entropy(MvNormal(d.mψ, Flux.softplus.(d.σψ))) + sum([entropy(Bernoulli(Flux.sigmoid.(θ))) for θ in d.θk])
 end
 
 function Base.max(d::PosteriorDistribution)
 
     bernoulliMax(θk) = θk >= 0.5
-    return vcat(d.mψ, bernoulliMax.(θk))
+    return vcat(d.mψ, bernoulliMax.(Flux.sigmoid.(θk)))
 end
 
+
+# WITHOUT updating parameters inside ELBO
 function (elbo::ELBO)(
     rng::AbstractRNG,
     alg::ADVI,
@@ -68,13 +77,18 @@ function (elbo::ELBO)(
 
     # But our `forward(q)` is using f⁻¹: ℝ → supp(p(z | x)) going forward → `+ logjac`
     _, z, logjac, _ = forward(rng, q)
+    # println(z[1])
     res = (logπ(z) + logjac) / num_samples
-    res += entropy(q, z) / num_samples
 
+    if q isa AdvancedVI.TransformedDistribution
+        res += entropy(q.dist)
+    else
+        res += entropy(q)
+    end
+    
     for i = 2:num_samples
         _, z, logjac, _ = forward(rng, q)
         res += (logπ(z) + logjac) / num_samples
-        res += entropy(q, z) / num_samples
     end
 
     return res
