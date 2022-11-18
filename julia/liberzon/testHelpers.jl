@@ -4,7 +4,7 @@ function testBayesian(xi, par; totalTimeStep = totalTimeStep)
     θ   = rand(q(par))
     ψ, uk = unstackSamples(θ)
 
-    l = testBayesian(xi, ψ, uk; totalTimeStep = totalTimeStep)
+    testBayesian(xi, ψ, uk; totalTimeStep = totalTimeStep)
 end
 
 function testBayesian(xi, ψ, uk; totalTimeStep = totalTimeStep)    
@@ -14,17 +14,14 @@ function testBayesian(xi, ψ, uk; totalTimeStep = totalTimeStep)
     plt.subplot(2, 2, 1)
     plot(getindex.(X, 1), getindex.(X, 2))
     scatter(X[end][1], X[end][2], marker="o")
-    l = loss(X)
     ylabel("x2")
     xlabel("x1")
-    legend(["loss " * string(l)])
 
     plt.subplot(2, 2, 2)
     plot(getindex.(X[1:end-1], 1), U)
     ylabel("uk")
 
     plotPartition(ψ, uk, X)
-    return l
 end
 
 function plotPartition(ψ, uk, X)
@@ -46,10 +43,8 @@ function plotPartition(ψ, uk, X)
     plt.subplot(2, 2, 3)
     plot(getindex.(X, 1), getindex.(X, 2))
     scatter(X[end][1], X[end][2], marker="o")
-    l = loss(X)
     ylabel("x2")
     xlabel("x1")
-    legend(["loss " * string(l)])
 
     imshow(u, extent = [X1[1], X1[end], X2[1], X2[end]])
     ylabel("Control")

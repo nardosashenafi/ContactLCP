@@ -1,4 +1,4 @@
-using LinearAlgebra, Flux, DiffEqFlux
+using LinearAlgebra, Flux, DiffEqFlux, LogExpFunctions, ForwardDiff
 using PyPlot 
 
 include("customPosterior.jl")
@@ -11,8 +11,8 @@ const Δt            = 0.01f0
 const totalTimeStep = Int(floor(tspan[2]/Δt))
 const binSize       = 4
 
-nn = FastChain(FastDense(2, 4, elu),
-                FastDense(4, 4))
+nn = FastChain(FastDense(2, 6, elu),
+                FastDense(6, 4))
 
 inputLayer(x) = x
 
@@ -59,13 +59,13 @@ function computeLoss(x0, param::Vector{T}; totalTimeStep = totalTimeStep) where 
             ltotal += lk/totalTimeStep
 
             ### select the next state
-            c  = argmax(bin(X[end], ψ))
+            c  = rand(Categorical(bin(X[end], ψ)))
             uk = maxBernoulli(θuk[c])
             push!(X, oneStep(X[end], uk))
         end
     end
 
-    return ltotal/length(x0)
+    return 3.0f0*ltotal/length(x0)
 end
 
 function berAct(x)
@@ -83,7 +83,7 @@ end
 function trainEM()
 
     ψ           = randn(Float32, nn_length)
-    θuk         = LogExpFunctions.logit.([0.6f0, 0.4f0, 0.4f0, 0.4f0])
+    θuk         = LogExpFunctions.logit.(rand(Float32, 4))
     param       = vcat(ψ, θuk)
     opt         = Adam(0.001f0)
     counter     = 0
@@ -99,8 +99,8 @@ function trainEM()
         if counter > 10
             ψ, θuk  = unstackParams(param)
             uk      = maxBernoulli.(θuk)
-            l       = testBayesian(x0[1], ψ, uk; totalTimeStep=1000)
-            println("loss = ", l, " θuk = ", berAct.(θuk) ," grad = ", lg1[end])
+            testBayesian(x0[1], ψ, uk; totalTimeStep=1000)
+            println("loss = ", l1(param), " θuk = ", berAct.(θuk) ," grad = ", lg1[end])
             counter = 0
         end
         counter += 1

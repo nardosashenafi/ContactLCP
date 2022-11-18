@@ -33,8 +33,7 @@ function integrate(xi, ψ::Vector{T}, uk; totalTimeStep = totalTimeStep) where {
 end
 
 function accumulatedLoss(traj)
-    extract = traj[end-300:end]
-    l = 1.0f0/length(extract)*sum(map(x -> dot(x, x), extract))
+    l = 1.0f0/length(traj)*sum(map(x -> dot(x, x), traj))
     return l
 end
 
