@@ -57,6 +57,12 @@ end
 
 end
 
+##############################
+#Currently, VI is not working because Advanced.grad! is not taking gradient of the 
+#bernoulli sample wrt its distribution parameters θk accurately. Needs proper definition
+#of a bijector that transforms the bernoulli to a continuous function such as 
+#Gumbel-softmax
+
 function trainVI()
 
     ψ           = randn(Float32, nn_length)
