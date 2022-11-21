@@ -8,7 +8,7 @@ const mp           = 0.5f0
 const l            = 0.5f0        #wheel
 const I1           = mp*l^2
 const g            = 9.81f0
-const d            = -0.5f0 
+const d            = -0.1f0 
 const D            = 1.0f0
 const ϵn_const     = 1.0f0*ones(Float32, 2)
 const ϵt_const     = 0.0f0*ones(Float32, 2)
@@ -60,8 +60,8 @@ function gap(z)
     g1 = q[1] - l*sin(q[2]) - d
     g2 = D - g1
 
-    # return [g1, g2] 
-    return [Inf, Inf]
+    return [g1, g2] 
+    # return [Inf, Inf]
 end
 
 function wn(z::Vector{T}) where {T<:Real}
@@ -120,13 +120,13 @@ function lqrGains()
 
     C = Matrix{Float32}(LinearAlgebra.I, (4, 4)) 
     cartLinearized = ControlSystems.ss(A, B, C, 0.0f0)
-    Q = 10.0f0*Matrix{Float32}(LinearAlgebra.I, (4, 4)) 
+    Q = 20.0f0*Matrix{Float32}(LinearAlgebra.I, (4, 4)) 
     R = 3.0f0
     ControlSystems.lqr(cartLinearized, Q, R)
 end
 
 function lqr(z)
-    k = vec([-1.82603  50.4554  -4.07912  15.4036])
+    k = vec([-2.58179  57.1853  -5.38706  17.628])
     # k = zeros(4)
     return -k'*z
 end
@@ -178,6 +178,19 @@ function createAnimateObject(x1, x2)
         MeshLambertMaterial(color=RGBA{Float32}(0.0, 0.0, 1.0, 1.0))))
     settransform!(vpendulum[:bob], Translation(0.0, x1, 0.0) ∘ LinearMap(RotX(x2)))
    
+    vwalls = vis[:walls]
+
+    setobject!(vwalls[:left], MeshObject(
+        Rect(Vec(0.0, 0.0, 0.3), Vec(0.0, 0.02, 0.5)),
+        MeshLambertMaterial(color=RGBA{Float32}(0.0, 0.0, 0.0, 1.0))))
+    settransform!(vwalls[:left], Translation(0.0, d, 0.0))
+
+    setobject!(vwalls[:right], MeshObject(
+        Rect(Vec(0.0, 0.0, 0.3), Vec(0.0, 0.02, 0.5)),
+        MeshLambertMaterial(color=RGBA{Float32}(0.0, 0.0, 0.0, 1.0))))
+    settransform!(vwalls[:right], Translation(0.0, d+D, 0.0))
+
+
     return vcart, vpendulum
 end
 
