@@ -2,17 +2,8 @@
 using DiffEqFlux
 using MLBasedESC
 using Statistics
-using MeshCat
-using GeometryBasics
-using CoordinateTransformations
-using ColorTypes
-using Blink
-using Rotations
 
 include("trainingHelpers.jl")
-# window = Window()
-# vis = Visualizer()
-# open(vis, window)
 
 Δt = 0.001f0; totalTimeStep = 1500
 

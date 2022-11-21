@@ -1,5 +1,5 @@
 
-# using ContactLCP
+using ContactLCP
 using LaTeXStrings
 using PyPlot
 
@@ -8,7 +8,7 @@ include("../../src/lcp.jl")
 include("../../src/solver.jl")
 
 sys  = BouncingBall(Float64)
-lcp  = Lcp(Float64, sys)
+lcp  = ContactLCP.Lcp(Float64, sys)
 
-X, t, Λn, Λt = fulltimestep(lcp, sys.x0, []; totalTimeStep=1500)
+X, t, Λn, Λt = ContactLCP.fulltimestep(lcp, sys.x0, []; totalTimeStep=1500)
 plots(X, t, Λn, Λt)
