@@ -1,11 +1,11 @@
 # ContactLCP
-This repository contains a Julia package that resolves contacts via Linear Complementarity Problem(LCP). Moreover, the package allows auto-differentiation through the LCP solver. Examples are provided on how to use auto-differentiation capabilities to learn estimate system parameters or learn optimal controllers through data-drive techniques.
+This repository contains a Julia package that resolves contacts via Linear Complementarity Problem (LCP). Moreover, the package allows auto-differentiation through the LCP solver. Examples are provided on how to use auto-differentiation capabilities to estimate system parameters and learn optimal controllers through data-driven techniques.
 
 The package includes:
 - LCP solver (Lemke's algorithm)
-- Example models of rimless wheel, bouncing ball and cart-pole with soft walls
+- Models of the rimless-wheel, bouncing ball and cart-pole with soft walls
 - System parameter estimation for the bouncing ball
-- Data-driven scheme to learn control of the rimless wheel to achieve constant hip speed
+- Data-driven scheme to learn control of the rimless-wheel to achieve constant hip speed
 - Bayesian learning technique to learn switching controller for the cart-pole with softwalls
 
 Rimless wheel: controlled via data-driven passivity-based control (NeuralPBC)
