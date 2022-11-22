@@ -8,7 +8,7 @@ const mp           = 0.5f0
 const l            = 0.5f0        #wheel
 const I1           = mp*l^2
 const g            = 9.81f0
-const d            = -0.1f0 
+const d            = -0.5f0 
 const D            = 1.0f0
 const ϵn_const     = 1.0f0*ones(Float32, 2)
 const ϵt_const     = 0.0f0*ones(Float32, 2)
@@ -23,7 +23,7 @@ function initialState(x1)
     # @assert pi-α <= θ0 <= pi+α "Give an initial spoke angle for the spoke in contact. This will help set the rimless wheel in contact with the surface"
     
     x1 = x1
-    x2 = 5.0f0*pi/180f0
+    x2 = -10.0f0*pi/180f0
 
     x1dot = 0.0f0
     x2dot = 0.0f0
