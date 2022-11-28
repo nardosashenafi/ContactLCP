@@ -1,10 +1,4 @@
 using ContactLCP
-using MeshCat
-using GeometryBasics
-using CoordinateTransformations
-using ColorTypes
-using Blink
-using Rotations
 
 include("dynamics.jl")
 # include("../../src/lcp.jl")

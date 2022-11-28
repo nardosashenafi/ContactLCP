@@ -1,20 +1,27 @@
 using PyPlot 
 using ControlSystems 
+using MeshCat
+using GeometryBasics
+using CoordinateTransformations
+using ColorTypes
+using Blink
+using Rotations
 
 export CartPoleWithSoftWalls
 
 const mc           = 1.0f0    
 const mp           = 0.5f0 
-const l            = 0.5f0        #wheel
+const l            = 0.3f0        #wheel
 const I1           = mp*l^2
 const g            = 9.81f0
 const d            = -0.5f0 
 const D            = 1.0f0
-const ϵn_const     = 1.0f0*ones(Float32, 2)
-const ϵt_const     = 0.0f0*ones(Float32, 2)
-const μ_const      = 0.0f0*ones(Float32, 2)
+const ϵn_const     = 0.5f0*ones(Float32, 4)
+const ϵt_const     = 0.0f0*ones(Float32, 4)
+const μ_const      = 0.0f0*ones(Float32, 4)
 const gThreshold   = 0.001f0
-const satu         = 100.0f0 
+const satu         = 1.0f0 
+const w            = 0.20f0
 
 struct CartPoleWithSoftWalls{}  
 end
@@ -32,12 +39,12 @@ function initialState(x1)
 end
 
 #returns the attributes needed to model contact
-function (sys::CartPoleWithSoftWalls)(x, θ::Vector{T}; ϵn=ϵn_const, ϵt=ϵt_const, μ=μ_const, gThreshold=gThreshold, expert=false) where {T<:Real}
+function (sys::CartPoleWithSoftWalls)(x, u::Vector{T}; ϵn=ϵn_const, ϵt=ϵt_const, μ=μ_const, gThreshold=gThreshold, expert=false) where {T<:Real}
     gn  = gap(x)  
     γn  = vnormal(x)
     γt  = vtang(x)
     M   = massMatrix(x)
-    h   = genForces(x, θ; expert=expert)
+    h   = genForces(x, u; expert=expert)
     Wn  = wn(x)
     Wt  = wt(x)
 
@@ -59,16 +66,18 @@ function gap(z)
     q, _ = parseStates(z)    
     g1 = q[1] - l*sin(q[2]) - d
     g2 = D - g1
-
-    return [g1, g2] 
-    # return [Inf, Inf]
+    g3 = q[1] - w/2.0f0 - d
+    g4 = D - g3 - w
+    
+    # return [g1, g2, g3, g4] 
+    return [Inf, Inf, Inf, Inf]
 end
 
 function wn(z::Vector{T}) where {T<:Real}
 
     q, _ = parseStates(z)
-    Wn = [1.0f0 -1.0f0;
-        -l*cos(q[2]) l*cos(q[2])]
+    Wn = [1.0f0 -1.0f0 1.0f0 -1.0f0;
+        -l*cos(q[2]) l*cos(q[2]) 0.0f0 0.0f0]
 
    return Wn 
 
@@ -76,8 +85,8 @@ end
 
 function wt(z::Vector{T}) where {T<:Real}
     q, _ = parseStates(z)
-    Wt = [0.0f0 0.0f0;
-         -l*sin(q[2]) -l*sin(q[2])]
+    Wt = [0.0f0 0.0f0 0.0f0 0.0f0;
+         -l*sin(q[2]) -l*sin(q[2]) 0.0f0 0.0f0]
     return Wt
 end
 
@@ -126,24 +135,30 @@ function lqrGains()
 end
 
 function lqr(z)
-    k = vec([-2.58179  57.1853  -5.38706  17.628])
+    k = vec([ -2.58182  50.3793  -5.04367  12.0988])
     # k = zeros(4)
     return -k'*z
 end
 
 inputLayer(z) = [z[1], cos(z[2]), sin(z[2]), z[3], z[4]]
 
-function control(z, θp::Vector{T}; expert=false) where {T<:Real}
+function control(z, u::Vector{T}; expert=false) where {T<:Real}
     q, v = parseStates(z)
 
     if expert #working expert controller
         return clamp(lqr(z), -satu, satu)
     else
-        return clamp(u, -satu, satu)
+        x1, x2 = q 
+        x1dot, x2dot = v
+        if ((1.0f0-cos(x2) <= 1.0f0-cosd(4.8)) && x2dot <= 0.1f0)
+            return clamp(lqr(z), -satu, satu)
+        else
+            return clamp(u[1], -satu, satu)
+        end
     end
 end
 
-function genForces(z, param::Vector{T}; expert=false) where {T<:Real}
+function genForces(z, u::Vector{T}; expert=false) where {T<:Real}
 
     q, v = parseStates(z)
     x1, x2 = q
@@ -156,16 +171,23 @@ function genForces(z, param::Vector{T}; expert=false) where {T<:Real}
     G = [0.0f0;
         -mp*g*l*sin(x2)]
 
-    return B*control(z, param; expert=expert) - C*v - G
+    return B*control(z, u; expert=expert) - C*v - G
 end
 
+function startAnimator()
+    window = Window()
+    vis = Visualizer()
+    open(vis, window)
+
+    return vis
+end
 function createAnimateObject(x1, x2)
     vcart = vis[:cart]
 
     setobject!(vcart, MeshObject(
         Rect(Vec(0.0, 0.0, 0.0), Vec(0.2, 0.2, 0.1)),
         MeshLambertMaterial(color=RGBA{Float32}(0.0, 0.0, 0.0, 0.25))))
-    settransform!(vcart, Translation(-0.1, x1-0.1, 0.0))
+    settransform!(vcart, Translation(-0.2, x1-w/2.0f0, 0.0))
 
     vpendulum = vis[:pendulum]
     setobject!(vpendulum[:link], MeshObject(
@@ -181,12 +203,12 @@ function createAnimateObject(x1, x2)
     vwalls = vis[:walls]
 
     setobject!(vwalls[:left], MeshObject(
-        Rect(Vec(0.0, 0.0, 0.3), Vec(0.0, 0.02, 0.5)),
+        Rect(Vec(0.0, 0.0, -0.8), Vec(0.0, 0.02, 1.6)),
         MeshLambertMaterial(color=RGBA{Float32}(0.0, 0.0, 0.0, 1.0))))
     settransform!(vwalls[:left], Translation(0.0, d, 0.0))
 
     setobject!(vwalls[:right], MeshObject(
-        Rect(Vec(0.0, 0.0, 0.3), Vec(0.0, 0.02, 0.5)),
+        Rect(Vec(0.0, 0.0, -0.8), Vec(0.0, 0.02, 1.6)),
         MeshLambertMaterial(color=RGBA{Float32}(0.0, 0.0, 0.0, 1.0))))
     settransform!(vwalls[:right], Translation(0.0, d+D, 0.0))
 
@@ -198,138 +220,12 @@ function animate(Z)
 
     x1, x2 = Z[1][1:2]
     vcart, vpendulum = createAnimateObject(x1, x2)
-    for z in Z[1:50:end]
+    for z in Z[1:20:end]
         x1, x2 = z[1:2]
-        settransform!(vcart, Translation(-0.1, x1-0.1, 0.0))
+        settransform!(vcart, Translation(-0.2, x1-w/2.f0, 0.0))
         settransform!(vpendulum[:link], Translation(0.0, x1, 0.0) ∘ LinearMap(RotX(x2)))
         settransform!(vpendulum[:bob], Translation(0.0, x1, 0.0) ∘ LinearMap(RotX(x2)))
         sleep(0.04)
     end
 
-end
-
-function animate_random(lcp, param; totalTimeStep = 5000)
-    x0 = Float32.(initialState(rand(pi-α:0.01:pi+α), 
-                                        #  rand(-3.0:0.05:-0.5),
-                                        0.0, 
-                                         0.0, 
-                                         0.0) )
-
-    X, _, _, _ = fulltimestep(lcp, x0, param; Δt = 0.001f0, totalTimeStep = totalTimeStep);                            
-    animate(X)
-end
-
-function plots(Z)
-    fig1 = plt.figure(1)
-    plots(Z, fig1)
-
-end
-
-function plots(Z, fig1)
-    PyPlot.figure(1)
-    fig1.clf()
-    subplot(2, 2, 1)
-    plot(getindex.(Z, 3), getindex.(Z, 7))
-    ylabel(L"\dot{\phi} [rad/s]", fontsize=15)
-    subplot(2, 2, 2)
-    θ = spokeInContact(Z)
-    plot(θ, getindex.(Z, 8))
-    ylabel(L"\dot{\theta} [rad/s]", fontsize=15)
-    subplot(2, 2, 3)
-    plot(getindex.(Z, 5))
-    ylabel("vx [m/s]", fontsize=15)
-end
-
-function plots(Z, t, Λn, Λt)
-    fig1 = plt.figure(1)
-    fig2 = plt.figure(2)
-    fig3 = plt.figure(3)
-    plots(Z, t, Λn, Λt, fig1, fig2, fig3)
-end
-
-function plots(Z, t, Λn, Λt, fig1, fig2, fig3)
-    PyPlot.figure(1)
-    fig1.clf()
-    subplot(2, 3, 1)
-    plot(t, getindex.(Z, 1))
-    ylabel("x [m]", fontsize=15)
-    subplot(2, 3, 2)
-    plot(t, getindex.(Z, 2))
-    ylabel("y [m]", fontsize=15)
-    subplot(2, 3, 3)
-    plot(t, getindex.(Z, 5))
-    ylabel("vx [m/s]", fontsize=15)
-    subplot(2, 3, 4)
-    plot(t, getindex.(Z, 6))
-    ylabel("vy [m/s]", fontsize=15)
-    subplot(2, 3, 5)
-    plot(getindex.(Z, 3), getindex.(Z, 7))
-    ylabel(L"\dot{\phi} [rad/s]", fontsize=15)
-    subplot(2, 3, 6)
-    plot(getindex.(Z, 4), getindex.(Z, 8))
-    ylabel(L"\dot{\theta} [rad/s]", fontsize=15)
-
-    PyPlot.figure(2)
-    fig2.clf()
-    subplot(2, 1, 1)
-    for i in 1:length(Λn[1])
-        plot(t, getindex.(Λn, i))
-    end
-    ticklabel_format(axis="y", style="sci",scilimits=(0,0))
-    ylabel(L"$\lambda_{n1} [N]$", fontsize=15)
-
-    subplot(2, 1, 2)
-    for i in 1:length(Λt[1])
-        plot(t, getindex.(Λt, i))
-    end
-    ticklabel_format(axis="y", style="sci",scilimits=(0,0))
-    ylabel(L"$\lambda_{t1} [N]$", fontsize=15)
-
-    PyPlot.figure(3)
-    fig3.clf()
-    θ = spokeInContact(Z)
-    plot(θ, getindex.(Z, 8))
-end
-
-# function spokeInContact(Z; gThreshold=gThreshold, k=k, α=α)
-
-#     θ = getindex.(Z, 4)
-#     θ_new = deepcopy(θ)
-#     i     = 1
-
-#     for z in Z
-#         gn = gap(z)
-#         contactIndex, _ = checkContact(gn, gThreshold, k)
-
-#         if any(contactIndex .> 0.0)
-#             ki = findfirst(x -> x == 1.0, contactIndex) - 1
-#             θ_new[i:end] = θ[i:end] .+ 2*α*ki
-#         end
-#         i += 1
-#     end
-
-#     return θ_new
-# end
-
-
-function spokeInContact(Z)
-    θ_new = getindex.(Z, 4)
-    θdot = getindex.(Z, 8)
-
-    for i in 2:length(θ_new)
-        #if velocity jumps, wrap. Checking θ causes the angle to jump when the velocity has not
-        if (abs(θdot[i] - θdot[i-1]) > 0.1) && 
-            θdot[i] < 0.0  &&
-            abs(round(abs.(θ_new[i]/α)) - abs.(θ_new[i]/α)) < 0.03       #instead check if new contact occurs
-            
-            θ_new[i:end] .= θ_new[i:end] .+ 2*α
-
-        elseif (abs(θdot[i] - θdot[i-1]) > 0.1) &&
-            θdot[i] > 0.0 && 
-            abs(round(abs.(θ_new[i]/α)) - abs.(θ_new[i]/α)) < 0.03      
-            
-            θ_new[i:end] .= θ_new[i:end] .- 2*α
-        end
-    end
-    return θ_new
 end

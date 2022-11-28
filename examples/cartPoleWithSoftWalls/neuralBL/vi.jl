@@ -1,7 +1,38 @@
 using Turing, Distributions, OrdinaryDiffEq, DistributionsAD
 using Turing: Variational
+using ContactLCP
 
-include("EM.jl")
+include("../dynamics.jl")
+include("trainingHelpers.jl")
+include("testHelpers.jl")
+
+const tspan         = (0.0f0, 10.0f0) 
+const batchsize     = 4
+const Δt            = 0.01f0
+const totalTimeStep = Int(floor(tspan[2]/Δt))
+const binSize       = 4
+
+binNN = FastChain(FastDense(5, 6, elu),
+                 FastDense(6, 3))
+
+const binNN_length = DiffEqFlux.paramlength(binNN) 
+
+controlArray     = Array{Function}(undef, binSize);
+controlNN_length = Vector{Int}(undef, binSize)
+ps               = Vector{Vector}(undef, binSize)
+
+for i in 1:binSize 
+    controlArray[i] = FastChain(FastDense(5, 6, elu),
+                        FastDense(6, 1))
+    
+    controlNN_length[i] = DiffEqFlux.paramlength(controlArray[i]) 
+
+    ps[i]               = randn(Float32, controllNN_length[i])
+end
+
+function bin(x, θ) 
+    return Flux.softmax(binNN(inputLayer(x), θ))
+end
 
 function unstackDistParam(par)
     return par[1:binSize]
@@ -9,6 +40,10 @@ end
 
 function unstackSamples(par)
     return par[1:binSize]
+end
+
+function lossPerState(x)
+    return 3.0f0*dot(x, x)
 end
 
 function q(par::Vector{T}) where {T<:Real}

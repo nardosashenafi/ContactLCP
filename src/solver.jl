@@ -242,8 +242,8 @@ function lemkeLexi(M, q::Vector{T}, x) where {T<:Real}
         if any(M̂[:,d] .< -piv_tol)
             b = lexiblockRatioTest(Q̂, M̂[:, d])
         else
-            println("Interpret output interms of infeasibility or unsolvability")
-            println("x = ", x)
+            # println("Interpret output interms of infeasibility or unsolvability")
+            # println("x = ", x)
             infeasible = true
             b = 1                   
             break            #TODO: handle infeasibility
