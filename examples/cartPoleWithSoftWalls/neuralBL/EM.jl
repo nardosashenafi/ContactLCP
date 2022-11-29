@@ -125,7 +125,7 @@ function trainEM()
 
         if counter > 5
             ψ, θk  = unstackParams(param)
-            testBayesian(x0[1], ψ, θk; totalTimeStep=2000)
+            testBayesian(x0[1], ψ, θk; totalTimeStep=4000)
             println("loss = ", l1(param))
             counter = 0
         end
