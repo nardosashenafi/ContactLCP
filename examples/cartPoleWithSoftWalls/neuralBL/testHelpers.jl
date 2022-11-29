@@ -28,15 +28,30 @@ function plots(X, fig1)
     ylabel("thetadot")
     xlabel("theta")
 
-    plt.subplot(2, 2, 2)
-    plot(-l .* sin.(getindex.(X, 2)), l .* cos.(getindex.(X, 2)))
-    scatter(l .* sin.(X[end][2]), l .* cos.(X[end][2]))
-    ylabel("cos(theta)")
-    xlabel("sin(theta)")
 end
 
 function plotPartition(ψ, θk)
     width = 30
+    
+    X2    = range(-pi, pi, length=width)
+    X2dot = range(-5.0, 5.0, length=width)
+
+    u = Matrix{Float32}(undef, width, width)
+
+    for i in 1:width    #row
+        for j in 1:width    #column
+            x       = vcat(0.0f0, X2[j], 0.0f0, X2dot[width-i+1])
+            pk      = bin(x, ψ)
+            c       = argmax(pk)
+            u[i, j] = input(x, θk, c)[1]
+        end
+    end
+
+    plt.subplot(2, 2, 2)
+    imshow(u, extent = [X2[1], X2[end], X2dot[1], X2dot[end]])
+    ylabel("Control")
+    xlabel("x2 vs x2dot")
+
     X1    = range(d, -d, length=width)
     X1dot = range(d, -d, length=width)
     
@@ -52,6 +67,7 @@ function plotPartition(ψ, θk)
         end
     end
 
+
     plt.subplot(2, 2, 3)
 
     imshow(u, extent = [X1[1], X1[end], X1dot[1], X1dot[end]])
@@ -62,5 +78,6 @@ function plotPartition(ψ, θk)
     imshow(c, extent = [X1[1], X1[end], X1dot[1], X1dot[end]])
     ylabel("Partitions")
     xlabel("x1 vs x1dot")
+
 end
 

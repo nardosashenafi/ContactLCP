@@ -11,16 +11,16 @@ export CartPoleWithSoftWalls
 
 const mc           = 1.0f0    
 const mp           = 0.5f0 
-const l            = 0.3f0        #wheel
+const l            = 0.5f0        #wheel
 const I1           = mp*l^2
 const g            = 9.81f0
-const d            = -0.5f0 
-const D            = 1.0f0
+const d            = -0.75f0 
+const D            = 1.5f0
 const ϵn_const     = 0.5f0*ones(Float32, 4)
 const ϵt_const     = 0.0f0*ones(Float32, 4)
 const μ_const      = 0.0f0*ones(Float32, 4)
 const gThreshold   = 0.001f0
-const satu         = 1.0f0 
+const satu         = 4.0f0
 const w            = 0.20f0
 
 struct CartPoleWithSoftWalls{}  
@@ -141,17 +141,18 @@ function lqr(z)
 end
 
 inputLayer(z) = [z[1], cos(z[2]), sin(z[2]), z[3], z[4]]
+# inputLayer(z) = [cos(z[2]), sin(z[2]), z[3], z[4]]
 
-function control(z, u::Vector{T}; expert=false) where {T<:Real}
+function control(z, u::Vector{T}; expert=false, lqr_max = 10.0f0) where {T<:Real}
     q, v = parseStates(z)
 
     if expert #working expert controller
-        return clamp(lqr(z), -satu, satu)
+        return clamp(lqr(z), -lqr_max, lqr_max)
     else
         x1, x2 = q 
         x1dot, x2dot = v
-        if ((1.0f0-cos(x2) <= 1.0f0-cosd(4.8)) && x2dot <= 0.1f0)
-            return clamp(lqr(z), -satu, satu)
+        if ((1.0f0-cos(x2) <= 1.0f0-cosd(17.0)) && x2dot <= 0.5f0)
+            return clamp(lqr(z), -lqr_max, lqr_max)
         else
             return clamp(u[1], -satu, satu)
         end

@@ -33,7 +33,7 @@ for i in 1:binSize
     
     controlNN_length[i] = DiffEqFlux.paramlength(controlArray[i]) 
 
-    ps[i]               = randn(Float32, controlNN_length[i])
+    ps[i]               = 0.5f0*randn(Float32, controlNN_length[i])
 end
 
 function bin(x, θ::Vector{T}) where {T<:Real} 
@@ -72,10 +72,35 @@ end
 
 function lossPerState(x)
     x1, x2, x1dot, x2dot = x
-    Q = diagm(0 => [0.0f0, 2.0f0, 2.0f0])
+    doubleHinge_x = 0.0f0
+    doubleHinge_θ = 0.0f0
 
-    return 1.0f0*dot([x1, x1dot, x2dot], 
-                    Q*[x1, x1dot, x2dot]) + 4.0f0*(1.0f0-cos(x2))
+    abs(x1) > 0.5 ? doubleHinge_x = 3.0f0*abs.(x1) : nothing
+
+    return doubleHinge_x + 12.0f0*(1.0f0-cos(x2)) + 2.0f0*x1dot^2.0f0 + 0.1f0*x2dot^2.0f0
+end
+
+function computeLoss(x0, param::Vector{T}, sampleEvery::Int ;totalTimeStep = totalTimeStep) where {T<:Real}
+    ψ, θk   = unstackParams(param)
+    ltotal  = 0.0f0
+
+    for xi in x0
+        X       = trajectory(xi, ψ, θk; totalTimeStep = totalTimeStep) 
+        X2      = X[1:sampleEvery:end]
+        len     = length(X2)
+
+        for x in X2
+            pk     = bin(x, ψ)
+            lk     = 0.0f0
+            for k in 1:binSize 
+                u  = input(x, θk, k)          
+                x2 = oneStep(x, u)
+                lk += pk[k]*lossPerState(x2) 
+            end
+            ltotal += lk/len
+        end
+    end
+    return ltotal
 end
 
 function computeLoss(x0, param::Vector{T}; totalTimeStep = totalTimeStep) where {T<:Real}
@@ -114,18 +139,23 @@ function trainEM()
     param       = stackParams(ψ, θk)
     opt         = Adam(0.001f0)
     counter     = 0
-    minibatch   = 2
+    minibatch   = 4
 
     for i in 1:5000
-        ψ, θk = unstackParams(param)
-        x0    = sampleInitialState(ψ, θk; totalTimeStep=2000, minibatch=minibatch)
+        ψ, θk   = unstackParams(param)
+        x0      = sampleInitialState(ψ, θk; totalTimeStep=2000, minibatch=minibatch)
 
-        l1(θ)   = computeLoss(x0, θ; totalTimeStep = 2000)
+        l1(θ)   = computeLoss(x0, θ, 5; totalTimeStep = 1000)
         lg1     = ForwardDiff.gradient(l1, param)
 
         if counter > 5
             ψ, θk  = unstackParams(param)
-            testBayesian(x0[1], ψ, θk; totalTimeStep=4000)
+            if rand() > 0.5 
+                xi = [0.0f0, pi, 1.0f0, 0.5f0]
+            else
+                xi = deepcopy(x0[1])
+            end
+            testBayesian(xi, ψ, θk; totalTimeStep=7000)
             println("loss = ", l1(param))
             counter = 0
         end
