@@ -15,7 +15,8 @@ include("testHelpers.jl")
 const tspan         = (0.0f0, 4.0f0) 
 const Δt            = 0.001f0
 const totalTimeStep = Int(floor(tspan[2]/Δt))
-const binSize       = 1
+const binSize       = 2
+const θmax          = 20.0*pi/180.0
 
 binNN = FastChain(FastDense(5, 6, elu),
                  FastDense(6, binSize))
@@ -37,8 +38,8 @@ for i in 1:binSize
 end
 
 function bin(x, θ::Vector{T}) where {T<:Real} 
-    # return Flux.softmax(binNN(inputLayer(x), θ))
-    return 1.0f0
+    return Flux.softmax(binNN(inputLayer(x), θ))
+    # return 1.0f0
 end
 
 function input(x::Vector{T}, θk::Vector{Vector}, i::Int) where {T<:Real}
@@ -76,8 +77,21 @@ function lossPerState(x)
     doubleHinge_θ = 0.0f0
 
     abs(x1) > 0.5 ? doubleHinge_x = 3.0f0*abs.(x1) : nothing
+    abs(x2) > θmax ? doubleHinge_θ = 3.0f0*abs.(x2) : nothing
+    # high cost on x1dot to lower fast impact
+    return doubleHinge_x + doubleHinge_θ + 
+            12.0f0*(1.0f0-cos(x2)) + 2.0f0*x1dot^2.0f0 + 
+            0.1f0*x2dot^2.0f0
+end
 
-    return doubleHinge_x + 12.0f0*(1.0f0-cos(x2)) + 2.0f0*x1dot^2.0f0 + 0.1f0*x2dot^2.0f0
+function extractStates(X::Vector{Vector{T}}) where {T<:Real}
+    X2 = Vector{Vector{T}}()
+    for x in X
+        if abs(x[2]) < 45.0f0*pi/180.0f0
+            push!(X2, x)
+        end
+    end
+    return X2
 end
 
 function computeLoss(x0, param::Vector{T}, sampleEvery::Int ;totalTimeStep = totalTimeStep) where {T<:Real}
@@ -86,6 +100,7 @@ function computeLoss(x0, param::Vector{T}, sampleEvery::Int ;totalTimeStep = tot
 
     for xi in x0
         X       = trajectory(xi, ψ, θk; totalTimeStep = totalTimeStep) 
+        X2      = extractStates(X)
         X2      = X[1:sampleEvery:end]
         len     = length(X2)
 
@@ -150,13 +165,13 @@ function trainEM()
 
         if counter > 5
             ψ, θk  = unstackParams(param)
-            if rand() > 0.5 
-                xi = [0.0f0, pi, 1.0f0, 0.5f0]
-            else
+            # if rand() > 0.5 
+            #     xi = [0.0f0, pi, 1.0f0, 0.5f0]
+            # else
                 xi = deepcopy(x0[1])
-            end
+            # end
             testBayesian(xi, ψ, θk; totalTimeStep=7000)
-            println("loss = ", l1(param))
+            println("x0 = ", x0, " loss = ", l1(param))
             counter = 0
         end
         counter += 1

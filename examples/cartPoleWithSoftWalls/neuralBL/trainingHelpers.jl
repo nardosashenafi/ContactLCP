@@ -34,19 +34,24 @@ end
 
 function sampleInitialState(ψ::Vector{T}, θk; totalTimeStep = totalTimeStep, minibatch=4) where {T<:Real}
     
-    x0 = T.([0.0, rand(-pi:0.005:pi), 
-         rand(-1.0:0.001:1.0), rand(-1.0:0.001:1.0)])
+    # x0 = T.([0.0, rand(-pi:0.005:pi), 
+    #      rand(-1.0:0.001:1.0), rand(-1.0:0.001:1.0)])
+
+    x0  = T.([0.0, rand(-θmax:0.005:θmax), 
+            rand(-0.5:0.001:0.5), rand(-0.5:0.001:0.5)])
 
     X  = trajectory(x0, ψ, θk)
-    
+    vmax = 0.5
     samples = Vector{Vector{T}}()
     for i in 1:minibatch
         if rand() > 0.2
             select      = rand(X)
             select[1]   = rand(-0.5f0:0.01f0:0.5f0)   #stop the training from visiting large values of x
+            select[2]   = rand(-θmax:0.01f0:θmax) 
+            select[3]   = clamp(select[3], -vmax, vmax)
             push!(samples, select)
         else
-            push!(samples, [rand(-0.1:0.001:0.1), rand(-0.1:0.001:0.1), 
+            push!(samples, [rand(-0.1:0.001:0.1), rand(-θmax:0.001:θmax), 
                             rand(-0.5:0.001:0.5), rand(-0.5:0.001:0.5)])
         end
     end

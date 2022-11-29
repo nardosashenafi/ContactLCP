@@ -16,11 +16,11 @@ const I1           = mp*l^2
 const g            = 9.81f0
 const d            = -0.75f0 
 const D            = 1.5f0
-const ϵn_const     = 0.5f0*ones(Float32, 4)
-const ϵt_const     = 0.0f0*ones(Float32, 4)
-const μ_const      = 0.0f0*ones(Float32, 4)
+const ϵn_const     = 0.5f0*ones(Float32, 2)
+const ϵt_const     = 0.0f0*ones(Float32, 2)
+const μ_const      = 0.0f0*ones(Float32, 2)
 const gThreshold   = 0.001f0
-const satu         = 4.0f0
+const satu         = 2.0f0
 const w            = 0.20f0
 
 struct CartPoleWithSoftWalls{}  
@@ -64,20 +64,23 @@ end
 
 function gap(z)
     q, _ = parseStates(z)    
-    g1 = q[1] - l*sin(q[2]) - d
+    g1 = q[1] - l*sin(q[2]) - d #pendulum in contact with wall
     g2 = D - g1
-    g3 = q[1] - w/2.0f0 - d
+    g3 = q[1] - w/2.0f0 - d     #cart in contact with wall
     g4 = D - g3 - w
     
     # return [g1, g2, g3, g4] 
-    return [Inf, Inf, Inf, Inf]
+    return [g1, g2] 
+    # return [Inf, Inf, Inf, Inf]
 end
 
 function wn(z::Vector{T}) where {T<:Real}
 
     q, _ = parseStates(z)
-    Wn = [1.0f0 -1.0f0 1.0f0 -1.0f0;
-        -l*cos(q[2]) l*cos(q[2]) 0.0f0 0.0f0]
+    # Wn = [1.0f0 -1.0f0 1.0f0 -1.0f0;
+    #     -l*cos(q[2]) l*cos(q[2]) 0.0f0 0.0f0]
+    Wn = [1.0f0 -1.0f0;
+        -l*cos(q[2]) l*cos(q[2])]
 
    return Wn 
 
@@ -85,8 +88,11 @@ end
 
 function wt(z::Vector{T}) where {T<:Real}
     q, _ = parseStates(z)
-    Wt = [0.0f0 0.0f0 0.0f0 0.0f0;
-         -l*sin(q[2]) -l*sin(q[2]) 0.0f0 0.0f0]
+    # Wt = [0.0f0 0.0f0 0.0f0 0.0f0;
+    #      -l*sin(q[2]) -l*sin(q[2]) 0.0f0 0.0f0]
+    Wt = [0.0f0 0.0f0;
+        -l*sin(q[2]) -l*sin(q[2])]
+
     return Wt
 end
 
@@ -151,11 +157,11 @@ function control(z, u::Vector{T}; expert=false, lqr_max = 10.0f0) where {T<:Real
     else
         x1, x2 = q 
         x1dot, x2dot = v
-        if ((1.0f0-cos(x2) <= 1.0f0-cosd(17.0)) && x2dot <= 0.5f0)
-            return clamp(lqr(z), -lqr_max, lqr_max)
-        else
+        # if ((1.0f0-cos(x2) <= 1.0f0-cosd(17.0)) && x2dot <= 0.5f0)
+        #     return clamp(lqr(z), -lqr_max, lqr_max)
+        # else
             return clamp(u[1], -satu, satu)
-        end
+        # end
     end
 end
 

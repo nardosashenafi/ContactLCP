@@ -8,7 +8,7 @@ function testBayesian(xi, par; totalTimeStep = totalTimeStep)
 end
 
 function testBayesian(xi, ψ, θk; totalTimeStep = totalTimeStep)    
-    X, U = integrate(xi, ψ, θk; totalTimeStep = totalTimeStep)
+    X, _ = integrate(xi, ψ, θk; totalTimeStep = totalTimeStep)
     clf()
     plots(X, fig1)
     plotPartition(ψ, θk)
@@ -54,7 +54,7 @@ function plotPartition(ψ, θk)
 
     X1    = range(d, -d, length=width)
     X1dot = range(d, -d, length=width)
-    
+
     u = Matrix{Float32}(undef, width, width)
     c = Matrix{Int}(undef, width, width)
 
