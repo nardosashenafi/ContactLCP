@@ -15,7 +15,7 @@ include("testHelpers.jl")
 const tspan         = (0.0f0, 4.0f0) 
 const Δt            = 0.001f0
 const totalTimeStep = Int(floor(tspan[2]/Δt))
-const binSize       = 2
+const binSize       = 3
 
 binNN = FastChain(FastDense(5, 6, elu),
                  FastDense(6, binSize))
@@ -122,7 +122,7 @@ function computeLoss(x0, param::Vector{T}; totalTimeStep = totalTimeStep) where 
     ψ, θk   = unstackParams(param)
     ltotal  = 0.0f0
 
-    for xi in x0
+    Threads.@threads for xi in x0
         pk = Vector(undef, totalTimeStep)
         x2 = deepcopy(xi)
 

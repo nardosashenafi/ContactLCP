@@ -37,7 +37,7 @@ for i in 1:binSize
     ps[i]               = 0.5f0*randn(Float32, controlNN_length[i])
 end
 
-######################Overwrite some functions amd constants
+###################### Overwrite some functions amd constants
 
 const ϵn_const     = 0.5f0*ones(Float32, 2)
 const ϵt_const     = 0.0f0*ones(Float32, 2)

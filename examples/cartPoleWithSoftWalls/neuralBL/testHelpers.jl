@@ -11,7 +11,7 @@ function testBayesian(xi, ψ, θk; totalTimeStep = totalTimeStep)
     X, _ = integrate(xi, ψ, θk; totalTimeStep = totalTimeStep)
     clf()
     plots(X, fig1)
-    plotPartition(ψ, θk)
+    plotPartition(X, ψ, θk)
     animate(X)
     sleep(1)
 end
@@ -30,11 +30,11 @@ function plots(X, fig1)
 
 end
 
-function plotPartition(ψ, θk)
+function plotPartition(X, ψ, θk)
     width = 30
     
-    X2    = range(-pi, pi, length=width)
-    X2dot = range(-5.0, 5.0, length=width)
+    X2    = range(-2pi, 2pi, length=width)
+    X2dot = range(-6.0, 6.0, length=width)
 
     u = Matrix{Float32}(undef, width, width)
 
@@ -51,6 +51,10 @@ function plotPartition(ψ, θk)
     imshow(u, extent = [X2[1], X2[end], X2dot[1], X2dot[end]])
     ylabel("Control")
     xlabel("x2 vs x2dot")
+
+    plot(getindex.(X, 2), getindex.(X, 4), "r")
+    scatter(X[end][2], X[end][4])
+
 
     X1    = range(d, -d, length=width)
     X1dot = range(d, -d, length=width)
