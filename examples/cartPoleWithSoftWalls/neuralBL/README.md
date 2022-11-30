@@ -10,4 +10,6 @@ discontinuities in the system dynamics.
 
 ![ezgif com-gif-maker(4)](https://user-images.githubusercontent.com/36546726/204888204-78ee491c-4098-4803-b389-630164a51e33.gif)
 
+The heat map on the top left shows that when the angle of the pendulum is outside the range of [0, 2] radians, it applies the first controller that swings up the pendulum. When the pendulum angle is within [0, 2] radians and it hits the wall, the second controller activates and balances the pendulum agains the wall. 
+
 
