@@ -185,8 +185,7 @@ function computeLoss(x0, param::Vector{T}, sampleEvery::Int ;totalTimeStep = tot
 
     for xi in x0
         X       = trajectory(xi, ψ, θk; totalTimeStep = totalTimeStep) 
-        X2      = extractStates(X)
-        X2      = X[1:sampleEvery:end]
+        X2      = extractStates(X)[1:sampleEvery:end]
         len     = length(X2)
 
         for x in X2
