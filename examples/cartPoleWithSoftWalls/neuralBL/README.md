@@ -12,4 +12,9 @@ discontinuities in the system dynamics.
 
 The heat map on the top left shows that when the angle of the pendulum is outside the range of [0, 2] radians, it applies the first controller that swings up the pendulum. When the pendulum angle is within [0, 2] radians and it hits the wall, the second controller activates and balances the pendulum agains the wall. 
 
+**Cart-pole switching between three controllers** :
+
+![ezgif com-gif-maker(5)](https://user-images.githubusercontent.com/36546726/205130570-09daa14e-28a0-45bc-9892-7eee0de9032a.gif)
+
+
 
