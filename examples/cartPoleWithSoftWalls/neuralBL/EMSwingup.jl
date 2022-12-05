@@ -149,9 +149,9 @@ function trainEM()
         l1(θ)   = computeLoss(x0, θ, 5; totalTimeStep = 1000)
         lg1     = ForwardDiff.gradient(l1, param)
 
-        if counter > 5
+        if counter > 10
             ψ, θk  = unstackParams(param)
-            if rand() > 0.3 
+            if rand() > 0.8
                 xi = [0.0f0, pi, 1.0f0, 0.5f0]
             else
                 xi = deepcopy(x0[1])
