@@ -66,7 +66,7 @@ function gap(z)
     q, _ = parseStates(z)    
     g1 = q[1] - l*sin(q[2]) - d #pendulum in contact with left wall
     g2 = D - g1
-    g3 = q[1] - w/2.0f0 - d     #pendulum in contact with right wall
+    g3 = q[1] - w/2.0f0 - d     #cart in contact with wall
     g4 = D - g3 - w
     
     return [g1, g2, g3, g4] 
