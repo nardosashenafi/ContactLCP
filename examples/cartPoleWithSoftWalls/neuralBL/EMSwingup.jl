@@ -4,11 +4,11 @@ using PyPlot
 
 using ContactLCP
 
-include("../dynamics.jl")
+include("../hangingWallDynamics.jl")
 
 sys  = CartPoleWithSoftWalls()
 lcp  = ContactLCP.Lcp(Float32, sys)
-
+fig1 = figure()
 include("trainingHelpers.jl")
 include("testHelpers.jl")
 
@@ -34,6 +34,20 @@ for i in 1:binSize
     controlNN_length[i] = DiffEqFlux.paramlength(controlArray[i]) 
 
     ps[i]               = 0.5f0*randn(Float32, controlNN_length[i])
+end
+
+function ContactLCP.checkContact(gn::Vector{T}, gThreshold, total_contact_num) where {T<:Real}
+     
+    contactIndex = zeros(T, total_contact_num)
+
+    for i in 1:total_contact_num
+        if (-gThreshold < gn[i] < gThreshold) 
+            contactIndex[i] = 1 
+        end
+    end
+    current_contact_num = Int(sum(contactIndex))
+
+    return contactIndex, current_contact_num
 end
 
 function bin(x, θ::Vector{T}) where {T<:Real} 
@@ -149,9 +163,9 @@ function trainEM()
         l1(θ)   = computeLoss(x0, θ, 5; totalTimeStep = 1000)
         lg1     = ForwardDiff.gradient(l1, param)
 
-        if counter > 5
+        if counter > 10
             ψ, θk  = unstackParams(param)
-            if rand() > 0.3 
+            if rand() > 0.8
                 xi = [0.0f0, pi, 1.0f0, 0.5f0]
             else
                 xi = deepcopy(x0[1])

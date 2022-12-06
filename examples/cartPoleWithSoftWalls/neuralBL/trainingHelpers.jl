@@ -43,7 +43,6 @@ function sampleInitialState(ψ::Vector{T}, θk; totalTimeStep = totalTimeStep, m
     for i in 1:minibatch
         if rand() > 0.2
             select      = rand(X)
-            select[1]   = rand(-0.5f0:0.01f0:0.5f0)   #stop the training from visiting large values of x
             push!(samples, select)
         else
             push!(samples, [rand(-0.1:0.001:0.1), rand(-0.2:0.001:0.2), 

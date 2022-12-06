@@ -9,19 +9,29 @@ using Rotations
 
 export CartPoleWithSoftWalls
 
-const mc           = 1.0f0    
-const mp           = 0.5f0 
-const l            = 0.5f0        #wheel
-const I1           = mp*l^2
-const g            = 9.81f0
-const d            = -0.75f0 
-const D            = 1.5f0
-const ϵn_const     = 0.5f0*ones(Float32, 4)
-const ϵt_const     = 0.0f0*ones(Float32, 4)
-const μ_const      = 0.0f0*ones(Float32, 4)
-const gThreshold   = 0.001f0
-const satu         = 4.0f0
-const w            = 0.20f0
+const mc            = 1.0f0    
+const mp            = 0.5f0 
+const l             = 0.5f0        #wheel
+const I1            = mp*l^2
+const g             = 9.81f0
+const d             = -0.75f0 
+const wallThickness = 0.10f0
+const D             = 1.5f0
+const wallBottomEnd = 0.3f0
+const wallTopEnd    = 0.8f0
+const contactNum    = 4
+const ϵn_const      = 0.5f0*ones(Float32, contactNum)
+const ϵt_const      = 0.0f0*ones(Float32, contactNum)
+const μ_const       = 0.0f0*ones(Float32, contactNum)
+const gThreshold    = 0.001f0
+const satu          = 4.0f0
+const w             = 0.20f0
+
+const leftWall_bottom   = [d, wallBottomEnd]
+const leftWall_top      = [d, wallTopEnd]
+const rightWall_bottom  = [D + d, wallBottomEnd]
+const rightWall_top     = [D + d, wallTopEnd]
+
 
 struct CartPoleWithSoftWalls{}  
 end
@@ -62,38 +72,62 @@ function parseStates(x::Vector{T}) where {T<:Real}
     return q, u
 end
 
-function gap(z)
-    q, _ = parseStates(z)    
-    g1 = q[1] - l*sin(q[2]) - d #pendulum in contact with left wall
-    g2 = D - g1
-    g3 = q[1] - w/2.0f0 - d     #pendulum in contact with right wall
-    g4 = D - g3 - w
+function pendulumPos(z)
+    q, _ = parseStates(z) 
+    x, θ = q
     
-    return [g1, g2, g3, g4] 
-    # return [g1, g2] 
-    # return [Inf, Inf, Inf, Inf]
+    return [x-l*sin(θ), l*cos(θ)]
+end
+
+function gap(z)
+    pendulum_xy = pendulumPos(z)
+
+    if pendulum_xy[2] > leftWall_bottom[2] #pendulum in contact with left wall
+        g1 = pendulum_xy[1] - d   
+    else
+        g1 = norm(pendulum_xy - leftWall_bottom, 2)
+    end
+
+    if pendulum_xy[2] > rightWall_bottom[2] #pendulum in contact with right wall
+        g2 = (D + d) - pendulum_xy[1]
+    else
+        g2 = norm(pendulum_xy - rightWall_bottom, 2)
+    end
+    
+    return [g1, g2, -g1 - wallThickness, -g2 - wallThickness] 
 end
 
 function wn(z::Vector{T}) where {T<:Real}
 
     q, _ = parseStates(z)
-    Wn = [1.0f0 -1.0f0 1.0f0 -1.0f0;
-        -l*cos(q[2]) l*cos(q[2]) 0.0f0 0.0f0]
-    # Wn = [1.0f0 -1.0f0;
-    #     -l*cos(q[2]) l*cos(q[2])]
+    x, θ = q
+    pendulum_xy = pendulumPos(z)
+    g = gap(z)
 
-   return Wn 
+    if pendulum_xy[2] > leftWall_bottom[2] #pendulum in contact with left wall
+        w1 = [1.0f0; -l*cos(q[2])]  
+    else
+        x̄l, ȳl = pendulum_xy - leftWall_bottom
+        w1 = 2.0f0/g[1]*[x̄l; -x̄l*l*cos(θ) + ȳl*l*sin(θ)] 
+    end
+
+    if pendulum_xy[2] > rightWall_bottom[2] #pendulum in contact with right wall
+        w2 = [-1.0f0; l*cos(q[2])]  
+    else
+        x̄r, ȳr = pendulum_xy - rightWall_bottom
+        w2 = 2.0f0/g[2]*[x̄r; -x̄r*l*cos(θ) + ȳr*l*sin(θ)] 
+    end
+    
+   return hcat(w1, w2, -w1, -w2)    #check contact against the wall on each face of the wall
 
 end
 
 function wt(z::Vector{T}) where {T<:Real}
     q, _ = parseStates(z)
-    Wt = [0.0f0 0.0f0 0.0f0 0.0f0;
-         -l*sin(q[2]) -l*sin(q[2]) 0.0f0 0.0f0]
-    # Wt = [0.0f0 0.0f0;
-    #     -l*sin(q[2]) -l*sin(q[2])]
+    w1 = [0.0f0; -l*sin(q[2])]
+    w2 = [0.0f0; -l*sin(q[2])]
 
-    return Wt
+    return hcat(w1, w2, w1, w2)
 end
 
 function vnormal(z)
@@ -157,7 +191,7 @@ function control(z, u::Vector{T}; expert=false, lqr_max = 10.0f0) where {T<:Real
     else
         x1, x2 = q 
         x1dot, x2dot = v
-        if ((1.0f0-cos(x2) <= 1.0f0-cosd(17.0)) && abs(x2dot) <= 0.5f0)
+        if ((1.0f0-cos(x2) <= (1.0f0-cosd(17.0))) && abs(x2dot) <= 0.5f0)
             return clamp(lqr(z), -lqr_max, lqr_max)
         else
             return clamp(u[1], -satu, satu)
@@ -188,6 +222,7 @@ function startAnimator()
 
     return vis
 end
+
 function createAnimateObject(x1, x2)
     vcart = vis[:cart]
 
@@ -210,12 +245,12 @@ function createAnimateObject(x1, x2)
     vwalls = vis[:walls]
 
     setobject!(vwalls[:left], MeshObject(
-        Rect(Vec(0.0, 0.0, -0.8), Vec(0.0, 0.02, 1.6)),
+        Rect(Vec(0.0, 0.0, wallBottomEnd), Vec(0.0, wallThickness, wallTopEnd-wallBottomEnd)),
         MeshLambertMaterial(color=RGBA{Float32}(0.0, 0.0, 0.0, 1.0))))
-    settransform!(vwalls[:left], Translation(0.0, d, 0.0))
+    settransform!(vwalls[:left], Translation(0.0, d-wallThickness, 0.0))
 
     setobject!(vwalls[:right], MeshObject(
-        Rect(Vec(0.0, 0.0, -0.8), Vec(0.0, 0.02, 1.6)),
+        Rect(Vec(0.0, 0.0, wallBottomEnd), Vec(0.0, wallThickness, wallTopEnd-wallBottomEnd)),
         MeshLambertMaterial(color=RGBA{Float32}(0.0, 0.0, 0.0, 1.0))))
     settransform!(vwalls[:right], Translation(0.0, d+D, 0.0))
 
