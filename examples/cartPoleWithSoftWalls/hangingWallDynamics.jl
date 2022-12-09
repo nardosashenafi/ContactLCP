@@ -32,7 +32,7 @@ const leftWall_top      = [d, wallTopEnd]
 const rightWall_bottom  = [D + d, wallBottomEnd]
 const rightWall_top     = [D + d, wallTopEnd]
 
-
+println("USING HANGING WALLS")
 struct CartPoleWithSoftWalls{}  
 end
 
@@ -191,7 +191,7 @@ function control(z, u::Vector{T}; expert=false, lqr_max = 10.0f0) where {T<:Real
     else
         x1, x2 = q 
         x1dot, x2dot = v
-        if ((1.0f0-cos(x2) <= (1.0f0-cosd(17.0))) && abs(x2dot) <= 0.5f0)
+        if ((1.0f0-cos(x2) <= (1.0f0-cosd(17.0))) && (abs(x2dot) <= 0.5f0))
             return clamp(lqr(z), -lqr_max, lqr_max)
         else
             return clamp(u[1], -satu, satu)

@@ -23,6 +23,8 @@ const gThreshold   = 0.001f0
 const satu         = 4.0f0
 const w            = 0.20f0
 
+println("IN THIS MODEL, CART CAN HIT THE WALL")
+
 struct CartPoleWithSoftWalls{}  
 end
 
@@ -141,7 +143,7 @@ function lqrGains()
 end
 
 function lqr(z)
-    k = vec([ -2.58182  50.3793  -5.04367  12.0988])
+    k = vec([-2.58182  50.3793  -5.04367  12.0988])
     # k = zeros(4)
     return -k'*z
 end
@@ -157,11 +159,13 @@ function control(z, u::Vector{T}; expert=false, lqr_max = 10.0f0) where {T<:Real
     else
         x1, x2 = q 
         x1dot, x2dot = v
-        if ((1.0f0-cos(x2) <= 1.0f0-cosd(17.0)) && abs(x2dot) <= 0.5f0)
+
+        if ((1.0f0-cos(x2) <= 1.0f0-cosd(17.0)) && (abs(x2dot) <= 0.5f0))
             return clamp(lqr(z), -lqr_max, lqr_max)
         else
             return clamp(u[1], -satu, satu)
         end
+
     end
 end
 
@@ -188,6 +192,7 @@ function startAnimator()
 
     return vis
 end
+
 function createAnimateObject(x1, x2)
     vcart = vis[:cart]
 

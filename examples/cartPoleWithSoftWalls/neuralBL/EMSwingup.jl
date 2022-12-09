@@ -1,10 +1,10 @@
 using LinearAlgebra, Flux, DiffEqFlux, LogExpFunctions, ForwardDiff
 using Distributions
 using PyPlot 
-
 using ContactLCP
 
-include("../hangingWallDynamics.jl")
+# include("../hangingWallDynamics.jl")
+include("../dynamics.jl")
 
 sys  = CartPoleWithSoftWalls()
 lcp  = ContactLCP.Lcp(Float32, sys)
@@ -17,8 +17,8 @@ const Δt            = 0.001f0
 const totalTimeStep = Int(floor(tspan[2]/Δt))
 const binSize       = 3
 
-binNN = FastChain(FastDense(5, 6, elu),
-                 FastDense(6, binSize))
+binNN = FastChain(FastDense(5, 8, elu),
+                 FastDense(8, binSize))
 
 const binNN_length = DiffEqFlux.paramlength(binNN) 
 
@@ -27,27 +27,13 @@ controlNN_length = Vector{Int}(undef, binSize)
 ps               = Vector{Vector}(undef, binSize)
 
 for i in 1:binSize 
-    controlArray[i] = FastChain(FastDense(5, 8, elu),
-                            FastDense(8, 4, elu),
-                            FastDense(4, 1))
+    controlArray[i] = FastChain(FastDense(5, 12, elu),
+                            FastDense(12, 6, elu),
+                            FastDense(6, 1))
     
     controlNN_length[i] = DiffEqFlux.paramlength(controlArray[i]) 
 
     ps[i]               = 0.5f0*randn(Float32, controlNN_length[i])
-end
-
-function ContactLCP.checkContact(gn::Vector{T}, gThreshold, total_contact_num) where {T<:Real}
-     
-    contactIndex = zeros(T, total_contact_num)
-
-    for i in 1:total_contact_num
-        if (-gThreshold < gn[i] < gThreshold) 
-            contactIndex[i] = 1 
-        end
-    end
-    current_contact_num = Int(sum(contactIndex))
-
-    return contactIndex, current_contact_num
 end
 
 function bin(x, θ::Vector{T}) where {T<:Real} 
@@ -92,7 +78,7 @@ function lossPerState(x)
 
     # high cost on x1dot to lower fast impact
     return doubleHinge_x  + 12.0f0*(1.0f0-cos(x2)) + 
-            2.0f0*x1dot^2.0f0 + 0.1f0*x2dot^2.0f0
+            2.0f0*x1dot^2.0f0 + 0.5f0*x2dot^2.0f0
 end
 
 function computeLoss(x0, param::Vector{T}, sampleEvery::Int ;totalTimeStep = totalTimeStep) where {T<:Real}
@@ -118,52 +104,66 @@ function computeLoss(x0, param::Vector{T}, sampleEvery::Int ;totalTimeStep = tot
     return ltotal
 end
 
-function computeLoss(x0, param::Vector{T}; totalTimeStep = totalTimeStep) where {T<:Real}
+function oneBatch(xi, param::Vector{T}; totalTimeStep = totalTimeStep) where {T<:Real}
     
     ψ, θk   = unstackParams(param)
     ltotal  = 0.0f0
+    pk = Vector(undef, totalTimeStep)
+    x2 = deepcopy(xi)
 
-    Threads.@threads for xi in x0
-        pk = Vector(undef, totalTimeStep)
-        x2 = deepcopy(xi)
-
-        for i in 1:totalTimeStep
-            pk[i]  = bin(x2, ψ)           #holds a softmax
-            lk     = 0.0f0
-            for k in 1:binSize     
-                u  = input(x2, θk, k)          
-                x  = oneStep(x2, u)
-                lk += pk[i][k]*lossPerState(x)       #maximize the changes of selecting lower loss
-            end
-            ltotal += lk/totalTimeStep
-
-            ### select the next state
-            c  = rand(Categorical(bin(x2, ψ)))
-            # c  = argmax(bin(x2, ψ))
-            x2 = oneStep(x2, input(x2, θk, c))
+    for i in 1:totalTimeStep
+        pk[i]  = bin(x2, ψ)           #holds a softmax
+        lk     = 0.0f0
+        for k in 1:binSize     
+            u  = input(x2, θk, k)          
+            x  = oneStep(x2, u)
+            lk += pk[i][k]*lossPerState(x)       #maximize the changes of selecting lower loss
         end
-    end
+        ltotal += lk/totalTimeStep
 
-    return 3.0f0*ltotal/length(x0)
+        ### select the next state
+        c  = rand(Categorical(bin(x2, ψ)))
+        # c  = argmax(bin(x2, ψ))
+        x2 = oneStep(x2, input(x2, θk, c))
+    end
+    return ltotal
+end
+
+function computeLoss(x0, param::Vector{T}; totalTimeStep = totalTimeStep) where {T<:Real}
+    
+    l = Threads.Atomic{T}()
+    Threads.@threads for xi in x0
+        Threads.atomic_add!(l, oneBatch(xi, param))
+    end
+    return 3.0f0*l.value/length(x0)
+end
+
+function gradient!(grad, x0, param::Vector{T}; totalTimeStep = 1000) where {T<:Real}
+    Threads.@threads for i in eachindex(x0)
+        grad[i] = ForwardDiff.gradient((θ) -> oneBatch(x0[i], θ; totalTimeStep = totalTimeStep), param)
+    end
 end
 
 function trainEM()
 
-    ψ           = randn(Float32, binNN_length)
+    ψ           = 0.5f0*randn(Float32, binNN_length)
     θk          = deepcopy(ps)
     param       = stackParams(ψ, θk)
     opt         = Adam(0.001f0)
     counter     = 0
     minibatch   = 4
 
-    for i in 1:5000
+    for i in 1:10000
         ψ, θk   = unstackParams(param)
-        x0      = sampleInitialState(ψ, θk; totalTimeStep=2000, minibatch=minibatch)
+        x0      = sampleInitialState(ψ, θk; totalTimeStep=5000, minibatch=minibatch)
 
-        l1(θ)   = computeLoss(x0, θ, 5; totalTimeStep = 1000)
-        lg1     = ForwardDiff.gradient(l1, param)
+        # l1(θ)   = computeLoss(x0, θ, 1; totalTimeStep = 1000)
+        # lg1     = ForwardDiff.gradient(l1, param)
+        lg1     = Vector{Vector{eltype(param)}}(undef, length(x0))
+        gradient!(lg1, x0, param; totalTimeStep = 1000) 
+        grads   = mean(lg1)
 
-        if counter > 10
+        if counter > 5
             ψ, θk  = unstackParams(param)
             if rand() > 0.8
                 xi = [0.0f0, pi, 1.0f0, 0.5f0]
@@ -175,7 +175,7 @@ function trainEM()
             counter = 0
         end
         counter += 1
-        Flux.update!(opt, param, lg1)
+        Flux.update!(opt, param, grads)
     end
 end
 
