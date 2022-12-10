@@ -3,8 +3,23 @@ using Distributions
 using PyPlot 
 using ContactLCP
 
-# include("../hangingWallDynamics.jl")
-include("../dynamics.jl")
+include("../hangingWallDynamics.jl")
+
+function ContactLCP.checkContact(gn::Vector{T}, gThreshold, total_contact_num) where {T<:Real}
+     
+    contactIndex = zeros(T, total_contact_num)
+
+    for i in 1:total_contact_num
+        if (-gThreshold < gn[i] < gThreshold) 
+            contactIndex[i] = 1 
+        end
+    end
+    current_contact_num = Int(sum(contactIndex))
+
+    return contactIndex, current_contact_num
+end
+
+# include("../dynamics.jl")
 
 sys  = CartPoleWithSoftWalls()
 lcp  = ContactLCP.Lcp(Float32, sys)
@@ -79,6 +94,12 @@ function lossPerState(x)
     # high cost on x1dot to lower fast impact
     return doubleHinge_x  + 12.0f0*(1.0f0-cos(x2)) + 
             2.0f0*x1dot^2.0f0 + 0.5f0*x2dot^2.0f0
+            #TODO: the weights on the loss are not balanaced.
+            #With these gains, the cart does not want to swing but the pendulum stabilizes
+            #when close to the upright.
+            #Try lowering the cost on x1dot to allow it to swing up.
+            # Moreover, the control NN may be too big now. It has large variance in control across the 
+            #states
 end
 
 function computeLoss(x0, param::Vector{T}, sampleEvery::Int ;totalTimeStep = totalTimeStep) where {T<:Real}
@@ -157,8 +178,38 @@ function trainEM()
         ψ, θk   = unstackParams(param)
         x0      = sampleInitialState(ψ, θk; totalTimeStep=5000, minibatch=minibatch)
 
-        # l1(θ)   = computeLoss(x0, θ, 1; totalTimeStep = 1000)
-        # lg1     = ForwardDiff.gradient(l1, param)
+        l1(θ)   = computeLoss(x0, θ, 1; totalTimeStep = 1000)
+        lg1     = ForwardDiff.gradient(l1, param)
+
+        if counter > 5
+            ψ, θk  = unstackParams(param)
+            if rand() > 0.8
+                xi = [0.0f0, pi, 1.0f0, 0.5f0]
+            else
+                xi = deepcopy(x0[1])
+            end
+            testBayesian(xi, ψ, θk; totalTimeStep=7000)
+            println("loss = ", l1(param))
+            counter = 0
+        end
+        counter += 1
+        Flux.update!(opt, param, lg1)
+    end
+end
+
+function trainParallel()
+
+    ψ           = 0.5f0*randn(Float32, binNN_length)
+    θk          = deepcopy(ps)
+    param       = stackParams(ψ, θk)
+    opt         = Adam(0.001f0)
+    counter     = 0
+    minibatch   = 6
+
+    for i in 1:10000
+        ψ, θk   = unstackParams(param)
+        x0      = sampleInitialState(ψ, θk; totalTimeStep=5000, minibatch=minibatch)
+
         lg1     = Vector{Vector{eltype(param)}}(undef, length(x0))
         gradient!(lg1, x0, param; totalTimeStep = 1000) 
         grads   = mean(lg1)
@@ -171,7 +222,8 @@ function trainEM()
                 xi = deepcopy(x0[1])
             end
             testBayesian(xi, ψ, θk; totalTimeStep=7000)
-            println("loss = ", l1(param))
+            l1   = oneBatch(xi, param; totalTimeStep = 7000)
+            println("loss = ", l1)
             counter = 0
         end
         counter += 1
