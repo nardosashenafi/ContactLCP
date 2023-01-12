@@ -14,6 +14,7 @@ function testBayesian(xi, ψ, θk; totalTimeStep = totalTimeStep)
     plotPartition(X, ψ, θk)
     animate(X)
     sleep(1)
+    return X
 end
 
 function plots(X)

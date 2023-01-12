@@ -42,7 +42,7 @@ function sampleInitialState(ψ::Vector{T}, θk; totalTimeStep = totalTimeStep, m
             select[1]  = clamp(select[1], d+w/2 - cropBuffer, D+d-w/2 + cropBuffer) 
             samples[i] = select
         else
-            samples[i] =  [rand(-0.1:0.001:0.1), rand(-0.2:0.001:0.2), 
+            samples[i] =  [rand(-0.1:0.001:0.1), rand(-0.35:0.001:0.35), 
                             rand(-0.5:0.001:0.5), rand(-0.5:0.001:0.5)]
         end
     end
