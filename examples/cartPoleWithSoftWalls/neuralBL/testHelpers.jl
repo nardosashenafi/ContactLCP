@@ -37,13 +37,14 @@ function plotPartition(X, ψ, θk)
     X2dot = range(-6.0, 6.0, length=width)
 
     u = Matrix{Float32}(undef, width, width)
+    c = Matrix{Int}(undef, width, width)
 
     for i in 1:width    #row
         for j in 1:width    #column
             x       = vcat(0.0f0, X2[j], 0.0f0, X2dot[width-i+1])
             pk      = bin(x, ψ)
-            c       = argmax(pk)
-            u[i, j] = input(x, θk, c)[1]
+            c[i,j]  = argmax(pk)
+            u[i, j] = input(x, θk, c[i,j])[1]
         end
     end
 
@@ -52,35 +53,35 @@ function plotPartition(X, ψ, θk)
     ylabel("Control")
     xlabel("x2 vs x2dot")
 
+    #overlap the trajectory on the control heat map
     plot(getindex.(X, 2), getindex.(X, 4), "r")
     scatter(X[end][2], X[end][4])
 
+    ################################################
+    plt.subplot(2, 2, 4)
+    imshow(c, extent = [X2[1], X2[end], X2dot[1], X2dot[end]])
+    ylabel("State Partitions")
+    xlabel("x2 vs x2dot")
 
-    X1    = range(d, -d, length=width)
-    X1dot = range(d, -d, length=width)
+    ####################################################
+    X1    = range(d+w/2, D+d-w/2, length=width)
+    X1dot = range(d+w/2, D+d-w/2, length=width)
 
     u = Matrix{Float32}(undef, width, width)
-    c = Matrix{Int}(undef, width, width)
 
     for i in 1:width    #row
         for j in 1:width    #column
             x       = vcat(X1[j], 0.0f0, X1dot[width-i+1], 0.0f0)
             pk      = bin(x, ψ)
-            c[i, j] = argmax(pk)
-            u[i, j] = input(x, θk, c[i, j])[1]
+            c       = argmax(pk)
+            u[i, j] = input(x, θk, c)[1]
         end
     end
-
 
     plt.subplot(2, 2, 3)
 
     imshow(u, extent = [X1[1], X1[end], X1dot[1], X1dot[end]])
     ylabel("Control")
-    xlabel("x1 vs x1dot")
-
-    plt.subplot(2, 2, 4)
-    imshow(c, extent = [X1[1], X1[end], X1dot[1], X1dot[end]])
-    ylabel("Partitions")
     xlabel("x1 vs x1dot")
 
 end

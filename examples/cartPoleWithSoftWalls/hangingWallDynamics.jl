@@ -67,7 +67,7 @@ function (sys::CartPoleWithSoftWalls)(x::Vector{T}) where {T<:Real}
 end
 
 function parseStates(x::Vector{T}) where {T<:Real}
-    q = x[1:2]      #[x1, y2]
+    q = x[1:2]      #[x1, x2]
     u = x[3:4]      #[x1dot, x2dot]
     return q, u
 end

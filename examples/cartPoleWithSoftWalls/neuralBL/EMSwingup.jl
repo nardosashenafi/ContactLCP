@@ -19,7 +19,7 @@ function ContactLCP.checkContact(gn::Vector{T}, gThreshold, total_contact_num) w
     return contactIndex, current_contact_num
 end
 
-# include("../dynamics.jl")
+# include("../longWallDynamics.jl")
 
 sys  = CartPoleWithSoftWalls()
 lcp  = ContactLCP.Lcp(Float32, sys)
@@ -32,7 +32,7 @@ const Δt            = 0.001f0
 const totalTimeStep = Int(floor(tspan[2]/Δt))
 const binSize       = 3
 
-binNN = FastChain(FastDense(5, 8, elu),
+binNN = FastChain(FastDense(5, 8, tanh),
                  FastDense(8, binSize))
 
 const binNN_length = DiffEqFlux.paramlength(binNN) 
@@ -42,14 +42,18 @@ controlNN_length = Vector{Int}(undef, binSize)
 ps               = Vector{Vector}(undef, binSize)
 
 for i in 1:binSize 
-    controlArray[i] = FastChain(FastDense(5, 12, elu),
-                            FastDense(12, 6, elu),
-                            FastDense(6, 1))
+    controlArray[i] = FastChain(FastDense(5, 8, elu),
+                            FastDense(8, 4, elu),
+                            FastDense(4, 1))
     
     controlNN_length[i] = DiffEqFlux.paramlength(controlArray[i]) 
 
     ps[i]               = 0.5f0*randn(Float32, controlNN_length[i])
 end
+
+println("Check the following properties in the initialization")
+println("Make sure that bin(x, ψ) does not return a large probability in some state.
+        That slows down the training until the large probability drops to below 0.5")
 
 function bin(x, θ::Vector{T}) where {T<:Real} 
     return Flux.softmax(binNN(inputLayer(x), θ))
@@ -92,23 +96,17 @@ function lossPerState(x)
     abs(x1) > 0.5 ? doubleHinge_x = 3.0f0*abs.(x1) : nothing
 
     # high cost on x1dot to lower fast impact
-    return doubleHinge_x  + 12.0f0*(1.0f0-cos(x2)) + 
-            2.0f0*x1dot^2.0f0 + 0.5f0*x2dot^2.0f0
-            #TODO: the weights on the loss are not balanaced.
-            #With these gains, the cart does not want to swing but the pendulum stabilizes
-            #when close to the upright.
-            #Try lowering the cost on x1dot to allow it to swing up.
-            # Moreover, the control NN may be too big now. It has large variance in control across the 
-            #states
+    return doubleHinge_x  + 10.0f0*(1.0f0-cos(x2)) + 
+            1.0f0*x1dot^2.0f0 + 0.5f0*x2dot^2.0f0
+
 end
 
-function computeLoss(x0, param::Vector{T}, sampleEvery::Int ;totalTimeStep = totalTimeStep) where {T<:Real}
+function computeLoss(X, param::Vector{T}, sampleEvery::Int, fullTraj::Bool ; totalTimeStep = totalTimeStep) where {T<:Real}
     ψ, θk   = unstackParams(param)
     ltotal  = 0.0f0
 
-    for xi in x0
-        X       = trajectory(xi, ψ, θk; totalTimeStep = totalTimeStep) 
-        X2      = X[1:sampleEvery:end]
+    for i in eachindex(X)
+        X2      = X[i][1:sampleEvery:end]
         len     = length(X2)
 
         for x in X2
@@ -129,8 +127,8 @@ function oneBatch(xi, param::Vector{T}; totalTimeStep = totalTimeStep) where {T<
     
     ψ, θk   = unstackParams(param)
     ltotal  = 0.0f0
-    pk = Vector(undef, totalTimeStep)
-    x2 = deepcopy(xi)
+    pk      = Vector(undef, totalTimeStep)
+    x2      = deepcopy(xi)
 
     for i in 1:totalTimeStep
         pk[i]  = bin(x2, ψ)           #holds a softmax
@@ -165,6 +163,11 @@ function gradient!(grad, x0, param::Vector{T}; totalTimeStep = 1000) where {T<:R
     end
 end
 
+function poi(ψ)
+    # xi = [0.0f0, -4.0f0, 0.0f0, -2.0f0]
+    # return bin(xi, ψ)
+end
+
 function trainEM()
 
     ψ           = 0.5f0*randn(Float32, binNN_length)
@@ -172,13 +175,15 @@ function trainEM()
     param       = stackParams(ψ, θk)
     opt         = Adam(0.001f0)
     counter     = 0
-    minibatch   = 4
+    minibatch   = 3
 
     for i in 1:10000
         ψ, θk   = unstackParams(param)
         x0      = sampleInitialState(ψ, θk; totalTimeStep=5000, minibatch=minibatch)
 
-        l1(θ)   = computeLoss(x0, θ, 1; totalTimeStep = 1000)
+        X       = [trajectory(xi, ψ, θk; totalTimeStep = 2000) for xi in x0] 
+        l1(θ)   = computeLoss(X, θ, 2, true; totalTimeStep = 2000)
+
         lg1     = ForwardDiff.gradient(l1, param)
 
         if counter > 5
@@ -189,7 +194,7 @@ function trainEM()
                 xi = deepcopy(x0[1])
             end
             testBayesian(xi, ψ, θk; totalTimeStep=7000)
-            println("loss = ", l1(param))
+            println("loss = ", l1(param), " POI = ", poi(ψ))
             counter = 0
         end
         counter += 1
