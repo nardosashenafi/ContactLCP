@@ -52,7 +52,7 @@ function lexiblockRatioTest(Q::Matrix{T}, m; LEXITHRESHOLD=1e-10, zero_tol = 0.0
     return minIndex  
 end
 
-function lexiPivot(Q, M, q::Vector{T}, r, s) where {T<:Real}
+function lexiPivot(Q, M, q::AbstractArray{T}, r, s) where {T<:Real}
 
     totalRow = range(1, stop=size(M, 1), step=1)
     totalCol = range(1, stop=size(M, 2), step=1)
@@ -81,7 +81,7 @@ function lexiPivot(Q, M, q::Vector{T}, r, s) where {T<:Real}
     return Q̂, M̂, q̂
 end
 
-function lexiPivot!(Q, M, q::Vector{T}, r, s) where {T<:Real}
+function lexiPivot!(Q, M, q::AbstractArray{T}, r, s) where {T<:Real}
 
     totalRow = range(1, stop=size(M, 1), step=1)
     totalCol = range(1, stop=size(M, 2), step=1)
@@ -108,7 +108,25 @@ function lexiPivot!(Q, M, q::Vector{T}, r, s) where {T<:Real}
 
 end
 
-function lemkeLexi(M, q::Vector{T}, x; MAX_ITER = 30, piv_tol = 1e-5) where {T<:Real}
+
+function updateComplementPair(basic, nonbasic, oldBasicInd, newBasicIndex)
+    locateComplementOfBasic = basic[oldBasicInd]
+    nonbasic[locateComplementOfBasic] = newBasicIndex
+
+    return nonbasic
+end
+
+function switchBasicWithNonBasic(basic, nonbasic, row, col)
+    nonbasic = updateComplementPair(basic, nonbasic, row, col)
+    basic[row], nonbasic[col] = nonbasic[col], basic[row]
+    return basic, nonbasic
+end
+
+function complementPairIndex(nonbasic, nonbasicIndex)
+    return nonbasic[nonbasicIndex]  #find complement of the dropped variable so we can add it to the basic variables on the next iteration
+end
+
+function lemkeLexi(M, q::AbstractArray{T}, x; MAX_ITER = 30, piv_tol = 1e-5) where {T<:Real}
     totalRow = size(M, 1)
     totalCol = size(M, 2)
 
@@ -201,6 +219,14 @@ function lemkeLexi(M, q::Vector{T}, x; MAX_ITER = 30, piv_tol = 1e-5) where {T<:
     # the solution is found in the vector q̂. 
     #But we have been switching the components of the vector.
     #so we need to trace back the exchange and extract the basic solution
+
+    # basicSol = extractSolution(pivottedIndices, q̂, totalCol)
+    basicSol = zeros(T, totalCol)
+    return basicSol
+end
+
+function extractSolution(pivottedIndices, q̂::AbstractArray{T}, totalCol) where {T<:Real}
+
     basicSol = zeros(T, totalCol+1)
     pivotLen = length(pivottedIndices)
     windex  = getindex.(pivottedIndices, 1)
@@ -238,31 +264,11 @@ function lemkeLexi(M, q::Vector{T}, x; MAX_ITER = 30, piv_tol = 1e-5) where {T<:
         end
         state_i = pivotLen
     end
-
-    basicSol = basicSol[1:end-1]
-
-    return basicSol
-end
-
-function updateComplementPair(basic, nonbasic, oldBasicInd, newBasicIndex)
-    locateComplementOfBasic = basic[oldBasicInd]
-    nonbasic[locateComplementOfBasic] = newBasicIndex
-
-    return nonbasic
-end
-
-function switchBasicWithNonBasic(basic, nonbasic, row, col)
-    nonbasic = updateComplementPair(basic, nonbasic, row, col)
-    basic[row], nonbasic[col] = nonbasic[col], basic[row]
-    return basic, nonbasic
-end
-
-function complementPairIndex(nonbasic, nonbasicIndex)
-    return nonbasic[nonbasicIndex]  #find complement of the dropped variable so we can add it to the basic variables on the next iteration
+    return basicSol[1:end-1]
 end
 
 #### the following functions are there for debugging purposes
-function pivot(M, q::Vector{T}, w, z, r, s) where {T<:Real}
+function pivot(M, q::AbstractArray{T}, w, z, r, s) where {T<:Real}
     totalRow = range(1, stop=length(w), step=1)
     totalCol = range(1, stop=length(z), step=1)
     i = totalRow[totalRow .!= r]
@@ -286,20 +292,20 @@ function pivot(M, q::Vector{T}, w, z, r, s) where {T<:Real}
     return M̂, q̂, ŵ, ẑ
 end
 
-function αRatioTest(q::Vector{T}, d) where {T<:Real}
+function αRatioTest(q::AbstractArray{T}, d) where {T<:Real}
     ratio = Vector{T}(undef, length(q))
     [q[i] < 0.0 ? ratio[i] = -q[i]/d[i] : ratio[i] = Inf for i in eachindex(q)] 
     return argmin(ratio) + 1        # q and d are vectors with 3 components. In the augemented form, they are shifted by 1
 end
 
-function blockRatioTest(q::Vector{T}, m) where {T<:Real}
+function blockRatioTest(q::AbstractArray{T}, m) where {T<:Real}
     zero_tol = 1e-5
     ratio = Vector{T}(undef, length(m))
     [m[i]+zero_tol < 0.0 ? ratio[i] = -q[i]/m[i] : ratio[i] = Inf for i in eachindex(m)] 
     return argmin(ratio) 
 end
 
-function lemke(M, q::Vector{T}) where {T<:Real}
+function lemke(M, q::AbstractArray{T}) where {T<:Real}
     # println("Lemke begins")
     totalRow = size(M, 1)
     totalCol = size(M, 2)
@@ -381,7 +387,7 @@ function lemke(M, q::Vector{T}) where {T<:Real}
     return sol
 end
 
-function stepLemke(M, q::Vector{T}, x) where {T<:Real}
+function stepLemke(M, q::AbstractArray{T}, x) where {T<:Real}
     # println("x = ", x)
 
     totalRow = size(M, 1)

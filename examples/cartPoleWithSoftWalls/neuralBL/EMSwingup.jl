@@ -23,9 +23,10 @@ function checkContact(gn::Vector{T}, gThreshold, total_contact_num) where {T<:Re
             whichInContact[i] = 1 
         end
     end
-    current_contact_num = Int(sum(whichInContact))
 
-    return findall(x -> x == 1, whichInContact), current_contact_num
+    contactIndex = findall(x -> x == 1, whichInContact)
+
+    return contactIndex, length(contactIndex)
 end
 
 # include("../longWallDynamics.jl")
@@ -65,7 +66,7 @@ println("Make sure that bin(x, ψ) does not return a large probability in some s
         This causes argmax(bin(x, ψ)) to return the same value for a long time in the training
         until the highest probability crosses 0.5")
 
-function bin(x, θ::Vector{T}) where {T<:Real} 
+function bin(x, θ::AbstractArray{T}) where {T<:Real} 
     return Flux.softmax(binNN(inputLayer(x), θ))
 end
 
@@ -73,9 +74,9 @@ function input(x, θk, i::Int)
     return controlArray[i](inputLayer(x), θk[i])
 end
 
-function unstackControlParam(param::Vector{T}) where {T<:Real}
+function unstackControlParam(param::AbstractArray{T}) where {T<:Real}
 
-    θk = Vector{SubArray{T, 1, Vector{T}, Tuple{UnitRange{Int64}}, true}}(undef, binSize)
+    θk = Vector{SubArray{T, 1, typeof(param), Tuple{UnitRange{Int64}}, true}}(undef, binSize)
     θk[1] = @view param[1:controlNN_length[1]] 
 
     for i in 2:binSize
@@ -110,7 +111,7 @@ function lossPerState(x)
 
 end
 
-function computeLossSampler(x0, param::Vector{T}; totalTimeStep = totalTimeStep) where {T<:Real}
+function computeLossSampler(x0, param::AbstractArray{T}; totalTimeStep = totalTimeStep) where {T<:Real}
     ψ, θk   = unstackParams(param)
     ltotal  = 0.0f0
 
@@ -133,7 +134,7 @@ function computeLossSampler(x0, param::Vector{T}; totalTimeStep = totalTimeStep)
     return ltotal/length(x0)
 end
 
-function computeLoss(X, param::Vector{T}, sampleEvery::Int, fullTraj::Bool ; totalTimeStep = totalTimeStep) where {T<:Real}
+function computeLoss(X, param::AbstractArray{T}, sampleEvery::Int, fullTraj::Bool ; totalTimeStep = totalTimeStep) where {T<:Real}
     ψ, θk   = unstackParams(param)
     ltotal  = 0.0f0
 
@@ -155,7 +156,7 @@ function computeLoss(X, param::Vector{T}, sampleEvery::Int, fullTraj::Bool ; tot
     return ltotal/length(X)
 end
 
-function oneBatch(xi, param::Vector{T}; totalTimeStep = totalTimeStep) where {T<:Real}
+function oneBatch(xi, param::AbstractArray{T}; totalTimeStep = totalTimeStep) where {T<:Real}
     
     ψ, θk   = unstackParams(param)
     ltotal  = 0.0f0
@@ -180,7 +181,7 @@ function oneBatch(xi, param::Vector{T}; totalTimeStep = totalTimeStep) where {T<
     return ltotal
 end
 
-function computeLoss(x0, param::Vector{T}; totalTimeStep = totalTimeStep) where {T<:Real}
+function computeLoss(x0, param::AbstractArray{T}; totalTimeStep = totalTimeStep) where {T<:Real}
     
     l = Threads.Atomic{T}()
     Threads.@threads for xi in x0
@@ -189,7 +190,7 @@ function computeLoss(x0, param::Vector{T}; totalTimeStep = totalTimeStep) where 
     return 3.0f0*l.value/length(x0)
 end
 
-function gradient!(grad, x0, param::Vector{T}; totalTimeStep = 1000) where {T<:Real}
+function gradient!(grad, x0, param::AbstractArray{T}; totalTimeStep = 1000) where {T<:Real}
     Threads.@threads for i in eachindex(x0)
         grad[i] = ForwardDiff.gradient((θ) -> oneBatch(x0[i], θ; totalTimeStep = totalTimeStep), param)
     end

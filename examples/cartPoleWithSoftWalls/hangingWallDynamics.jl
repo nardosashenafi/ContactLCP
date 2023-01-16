@@ -49,7 +49,7 @@ function initialState(x1)
 end
 
 #returns the attributes needed to model contact
-function (sys::CartPoleWithSoftWalls)(x, u::Vector{T}; ϵn=ϵn_const, ϵt=ϵt_const, μ=μ_const, gThreshold=gThreshold, expert=false) where {T<:Real}
+function (sys::CartPoleWithSoftWalls)(x, u::AbstractArray{T}; ϵn=ϵn_const, ϵt=ϵt_const, μ=μ_const, gThreshold=gThreshold, expert=false) where {T<:Real}
     q, v         = parseStates(x)
     x1,x2        = q[1:2]
     x1dot, x2dot = v[1:2]
@@ -66,11 +66,11 @@ function (sys::CartPoleWithSoftWalls)(x, u::Vector{T}; ϵn=ϵn_const, ϵt=ϵt_co
 end
 
 #parses out the poses and velocities from the state vector
-function (sys::CartPoleWithSoftWalls)(x::Vector{T}) where {T<:Real}
+function (sys::CartPoleWithSoftWalls)(x::AbstractArray{T}) where {T<:Real}
     return parseStates(x)
 end
 
-function parseStates(x::Vector{T}) where {T<:Real}
+function parseStates(x::AbstractArray{T}) where {T<:Real}
     q = x[1:2]      #[x1, x2]
     u = x[3:4]      #[x1dot, x2dot]
     return q, u
@@ -165,7 +165,7 @@ function lqrGains()
     ControlSystems.lqr(cartLinearized, Q, R)
 end
 
-function lqr(z::Vector{T}) where {T<:Real}
+function lqr(z::AbstractArray{T}) where {T<:Real}
     k = convert.(T, vec([ -2.58182  50.3793  -5.04367  12.0988]))
     # k = zeros(4)
     return -k'*z
@@ -174,7 +174,7 @@ end
 inputLayer(z) = [z[1], cos(z[2]), sin(z[2]), z[3], z[4]]
 # inputLayer(z) = [cos(z[2]), sin(z[2]), z[3], z[4]]
 
-function control(z, u::Vector{T}; expert=false, lqr_max = 10.0f0) where {T<:Real}
+function control(z, u::AbstractArray{T}; expert=false, lqr_max = 10.0f0) where {T<:Real}
     q, v = parseStates(z)
 
     if expert #working expert controller
@@ -190,7 +190,7 @@ function control(z, u::Vector{T}; expert=false, lqr_max = 10.0f0) where {T<:Real
     end
 end
 
-function genForces(x, u::Vector{T}; expert=false) where {T<:Real}
+function genForces(x, u::AbstractArray{T}; expert=false) where {T<:Real}
 
     q, v = parseStates(x)
     x1, x2 = q[1:2]
