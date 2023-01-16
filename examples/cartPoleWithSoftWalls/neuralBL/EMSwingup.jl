@@ -1,32 +1,39 @@
 using LinearAlgebra, Flux, DiffEqFlux, LogExpFunctions, ForwardDiff
 using Distributions
 using PyPlot 
-using ContactLCP
+using ForwardDiff: Chunk, GradientConfig
+# import ContactLCP
 
+using JuMP
+include("../../../src/lcp.jl")
+include("../../../src/solver.jl")
+# include("../hangingWallDynamics.jl")
 include("../hangingWallDynamics.jl")
 
-function ContactLCP.checkContact(gn::Vector{T}, gThreshold, total_contact_num) where {T<:Real}
+function checkContact(gn::Vector{T}, gThreshold, total_contact_num) where {T<:Real}
      
-    contactIndex = zeros(T, total_contact_num)
+    whichInContact = zeros(T, total_contact_num)
 
     for i in 1:total_contact_num
-        if (-wallThickness/2.0f0 < gn[i] < gThreshold)  
+        if (-wallThickness/2.0f0+gThreshold < gn[i] < gThreshold)  
             # we need to detect contact on both sides of a wall. If we simply use gn < gThreshold,
             # then the pendulum would stick to the wall due to the opposing contact forces from both sides
             # of the wall. To combat that, we need to deactivate the contact force from one side of the wall
             # after a certain depth.
-            contactIndex[i] = 1 
+            whichInContact[i] = 1 
         end
     end
-    current_contact_num = Int(sum(contactIndex))
+    current_contact_num = Int(sum(whichInContact))
 
-    return contactIndex, current_contact_num
+    return findall(x -> x == 1, whichInContact), current_contact_num
 end
 
 # include("../longWallDynamics.jl")
 
 sys  = CartPoleWithSoftWalls()
-lcp  = ContactLCP.Lcp(Float32, sys)
+lcp  = Lcp(Float32, sys)
+oneStep(x, param) = oneTimeStep(lcp, x, param; Δt=Δt)
+
 fig1 = figure()
 include("trainingHelpers.jl")
 include("testHelpers.jl")
@@ -34,16 +41,16 @@ include("testHelpers.jl")
 const tspan         = (0.0f0, 4.0f0) 
 const Δt            = 0.001f0
 const totalTimeStep = Int(floor(tspan[2]/Δt))
-const binSize       = 4
+const binSize       = 3
 
-binNN = FastChain(FastDense(5, 8, elu),
-                 FastDense(8, binSize))
+binNN = FastChain(FastDense(5, 5, elu),
+                    FastDense(5, 4, elu),
+                    FastDense(4, binSize))
 
 const binNN_length = DiffEqFlux.paramlength(binNN) 
 
 controlArray     = Array{Function}(undef, binSize);
 controlNN_length = Vector{Int}(undef, binSize)
-ps               = Vector{Vector}(undef, binSize)
 
 for i in 1:binSize 
     controlArray[i] = FastChain(FastDense(5, 8, elu),
@@ -51,29 +58,28 @@ for i in 1:binSize
                             FastDense(4, 1))
     
     controlNN_length[i] = DiffEqFlux.paramlength(controlArray[i]) 
-
-    ps[i]               = 0.5f0*randn(Float32, controlNN_length[i])
 end
 
 println("Check the following properties in the initialization")
 println("Make sure that bin(x, ψ) does not return a large probability in some state.
-        That slows down the training until the large probability drops to below 0.5")
+        This causes argmax(bin(x, ψ)) to return the same value for a long time in the training
+        until the highest probability crosses 0.5")
 
 function bin(x, θ::Vector{T}) where {T<:Real} 
     return Flux.softmax(binNN(inputLayer(x), θ))
 end
 
-function input(x::Vector{T}, θk::Vector{Vector}, i::Int) where {T<:Real}
+function input(x, θk, i::Int)
     return controlArray[i](inputLayer(x), θk[i])
 end
 
-function unstackControlParam(param)
+function unstackControlParam(param::Vector{T}) where {T<:Real}
 
-    θk = Vector{Vector}(undef, binSize)
-    θk[1] = param[1:controlNN_length[1]] 
+    θk = Vector{SubArray{T, 1, Vector{T}, Tuple{UnitRange{Int64}}, true}}(undef, binSize)
+    θk[1] = @view param[1:controlNN_length[1]] 
 
     for i in 2:binSize
-        θk[i] = param[sum([controlNN_length[j] for j in 1:i-1])+1:sum([controlNN_length[j] for j in 1:i])] 
+        θk[i] = @view param[sum([controlNN_length[j] for j in 1:i-1])+1:sum([controlNN_length[j] for j in 1:i])] 
     end
 
     return θk
@@ -83,7 +89,7 @@ function unstackParams(param)
     return param[1:binNN_length], unstackControlParam(param[binNN_length+1:end])
 end
 
-function stackParams(ψ::Vector{T}, θk::Vector{Vector}) where {T<:Real}
+function stackParams(ψ::Vector{T}, θk::Vector{Vector{T}}) where {T<:Real}
     param = Vector{T}()
     param = vcat(param, ψ)
     for i in 1:binSize
@@ -96,34 +102,36 @@ function lossPerState(x)
     x1, x2, x1dot, x2dot = x
     doubleHinge_x = 0.0f0
 
-    abs(x1) > 0.5 ? doubleHinge_x = 3.0f0*abs.(x1) : nothing
+    abs(x1) > D/2.0f0 ? doubleHinge_x = 2.0f0*abs.(x1) : nothing
 
     # high cost on x1dot to lower fast impact
-    return 5.0f0*(doubleHinge_x  + 8.0f0*(1.0f0-cos(x2)) + 
-            1.0f0*abs(x1dot) + 0.5f0*abs(x2dot))
+    return doubleHinge_x  + 12.0f0*(1.0f0-cos(x2)) + 
+            2.0f0*x1dot^2.0f0 + 0.1f0*x2dot^2.0f0
 
 end
 
-function computeLossSampler(X, param::Vector{T}, sampleEvery::Int, fullTraj::Bool ; totalTimeStep = totalTimeStep) where {T<:Real}
+function computeLossSampler(x0, param::Vector{T}; totalTimeStep = totalTimeStep) where {T<:Real}
     ψ, θk   = unstackParams(param)
     ltotal  = 0.0f0
 
-    for i in eachindex(X)
-        X2      = X[i][1:sampleEvery:end]
-        len     = length(X2)
-
-        for x in X2
+    for xi in x0
+        x = xi
+        for i in 1:totalTimeStep
             pk = bin(x, ψ)
-            k  = rand(1:binSize) 
-            u  = input(x, θk, k)          
-            x2 = oneStep(x, u)
-            lk = pk[k]*lossPerState(x2) 
-            ltotal += lk/len
+
+            if rand() > 0.3
+                k = argmax(pk)      # improve the greedy
+            else
+                k = rand(1:1:binSize)    # exploration
+            end
+
+            x  = oneStep(x, input(x, θk, k) )
+            lk = pk[k]*lossPerState(x) 
+            ltotal += lk/totalTimeStep
         end
     end
-    return ltotal
+    return ltotal/length(x0)
 end
-
 
 function computeLoss(X, param::Vector{T}, sampleEvery::Int, fullTraj::Bool ; totalTimeStep = totalTimeStep) where {T<:Real}
     ψ, θk   = unstackParams(param)
@@ -144,7 +152,7 @@ function computeLoss(X, param::Vector{T}, sampleEvery::Int, fullTraj::Bool ; tot
             ltotal += lk/len
         end
     end
-    return ltotal
+    return ltotal/length(X)
 end
 
 function oneBatch(xi, param::Vector{T}; totalTimeStep = totalTimeStep) where {T<:Real}
@@ -195,11 +203,12 @@ end
 function trainEM()
 
     ψ           = 0.5f0*randn(Float32, binNN_length)
-    θk          = deepcopy(ps)
+    θk          = [0.1f0*randn(Float32, controlNN_length[i]) for i in 1:binSize]
     param       = stackParams(ψ, θk)
     opt         = Adam(0.001f0)
     counter     = 0
     minibatch   = 3
+    diff_results = DiffResults.GradientResult(param)
 
     for i in 1:10000
         ψ, θk   = unstackParams(param)
@@ -207,25 +216,30 @@ function trainEM()
         #inorder to assist exploration 
         x0      = sampleInitialState(ψ, θk; totalTimeStep=8000, minibatch=minibatch)
 
-        X       = [trajectory(xi, ψ, θk; totalTimeStep = 2000) for xi in x0]
+        # X       = [trajectory(xi, ψ, θk; totalTimeStep = 3000) for xi in x0]
         # For each state in the trajectory, compute the loss incurred by each of the given by the 
         # bin generator 
         # l1(θ)   = computeLoss(X, θ, 2, true; totalTimeStep = 2000)
-        l1(θ)   = computeLossSampler(X, θ, 2, true; totalTimeStep = 2000)
+        l1(θ)   = computeLossSampler(x0, θ; totalTimeStep = 4000)
 
         # ForwardDiff.gradient takes the gradient of the loss wrt the state bin parameters and the 
         # controller parameters in each bin
-        lg1     = ForwardDiff.gradient(l1, param)
+        # lg1     = ForwardDiff.gradient(l1, param)
+
+        ForwardDiff.gradient!(diff_results, l1, param)
+        ∇ = DiffResults.gradient(diff_results)
+        Δ = Flux.Optimise.apply!(opt, param, ∇)
+        @. param = param - Δ
 
         if counter > 5
             ψ, θk  = unstackParams(param)
             if rand() > 0.8
                 xi = [0.0f0, pi, 1.0f0, 0.5f0]
             else
-                xi = deepcopy(x0[1])
+                xi = x0[1]
             end
-            X = testBayesian(xi, ψ, θk; totalTimeStep=7000)
-            println("loss = ", sum(lossPerState.(X))/length(X), " POI = ", poi(ψ))
+            X = testBayesian(xi, ψ, θk; totalTimeStep=10000)
+            println("loss = ", computeLossSampler([xi], param), " POI = ", poi(ψ))
             counter = 0
         end
         counter += 1

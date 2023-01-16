@@ -12,7 +12,7 @@ export CartPoleWithSoftWalls
 const mc            = 1.0f0    
 const mp            = 0.5f0 
 const l             = 0.5f0        #wheel
-const I1            = mp*l^2
+const I1            = mp*l^2.0f0
 const g             = 9.81f0
 const d             = -0.75f0 
 const wallThickness = 0.10f0
@@ -50,13 +50,17 @@ end
 
 #returns the attributes needed to model contact
 function (sys::CartPoleWithSoftWalls)(x, u::Vector{T}; ϵn=ϵn_const, ϵt=ϵt_const, μ=μ_const, gThreshold=gThreshold, expert=false) where {T<:Real}
-    gn  = gap(x)  
-    γn  = vnormal(x)
-    γt  = vtang(x)
-    M   = massMatrix(x)
+    q, v         = parseStates(x)
+    x1,x2        = q[1:2]
+    x1dot, x2dot = v[1:2]
+
+    gn  = gap(x1, x2)  
+    Wn  = wn(x1, x2)
+    Wt  = wt(x1, x2)
+    γn  = vnormal(Wn, v)
+    γt  = vtang(Wt, v)
+    M   = massMatrix(x2)
     h   = genForces(x, u; expert=expert)
-    Wn  = wn(x)
-    Wt  = wt(x)
 
     return gn, γn, γt, M, h, Wn, Wt, ϵn, ϵt, μ, gThreshold
 end
@@ -72,15 +76,13 @@ function parseStates(x::Vector{T}) where {T<:Real}
     return q, u
 end
 
-function pendulumPos(z)
-    q, _ = parseStates(z) 
-    x, θ = q
+function pendulumPos(x, θ)
     
     return [x-l*sin(θ), l*cos(θ)]
 end
 
-function gap(z)
-    pendulum_xy = pendulumPos(z)
+function gap(x1, x2)
+    pendulum_xy = pendulumPos(x1, x2)
 
     if pendulum_xy[2] > leftWall_bottom[2] #pendulum in contact with left wall
         g1 = pendulum_xy[1] - d   
@@ -97,63 +99,52 @@ function gap(z)
     return [g1, g2, -g1 - wallThickness, -g2 - wallThickness] 
 end
 
-function wn(z::Vector{T}) where {T<:Real}
+function wn(x1, x2) where {T<:Real}
 
-    q, _ = parseStates(z)
-    x, θ = q
-    pendulum_xy = pendulumPos(z)
-    g = gap(z)
+    pendulum_xy = pendulumPos(x1, x2)
+    g = gap(x1, x2)
 
     if pendulum_xy[2] > leftWall_bottom[2] #pendulum in contact with left wall
-        w1 = [1.0f0; -l*cos(q[2])]  
+        w1 = [1.0f0; -l*cos(x2)]  
     else
         x̄l, ȳl = pendulum_xy - leftWall_bottom
-        w1 = 2.0f0/g[1]*[x̄l; -x̄l*l*cos(θ) + ȳl*l*sin(θ)] 
+        w1 = 2.0f0/g[1]*[x̄l; -x̄l*l*cos(x2) + ȳl*l*sin(x2)] 
     end
 
     if pendulum_xy[2] > rightWall_bottom[2] #pendulum in contact with right wall
-        w2 = [-1.0f0; l*cos(q[2])]  
+        w2 = [-1.0f0; l*cos(x2)]  
     else
         x̄r, ȳr = pendulum_xy - rightWall_bottom
-        w2 = 2.0f0/g[2]*[x̄r; -x̄r*l*cos(θ) + ȳr*l*sin(θ)] 
+        w2 = 2.0f0/g[2]*[x̄r; -x̄r*l*cos(x2) + ȳr*l*sin(x2)] 
     end
     
    return hcat(w1, w2, -w1, -w2)    #check contact against the wall on each face of the wall
 
 end
 
-function wt(z::Vector{T}) where {T<:Real}
-    q, _ = parseStates(z)
-    w1 = [0.0f0; -l*sin(q[2])]
-    w2 = [0.0f0; -l*sin(q[2])]
+function wt(x1, x2) where {T<:Real}
+    w1 = [0.0f0; -l*sin(x2)]
+    w2 = [0.0f0; -l*sin(x2)]
 
     return hcat(w1, w2, w1, w2)
 end
 
-function vnormal(z)
-    Wn = wn(z)
-    _, v = parseStates(z)
+function vnormal(Wn, v)
     return Wn'*v
 end
 
-function vtang(z)
-    Wt = wt(z)
-    _, v = parseStates(z)
+function vtang(Wt, v)
     return Wt'*v
 end
 
-function massMatrix(z)
-    q, u = parseStates(z)
-    x1, x2 = q 
-    
-    M = [mc+mp -mp*l*cos(x2);
-        -mp*l*cos(x2) mp*l^2+I1]
+function massMatrix(x2)
 
-    return M
+    return [mc+mp -mp*l*cos(x2);
+            -mp*l*cos(x2) mp*l^2+I1]
 end
 
 function lqrGains()
-    M    = massMatrix([0.0f0, 0.0f0, 0.0f0, 0.0f0])
+    M    = massMatrix(0.0f0)
     Minv = inv(M)
 
     Ĝ = Minv* [0.0f0;
@@ -174,8 +165,8 @@ function lqrGains()
     ControlSystems.lqr(cartLinearized, Q, R)
 end
 
-function lqr(z)
-    k = vec([ -2.58182  50.3793  -5.04367  12.0988])
+function lqr(z::Vector{T}) where {T<:Real}
+    k = convert.(T, vec([ -2.58182  50.3793  -5.04367  12.0988]))
     # k = zeros(4)
     return -k'*z
 end
@@ -199,20 +190,23 @@ function control(z, u::Vector{T}; expert=false, lqr_max = 10.0f0) where {T<:Real
     end
 end
 
-function genForces(z, u::Vector{T}; expert=false) where {T<:Real}
+function genForces(x, u::Vector{T}; expert=false) where {T<:Real}
 
-    q, v = parseStates(z)
-    x1, x2 = q
+    q, v = parseStates(x)
+    x1, x2 = q[1:2]
+    # B = [1.0f0, 0.0f0]
+
+    # C = [0.0f0 mp*l*sin(x2); 
+    #     -mp*sin(x2)/2.0f0 0.0f0]
+
+    # G = [0.0f0;
+    #     -mp*g*l*sin(x2)]
+
     #h = Bu - C qdot - G
-    B = [1.0f0, 0.0f0]
 
-    C = [0.0f0 mp*l*sin(x2); 
-        -mp*sin(x2)/2.0f0 0.0f0]
-
-    G = [0.0f0;
-        -mp*g*l*sin(x2)]
-
-    return B*control(z, u; expert=expert) - C*v - G
+    return  [1.0f0, 0.0f0]*control(x, u; expert=expert) -  #Bu 
+                [0.0f0 mp*l*sin(x2); -mp*sin(x2)/2.0f0 0.0f0]*v -  #-C qdot
+                [0.0f0; -mp*g*l*sin(x2)]            #-G
 end
 
 function startAnimator()

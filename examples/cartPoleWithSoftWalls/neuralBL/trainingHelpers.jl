@@ -1,5 +1,4 @@
 
-oneStep(x, param) = ContactLCP.oneTimeStep(lcp, x, param; Δt=Δt)[1]
 
 function integrate(xi, ψ::Vector{T}, θk; totalTimeStep = totalTimeStep) where {T<:Real}
     X = Vector{Vector{T}}(undef, totalTimeStep)
@@ -30,7 +29,7 @@ end
 function sampleInitialState(ψ::Vector{T}, θk; totalTimeStep = totalTimeStep, minibatch=4) where {T<:Real}
     
     x0          = T.([rand(d+w/2:0.01:D+d-w/2), rand(-pi:0.005:pi), 
-                  rand(-1.0:0.001:1.0), rand(-6.0:0.001:6.0)])
+                  rand(-0.5:0.001:0.5), rand(-6.0:0.001:6.0)])
 
     X           = trajectory(x0, ψ, θk)
     samples     = Vector{Vector{T}}(undef, minibatch)
@@ -39,11 +38,17 @@ function sampleInitialState(ψ::Vector{T}, θk; totalTimeStep = totalTimeStep, m
     for i in 1:minibatch
         if rand() > 0.2
             select     = rand(X)
-            select[1]  = clamp(select[1], d+w/2 - cropBuffer, D+d-w/2 + cropBuffer) 
+            #It is highly likely that the initial parameter cause the cart to go far from x1 = 0
+            #Hence sampling from this trajectory tends to overwhelm the reply buffer with large x1 values.
+            #Clamping x1 is bad because it tends to always work under the edge cases
+            #so simply randomize x1 when it goes too far
+            if !(d+w/2 - cropBuffer <= select[1] <= D+d-w/2 + cropBuffer)
+                select[1]  = rand(d+w/2 - cropBuffer:0.01:D+d-w/2 + cropBuffer) 
+            end
             samples[i] = select
         else
-            samples[i] =  [rand(-0.1:0.001:0.1), rand(-0.35:0.001:0.35), 
-                            rand(-0.5:0.001:0.5), rand(-0.5:0.001:0.5)]
+            samples[i] =  [rand(-0.1:0.001:0.1), rand(-0.5:0.001:0.5), 
+                            rand(-0.5:0.001:0.5), rand(-1.0:0.001:1.0)]
         end
     end
 

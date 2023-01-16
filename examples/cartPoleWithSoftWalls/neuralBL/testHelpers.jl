@@ -1,4 +1,10 @@
 
+function evaluateControl(x, ψ, θk)
+    pk = bin(x, ψ)
+    k = argmax(pk)
+    u = input(x, θk, k)
+    return [control(x, u)]
+end 
 
 function testBayesian(xi, par; totalTimeStep = totalTimeStep)
     θ    = rand(q(par))
@@ -34,8 +40,8 @@ end
 function plotPartition(X, ψ, θk)
     width = 30
     
-    X2    = range(-2pi, 2pi, length=width)
-    X2dot = range(-6.0, 6.0, length=width)
+    X2    = range(-2.0f0pi, 2.0f0pi, length=width)
+    X2dot = range(-6.0f0, 6.0f0, length=width)
 
     u = Matrix{Float32}(undef, width, width)
     c = Matrix{Int}(undef, width, width)
