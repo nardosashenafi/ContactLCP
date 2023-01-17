@@ -126,7 +126,8 @@ function complementPairIndex(nonbasic, nonbasicIndex)
     return nonbasic[nonbasicIndex]  #find complement of the dropped variable so we can add it to the basic variables on the next iteration
 end
 
-function lemkeLexi(M, q::AbstractArray{T}, x; MAX_ITER = 30, piv_tol = 1e-5) where {T<:Real}
+function lemkeLexi(M, q::AbstractArray{T}, x; MAX_ITER = 30, piv_tol = 1e-5,
+                    LEXITHRESHOLD = 1e-10, MAX_INFEASIBLECOUNT = 5) where {T<:Real}
     totalRow = size(M, 1)
     totalCol = size(M, 2)
 
@@ -137,9 +138,7 @@ function lemkeLexi(M, q::AbstractArray{T}, x; MAX_ITER = 30, piv_tol = 1e-5) whe
         return zeros(totalCol)
     end
 
-    LEXITHRESHOLD   = 1e-10
     infeasibleCount = 0
-    MAX_INFEASIBLECOUNT = 5
     iter            = 1
 
     pivottedIndices = Vector{Tuple{Int64, Int64}}()
@@ -151,9 +150,7 @@ function lemkeLexi(M, q::AbstractArray{T}, x; MAX_ITER = 30, piv_tol = 1e-5) whe
         #z0 = maximum(-q ./ c)
 
         M̂ = [M c]
-
-        Q = Matrix{T}(I, totalRow, totalRow)
-        Q̂ = hcat(q̂, Q)
+        Q̂ = hcat(q̂, Matrix{T}(I, totalRow, totalRow))
 
         basic    = collect(range(1, stop = totalRow, step= 1))
         nonbasic = collect(range(1, stop = totalCol+1, step= 1))
@@ -220,8 +217,8 @@ function lemkeLexi(M, q::AbstractArray{T}, x; MAX_ITER = 30, piv_tol = 1e-5) whe
     #But we have been switching the components of the vector.
     #so we need to trace back the exchange and extract the basic solution
 
-    # basicSol = extractSolution(pivottedIndices, q̂, totalCol)
-    basicSol = zeros(T, totalCol)
+    basicSol = extractSolution(pivottedIndices, q̂, totalCol)
+    # basicSol = 0.1f0*ones(T, totalCol)
     return basicSol
 end
 

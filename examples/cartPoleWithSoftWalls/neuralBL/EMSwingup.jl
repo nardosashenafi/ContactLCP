@@ -105,7 +105,7 @@ function lossPerState(x)
 
     abs(x1) > D/2.0f0 ? doubleHinge_x = 2.0f0*abs.(x1) : nothing
 
-    # high cost on x1dot to lower fast impact
+    # high cost on x1dot to lower fast impact and to encourage pumping
     return doubleHinge_x  + 12.0f0*(1.0f0-cos(x2)) + 
             2.0f0*x1dot^2.0f0 + 0.1f0*x2dot^2.0f0
 
@@ -160,23 +160,20 @@ function oneBatch(xi, param::AbstractArray{T}; totalTimeStep = totalTimeStep) wh
     
     ψ, θk   = unstackParams(param)
     ltotal  = 0.0f0
-    pk      = Vector(undef, totalTimeStep)
-    x2      = deepcopy(xi)
+    x       = deepcopy(xi)
 
     for i in 1:totalTimeStep
-        pk[i]  = bin(x2, ψ)           #holds a softmax
-        lk     = 0.0f0
-        for k in 1:binSize     
-            u  = input(x2, θk, k)          
-            x  = oneStep(x2, u)
-            lk += pk[i][k]*lossPerState(x)       #maximize the changes of selecting lower loss
-        end
-        ltotal += lk/totalTimeStep
+        pk = bin(x, ψ)
 
-        ### select the next state
-        c  = rand(Categorical(bin(x2, ψ)))
-        # c  = argmax(bin(x2, ψ))
-        x2 = oneStep(x2, input(x2, θk, c))
+        if rand() > 0.3
+            k = argmax(pk)      # improve the greedy
+        else
+            k = rand(1:1:binSize)    # exploration
+        end
+
+        x  = oneStep(x, input(x, θk, k) )
+        lk = pk[k]*lossPerState(x) 
+        ltotal += lk/totalTimeStep
     end
     return ltotal
 end
@@ -187,7 +184,7 @@ function computeLoss(x0, param::AbstractArray{T}; totalTimeStep = totalTimeStep)
     Threads.@threads for xi in x0
         Threads.atomic_add!(l, oneBatch(xi, param))
     end
-    return 3.0f0*l.value/length(x0)
+    return l.value/length(x0)
 end
 
 function gradient!(grad, x0, param::AbstractArray{T}; totalTimeStep = 1000) where {T<:Real}
@@ -251,18 +248,18 @@ end
 function trainParallel()
 
     ψ           = 0.5f0*randn(Float32, binNN_length)
-    θk          = deepcopy(ps)
+    θk          = [0.1f0*randn(Float32, controlNN_length[i]) for i in 1:binSize]
     param       = stackParams(ψ, θk)
     opt         = Adam(0.001f0)
     counter     = 0
-    minibatch   = 6
+    minibatch   = Threads.nthreads()
 
     for i in 1:10000
         ψ, θk   = unstackParams(param)
         x0      = sampleInitialState(ψ, θk; totalTimeStep=5000, minibatch=minibatch)
 
         lg1     = Vector{Vector{eltype(param)}}(undef, length(x0))
-        gradient!(lg1, x0, param; totalTimeStep = 1000) 
+        gradient!(lg1, x0, param; totalTimeStep = 4000) 
         grads   = mean(lg1)
 
         if counter > 5

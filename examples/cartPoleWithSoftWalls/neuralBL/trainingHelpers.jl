@@ -28,8 +28,8 @@ end
 
 function sampleInitialState(ψ::Vector{T}, θk; totalTimeStep = totalTimeStep, minibatch=4) where {T<:Real}
     
-    x0          = T.([rand(d+w/2:0.01:D+d-w/2), rand(-pi:0.005:pi), 
-                  rand(-0.5:0.001:0.5), rand(-6.0:0.001:6.0)])
+    x0          = T.([rand(d+w/2:0.01:D+d-w/2), rand(0.0:0.005:2pi), 
+                  rand(-0.5:0.001:0.5), rand(-3.0:0.001:3.0)])
 
     X           = trajectory(x0, ψ, θk)
     samples     = Vector{Vector{T}}(undef, minibatch)

@@ -9,13 +9,13 @@ include("../../src/solver.jl")
 
 Δt = 0.001f0; totalTimeStep = 1500
 θ0 = Float32[0.2]
-x0 = Float32[0.0,0.5,0.2,-0.2]
+x0 = Float32[0.0,0.0002,0.2,-0.2]
 
 sys  = BouncingBall(Float64)
 lcp  = Lcp(Float64, sys)
 
-function loss(lcp, θ, x0, Sθd, λθd)
-    Sθ, λθ, _ = trajectory(lcp, x0, θ)
+function loss(lcp, θ, x0, Sθd, λθd; totalTimeStep = 1500)
+    Sθ, λθ, _ = trajectory(lcp, x0, θ; totalTimeStep = totalTimeStep)
     return 50.0f0/length(Sθ) * ( 0.5f0*dot(Sθd - Sθ , Sθd - Sθ) + 0.5f0*dot(λθd - λθ, λθd - λθ) )
 end
 
@@ -65,10 +65,10 @@ function solveM(lcp::Lcp, x0::Vector{T}) where {T<:Real}
     η           = 0.2
 
     # x0 = [0.0, rand(range(0.2, 0.5, step=0.01)), 0.1, -0.1]
-    Sθd, λθd, _ = trajectory(lcp, x0, θm_actual)
+    Sθd, λθd, _ = trajectory(lcp, x0, θm_actual; totalTimeStep=100)
     l1 = Inf
     for i in 1:100
-        l(θ)  = loss(lcp, θ, x0, Sθd, λθd)
+        l(θ)  = loss(lcp, θ, x0, Sθd, λθd; totalTimeStep=100)
         lg    = ReverseDiff.gradient(l, θm)
         θm    .-= η*lg
         l1    = l(θm)
