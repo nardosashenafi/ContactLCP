@@ -1,6 +1,6 @@
 using LinearAlgebra, Flux, DiffEqFlux, LogExpFunctions, ForwardDiff
 using Distributions
-using PyPlot 
+using PyPlot, BSON
 using ForwardDiff: Chunk, GradientConfig
 # import ContactLCP
 
@@ -256,13 +256,13 @@ function trainParallel()
 
     for i in 1:10000
         ψ, θk   = unstackParams(param)
-        x0      = sampleInitialState(ψ, θk; totalTimeStep=5000, minibatch=minibatch)
+        x0      = sampleInitialState(ψ, θk; totalTimeStep=10000, minibatch=minibatch)
 
         lg1     = Vector{Vector{eltype(param)}}(undef, length(x0))
         gradient!(lg1, x0, param; totalTimeStep = 4000) 
         grads   = mean(lg1)
 
-        if counter > 5
+        if counter > 10
             ψ, θk  = unstackParams(param)
             if rand() > 0.8
                 xi = [0.0f0, pi, 1.0f0, 0.5f0]
@@ -272,6 +272,7 @@ function trainParallel()
             testBayesian(xi, ψ, θk; totalTimeStep=7000)
             l1   = oneBatch(xi, param; totalTimeStep = 7000)
             println("loss = ", l1)
+            BSON.@save "neuralBL/savedWeights/beastHangingWalls.bson" param
             counter = 0
         end
         counter += 1

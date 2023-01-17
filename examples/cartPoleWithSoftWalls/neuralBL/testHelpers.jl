@@ -18,8 +18,8 @@ function testBayesian(xi, ψ, θk; totalTimeStep = totalTimeStep)
     clf()
     plots(X, fig1)
     plotPartition(X, ψ, θk)
-    animate(X)
-    sleep(1)
+    # animate(X)
+    # sleep(1)
     return X
 end
 

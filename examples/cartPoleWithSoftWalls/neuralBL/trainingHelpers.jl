@@ -28,10 +28,14 @@ end
 
 function sampleInitialState(ψ::Vector{T}, θk; totalTimeStep = totalTimeStep, minibatch=4) where {T<:Real}
     
-    x0          = T.([rand(d+w/2:0.01:D+d-w/2), rand(0.0:0.005:2pi), 
-                  rand(-0.5:0.001:0.5), rand(-3.0:0.001:3.0)])
+    X = Vector{Vector{T}}()
+    
+    for i in 1:4     
+        x0  = T.([rand(d+w/2:0.01:D+d-w/2), rand(0.0:0.005:2pi), 
+                rand(-0.5:0.001:0.5), rand(-3.0:0.001:3.0)])
+        append!(X, trajectory(x0, ψ, θk))
+    end
 
-    X           = trajectory(x0, ψ, θk)
     samples     = Vector{Vector{T}}(undef, minibatch)
     cropBuffer  = 0.3f0
 
