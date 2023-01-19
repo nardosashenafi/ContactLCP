@@ -1,0 +1,10 @@
+inputNum = 4
+layerNum = 3
+biasConnect = [1;1;1]
+inputConnect = [1 0 0 0;0 0 0 0;0 0 0 0]
+layerConnect = [0 0 0; 1 0 0; 0 1 0]
+outputConnect = [0 0 1]
+net = network(4, 3,[1;1;1],[1;0;0],[0 0 0 0; 1 0 0; 0 1 0],[0 0 1])
+
+%network(inputNum, layerNum, biasConnect, inputConnect,layerConnect,
+%outputConnect)

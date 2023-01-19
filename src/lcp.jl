@@ -74,19 +74,34 @@ function solveLcp(gn, γn, γt, M, h::AbstractArray{T}, Wn, Wt, ϵn, ϵt, μ, gT
     return Λn, Λt, ΛR
 end
 
-function oneTimeStep(lcp::Lcp, x1, param::AbstractArray{T}; Δt = 0.001f0, kwargs...) where {T<:Real}
+function oneTimeStep(lcp::Lcp, x, param::AbstractArray{T}; Δt = 0.001f0, kwargs...) where {T<:Real}
+
+    qA, uA  = lcp.sys(x)
+    qM      = qA + 0.5f0*Δt*uA
+
+    x_mid   = vcat(qM, uA)
+    gn, γn, γt, M, h, Wn, Wt, ϵn, ϵt, μ, gThreshold = sysAttributes(lcp, x_mid, param; kwargs...)
+    λn, _, λR  = solveLcp(gn, γn, γt, M, h, Wn, Wt, ϵn, ϵt, μ, gThreshold, x; Δt=Δt)
+
+    uE = M\((Wn - Wt*diagm(0 => μ))*λn + Wt*λR + h*Δt) + uA
+    qE = qM + 0.5f0*Δt*uE
+
+    return vcat(qE,uE)
+end
+
+function stateAndForces(lcp::Lcp, x1, param::AbstractArray{T}; Δt = 0.001f0, kwargs...) where {T<:Real}
 
     qA, uA  = lcp.sys(x1)
     qM      = qA + 0.5f0*Δt*uA
 
     x_mid   = vcat(qM, uA)
     gn, γn, γt, M, h, Wn, Wt, ϵn, ϵt, μ, gThreshold = sysAttributes(lcp, x_mid, param; kwargs...)
-    λn, _, λR  = solveLcp(gn, γn, γt, M, h, Wn, Wt, ϵn, ϵt, μ, gThreshold, x1; Δt=Δt)
+    λn, λt, λR  = solveLcp(gn, γn, γt, M, h, Wn, Wt, ϵn, ϵt, μ, gThreshold, x1; Δt=Δt)
 
     uE = M\((Wn - Wt*diagm(0 => μ))*λn + Wt*λR + h*Δt) + uA
     qE = qM + 0.5f0*Δt*uE
 
-    return vcat(qE,uE)
+    return vcat(qE,uE), λn, λt
 end
 
 function fulltimestep(sys, x0, param::AbstractArray{T}, total_contact_num; Δt = 0.001f0, totalTimeStep = 500) where {T<:Real}

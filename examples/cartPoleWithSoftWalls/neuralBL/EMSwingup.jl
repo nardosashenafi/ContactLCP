@@ -118,7 +118,8 @@ function computeLossSampler(x0, param::AbstractArray{T}; totalTimeStep = totalTi
     for xi in x0
         x = xi
         for i in 1:totalTimeStep
-            pk = bin(x, ψ)
+            pk = bin(x, ψ)      #Gaussian: quadratic boudaries
+                                # BNN arbtrary training
 
             if rand() > 0.3
                 k = argmax(pk)      # improve the greedy
@@ -225,9 +226,7 @@ function trainEM()
         # lg1     = ForwardDiff.gradient(l1, param)
 
         ForwardDiff.gradient!(diff_results, l1, param)
-        ∇ = DiffResults.gradient(diff_results)
-        Δ = Flux.Optimise.apply!(opt, param, ∇)
-        @. param = param - Δ
+        grads = DiffResults.gradient(diff_results)
 
         if counter > 5
             ψ, θk  = unstackParams(param)
@@ -241,7 +240,7 @@ function trainEM()
             counter = 0
         end
         counter += 1
-        Flux.update!(opt, param, lg1)
+        Flux.update!(opt, param, grads)
     end
 end
 

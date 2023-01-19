@@ -18,6 +18,8 @@ function testBayesian(xi, ψ, θk; totalTimeStep = totalTimeStep)
     clf()
     plots(X, fig1)
     plotPartition(X, ψ, θk)
+    fig1.canvas.draw()      #draws tupdates in for loop
+    fig1.canvas.flush_events()  #gets new figure in for loop
     animate(X)
     sleep(1)
     return X
@@ -34,7 +36,6 @@ function plots(X, fig1)
     scatter(X[end][2], X[end][4])
     ylabel("thetadot")
     xlabel("theta")
-
 end
 
 function plotPartition(X, ψ, θk)
