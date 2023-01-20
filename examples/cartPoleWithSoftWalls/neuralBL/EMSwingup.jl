@@ -26,6 +26,14 @@ function checkContact(gn::Vector{T}, gThreshold, total_contact_num) where {T<:Re
 
     contactIndex = findall(x -> x == 1, whichInContact)
 
+    if any(i -> i ∈ contactIndex, [3,4])    #the pendulum cannot contact on the edge and along the length at the same time. Or else it will get stick
+        [filter!(e -> e ≠ j, contactIndex) for j in 1:2]
+    end
+
+    if any(i -> i ∈ contactIndex, [7,8])
+        [filter!(e -> e ≠ j, contactIndex) for j in 5:6]
+    end
+
     return contactIndex, length(contactIndex)
 end
 
@@ -128,6 +136,9 @@ function computeLossSampler(x0, param::AbstractArray{T}; totalTimeStep = totalTi
 
             x  = oneStep(x, input(x, θk, k) )
             lk = pk[k]*lossPerState(x) 
+            if i == totalTimeStep   #terminal loss
+                lk *= 2.0f0
+            end
             ltotal += lk/totalTimeStep
         end
     end
@@ -178,23 +189,8 @@ function oneBatch(xi, param::AbstractArray{T}; totalTimeStep = totalTimeStep) wh
     return ltotal
 end
 
-function computeLoss(x0, param::AbstractArray{T}; totalTimeStep = totalTimeStep) where {T<:Real}
-    
-    l = Threads.Atomic{T}()
-    Threads.@threads for xi in x0
-        Threads.atomic_add!(l, oneBatch(xi, param))
-    end
-    return l.value/length(x0)
-end
-
-function gradient!(grad, x0, param::AbstractArray{T}; totalTimeStep = 1000) where {T<:Real}
-    Threads.@threads for i in eachindex(x0)
-        grad[i] = ForwardDiff.gradient((θ) -> oneBatch(x0[i], θ; totalTimeStep = totalTimeStep), param)
-    end
-end
-
 function poi(ψ)
-    xi = [0.0f0, -4.0f0, 0.0f0, 2.0f0]
+    xi = [0.0f0, 0.0f0, 0.0f0, 0.0f0]
     return bin(xi, ψ)
 end
 
@@ -225,9 +221,7 @@ function trainEM()
         # lg1     = ForwardDiff.gradient(l1, param)
 
         ForwardDiff.gradient!(diff_results, l1, param)
-        ∇ = DiffResults.gradient(diff_results)
-        Δ = Flux.Optimise.apply!(opt, param, ∇)
-        @. param = param - Δ
+        grads = DiffResults.gradient(diff_results)
 
         if counter > 5
             ψ, θk  = unstackParams(param)
@@ -238,41 +232,6 @@ function trainEM()
             end
             X = testBayesian(xi, ψ, θk; totalTimeStep=10000)
             println("loss = ", computeLossSampler([xi], param), " POI = ", poi(ψ))
-            counter = 0
-        end
-        counter += 1
-        Flux.update!(opt, param, lg1)
-    end
-end
-
-function trainParallel()
-
-    ψ           = 0.5f0*randn(Float32, binNN_length)
-    θk          = [0.1f0*randn(Float32, controlNN_length[i]) for i in 1:binSize]
-    param       = stackParams(ψ, θk)
-    opt         = Adam(0.001f0)
-    counter     = 0
-    minibatch   = Threads.nthreads()
-
-    for i in 1:10000
-        ψ, θk   = unstackParams(param)
-        x0      = sampleInitialState(ψ, θk; totalTimeStep=10000, minibatch=minibatch)
-
-        lg1     = Vector{Vector{eltype(param)}}(undef, length(x0))
-        gradient!(lg1, x0, param; totalTimeStep = 4000) 
-        grads   = mean(lg1)
-
-        if counter > 10
-            ψ, θk  = unstackParams(param)
-            if rand() > 0.8
-                xi = [0.0f0, pi, 1.0f0, 0.5f0]
-            else
-                xi = deepcopy(x0[1])
-            end
-            testBayesian(xi, ψ, θk; totalTimeStep=7000)
-            l1   = oneBatch(xi, param; totalTimeStep = 7000)
-            println("loss = ", l1)
-            BSON.@save "neuralBL/savedWeights/beastHangingWalls.bson" param
             counter = 0
         end
         counter += 1

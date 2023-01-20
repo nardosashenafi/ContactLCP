@@ -9,28 +9,39 @@ using Rotations
 
 export CartPoleWithSoftWalls
 
-const mc            = 1.0f0    
-const mp            = 0.5f0 
-const l             = 0.5f0        #wheel
-const I1            = mp*l^2.0f0
+##Posa's parameters
+# const mc            = 1.0f0    
+# const mp            = 0.5f0 
+# const l             = 0.5f0     #center of mass of the pendulum  
+# const I1            = mp*l^2.0f0/3.0f0
+##Hardware parameters
+const mc            = 0.57f0    
+const mp            = 0.23f0 
+const l             = 0.6413f0       #length of pendulum
+const lcm           = l/2.0f0        #center of mass of the pendulum  
+const I1            = mp*lcm^2.0f0/3.0f0
 const g             = 9.81f0
-const d             = -0.75f0 
-const wallThickness = 0.10f0
-const D             = 1.5f0
-const wallBottomEnd = 0.3f0
-const wallTopEnd    = 0.8f0
-const contactNum    = 4
+const d             = -0.45f0 
+const wallThickness = 0.05f0
+const D             = 0.9f0
+const wallBottomEnd = 0.45f0
+const wallTopEnd    = 0.9f0
+const contactNum    = 8
 const ϵn_const      = 0.5f0*ones(Float32, contactNum)
 const ϵt_const      = 0.0f0*ones(Float32, contactNum)
 const μ_const       = 0.0f0*ones(Float32, contactNum)
 const gThreshold    = 0.001f0
-const satu          = 4.0f0
+const satu          = 6.0f0     #Newtons. 10 Newton corresponds to 5.8 volts
 const w             = 0.20f0
 
 const leftWall_bottom   = [d, wallBottomEnd]
 const leftWall_top      = [d, wallTopEnd]
 const rightWall_bottom  = [D + d, wallBottomEnd]
 const rightWall_top     = [D + d, wallTopEnd]
+const lbr = leftWall_bottom     #bottom right corner of the left wall
+const lbl = [leftWall_bottom[1] - wallThickness, leftWall_bottom[2]]  #bottom left corner of the left wall
+const rbr = [rightWall_bottom[1] + wallThickness, rightWall_bottom[2]]  #bottom right corner of the right wall
+const rbl = rightWall_bottom    #bottom left corner of the right wall
 
 println("USING HANGING WALLS")
 struct CartPoleWithSoftWalls{}  
@@ -50,12 +61,10 @@ end
 
 #returns the attributes needed to model contact
 function (sys::CartPoleWithSoftWalls)(x, u::AbstractArray{T}; ϵn=ϵn_const, ϵt=ϵt_const, μ=μ_const, gThreshold=gThreshold, expert=false) where {T<:Real}
-    q, v         = parseStates(x)
-    x1,x2        = q[1:2]
-    x1dot, x2dot = v[1:2]
+    q, v   = parseStates(x)
+    x1,x2  = q[1:2]
 
-    gn  = gap(x1, x2)  
-    Wn  = wn(x1, x2)
+    gn, Wn  = gap(x1, x2)  
     Wt  = wt(x1, x2)
     γn  = vnormal(Wn, v)
     γt  = vtang(Wt, v)
@@ -72,61 +81,139 @@ end
 
 function parseStates(x::AbstractArray{T}) where {T<:Real}
     q = x[1:2]      #[x1, x2]
-    u = x[3:4]      #[x1dot, x2dot]
-    return q, u
+    v = x[3:4]      #[x1dot, x2dot]
+    return q, v
 end
 
 function pendulumPos(x, θ)
-    
     return [x-l*sin(θ), l*cos(θ)]
 end
 
+function closestPointonPendulumToWall(pendulum_xy, x1, cornerx, cornery)
+    px, py = pendulum_xy
+    m = py/(px-x1)                     #pendulumSlope
+
+    #draw circle around the corner and find the point on the pendulum (cx, cy) that is tangent to the circle
+    cx = (m*cornery + cornerx + m^2*x1)/(m^2+1.0f0)
+    cy = m*(cx-x1)
+
+    return [cx, cy]
+end
+
+function gapPendulumToLeftWallCorners(pendulum_xy, x1, θ)
+
+    c = closestPointonPendulumToWall(pendulum_xy, x1, lbr[1], lbr[2])
+    g1inner = c[1] - lbr[1]
+
+    ###also compute wn while you are here
+    tt = tan(θ)
+    A = (sec(θ))^2/(tt^2+1)^2*(lbr[2]*tt^2 - lbr[2] +2*lbr[1]*tt - 2*x1*tt)
+    B = (sec(θ))^2/(tt^2+1)^2*(tt^2+1)
+
+    wn1inner = [B; A]
+
+    #now check the bottom left corners of the left wall
+    c = closestPointonPendulumToWall(pendulum_xy, x1, lbl[1], lbl[2])
+    g1outer = lbl[1] - c[1]
+    A = (sec(θ))^2/(tt^2+1)^2*(lbl[2]*tt^2 - lbl[2] +2*lbr[1]*tt - 2*x1*tt)
+
+    wn1outer = -[B; A]
+
+    return g1inner, g1outer, wn1inner, wn1outer
+end
+
+function gapPendulumToRightWallCorners(pendulum_xy, x1, θ)
+
+    c = closestPointonPendulumToWall(pendulum_xy, x1, rbl[1], rbl[2])
+    g1inner = rbl[1] - c[1]
+
+    ###also compute wn while you are here
+    tt = tan(θ)
+    A = (sec(θ))^2/(tt^2+1)^2*(lbr[2]*tt^2 - rbl[2] +2*rbl[1]*tt - 2*x1*tt)
+    B = (sec(θ))^2/(tt^2+1)^2*(tt^2+1)
+
+    wn1inner = -[B; A]
+
+    #now check the bottom left corners of the left wall
+    c = closestPointonPendulumToWall(pendulum_xy, x1, rbr[1], rbr[2])
+    g1outer = c[1] - rbr[1]
+    A = (sec(θ))^2/(tt^2+1)^2*(rbr[2]*tt^2 - rbr[2] +2*rbr[1]*tt - 2*x1*tt)
+
+    wn1outer = [B; A]
+
+    return g1inner, g1outer, wn1inner, wn1outer
+end
+
+function gapPendulumToLeftWall(pendulum_xy, θ)
+    g2innerleft = pendulum_xy[1] - d 
+    g2outerleft = -g2innerleft - wallThickness
+    wn2innerleft = [1.0f0; -l*cos(θ)]  
+    wn2outerleft = -wn2innerleft
+
+    return g2innerleft, g2outerleft, wn2innerleft, wn2outerleft
+end
+
+function gapPendulumToRightWall(pendulum_xy, θ)
+    g4innerleft = (D + d) - pendulum_xy[1]
+    g4outerleft = -g4innerleft - wallThickness
+    wn4innerleft = [-1.0f0; l*cos(θ)]   
+    wn4outerleft = -wn4innerleft
+
+    return g4innerleft, g4outerleft, wn4innerleft, wn4outerleft
+end
+
 function gap(x1, x2)
+    #this function checks for two forms of contact on the two sides of the two walls (total of 8 cases)
+    #The first set of gap functions checks if the pendulum link is in contact with the corners of the walls
+    #The second set of gap functions check if the edge of the pendulum is contact with the sides of the walls
     pendulum_xy = pendulumPos(x1, x2)
 
-    if pendulum_xy[2] > leftWall_bottom[2] #pendulum in contact with left wall
-        g1 = pendulum_xy[1] - d   
+    if pendulum_xy[2] > lbr[2] #pendulum in contact with left wall
+        #check the length of the pendulum is in contact with the bottom corners of the wall
+        g1innerleft, g1outerleft, wn1innerleft, wn1outerleft = gapPendulumToLeftWallCorners(pendulum_xy, x1, x2)                         
+        #check if the end of the pendulum is in contact with the vertical wall sides
+        g2innerleft, g2outerleft, wn2innerleft, wn2outerleft = gapPendulumToLeftWall(pendulum_xy, x2)
     else
-        g1 = norm(pendulum_xy - leftWall_bottom, 2)
+        #the pendulum is nowhere near the wall. Neither the length of the link nor its top end are in contact
+        g1innerleft = norm(pendulum_xy - lbr, 2)
+        g2innerleft = g1innerleft
+        g1outerleft = -g1innerleft - wallThickness
+        g2outerleft = g1outerleft
+        x̄l, ȳl = pendulum_xy - lbr
+
+        wn1innerleft = 1.0f0/g1innerleft*[x̄l; -x̄l*l*cos(x2) + ȳl*l*sin(x2)] 
+        wn1outerleft = -wn1innerleft
+        wn2innerleft = wn1innerleft
+        wn2outerleft = -wn2innerleft
     end
 
-    if pendulum_xy[2] > rightWall_bottom[2] #pendulum in contact with right wall
-        g2 = (D + d) - pendulum_xy[1]
+    if pendulum_xy[2] > rbl[2] #pendulum in contact with right wall
+        #check the length of the pendulum is in contact with the bottom corners of the wall
+        g3innerleft, g3outerleft, wn3innerleft, wn3outerleft = gapPendulumToRightWallCorners(pendulum_xy, x1, x2)  
+         #check if the end of the pendulum is in contact with the vertical wall sides
+        g4innerleft, g4outerleft, wn4innerleft, wn4outerleft = gapPendulumToRightWall(pendulum_xy, x2)
     else
-        g2 = norm(pendulum_xy - rightWall_bottom, 2)
+        g3innerleft = norm(pendulum_xy - rbl, 2)
+        g4innerleft = g3innerleft
+        g3outerleft = -g3innerleft - wallThickness
+        g4outerleft = g4innerleft
+
+        x̄r, ȳr = pendulum_xy - rbl
+        wn3innerleft = 1.0f0/g3innerleft*[x̄r; -x̄r*l*cos(x2) + ȳr*l*sin(x2)] 
+        wn3outerleft = -wn3innerleft
+        wn4innerleft = wn3innerleft
+        wn4outerleft = -wn4innerleft
     end
     
-    return [g1, g2, -g1 - wallThickness, -g2 - wallThickness] 
+    gn = [g1innerleft, g1outerleft, g2innerleft, g2outerleft, g3innerleft, g3outerleft, g4innerleft, g4outerleft] 
+    wn = hcat(wn1innerleft, wn1outerleft, wn2innerleft, wn2outerleft, wn3innerleft, wn3outerleft, wn4innerleft, wn4outerleft)
+    return gn, wn
 end
 
-function wn(x1, x2) where {T<:Real}
-
-    pendulum_xy = pendulumPos(x1, x2)
-    g = gap(x1, x2)
-
-    if pendulum_xy[2] > leftWall_bottom[2] #pendulum in contact with left wall
-        w1 = [1.0f0; -l*cos(x2)]  
-    else
-        x̄l, ȳl = pendulum_xy - leftWall_bottom
-        w1 = 2.0f0/g[1]*[x̄l; -x̄l*l*cos(x2) + ȳl*l*sin(x2)] 
-    end
-
-    if pendulum_xy[2] > rightWall_bottom[2] #pendulum in contact with right wall
-        w2 = [-1.0f0; l*cos(x2)]  
-    else
-        x̄r, ȳr = pendulum_xy - rightWall_bottom
-        w2 = 2.0f0/g[2]*[x̄r; -x̄r*l*cos(x2) + ȳr*l*sin(x2)] 
-    end
-    
-   return hcat(w1, w2, -w1, -w2)    #check contact against the wall on each face of the wall
-
-end
-
-function wt(x1, x2) where {T<:Real}
+function wt(x1, x2) 
     w1 = [0.0f0; -l*sin(x2)]
-    w2 = [0.0f0; -l*sin(x2)]
 
-    return hcat(w1, w2, w1, w2)
+    return hcat(-w1, w1, -w1, w1, w1, -w1, w1, -w1)
 end
 
 function vnormal(Wn, v)
@@ -139,8 +226,8 @@ end
 
 function massMatrix(x2)
 
-    return [mc+mp -mp*l*cos(x2);
-            -mp*l*cos(x2) mp*l^2+I1]
+    return [mc+mp -mp*lcm*cos(x2);
+            -mp*lcm*cos(x2) mp*lcm^2+I1]
 end
 
 function lqrGains()
@@ -148,7 +235,7 @@ function lqrGains()
     Minv = inv(M)
 
     Ĝ = Minv* [0.0f0;
-              mp*g*l]
+              mp*g*lcm]
     B̂ = Minv*[1.0f0, 0.0f0]
 
     A = [0.0f0 0.0f0 1.0f0 0.0f0;
@@ -166,13 +253,12 @@ function lqrGains()
 end
 
 function lqr(z::AbstractArray{T}) where {T<:Real}
-    k = convert.(T, vec([ -2.58182  50.3793  -5.04367  12.0988]))
+    k = convert.(T, vec([ -2.58192  32.2164  -4.41508  6.84527]))
     # k = zeros(4)
     return -k'*z
 end
 
 inputLayer(z) = [z[1], cos(z[2]), sin(z[2]), z[3], z[4]]
-# inputLayer(z) = [cos(z[2]), sin(z[2]), z[3], z[4]]
 
 function control(z, u::AbstractArray{T}; expert=false, lqr_max = 10.0f0) where {T<:Real}
     q, v = parseStates(z)
@@ -182,7 +268,7 @@ function control(z, u::AbstractArray{T}; expert=false, lqr_max = 10.0f0) where {
     else
         x1, x2 = q 
         x1dot, x2dot = v
-        if ((1.0f0-cos(x2) <= (1.0f0-cosd(17.0))) && (abs(x2dot) <= 0.5f0))
+        if ((1.0f0-cos(x2) <= (1.0f0-cosd(15.0))) && (abs(x2dot) <= 0.5f0))
             return clamp(lqr(z), -lqr_max, lqr_max)
         else
             return clamp(u[1], -satu, satu)
@@ -205,8 +291,8 @@ function genForces(x, u::AbstractArray{T}; expert=false) where {T<:Real}
     #h = Bu - C qdot - G
 
     return  [1.0f0, 0.0f0]*control(x, u; expert=expert) -  #Bu 
-                [0.0f0 mp*l*sin(x2); -mp*sin(x2)/2.0f0 0.0f0]*v -  #-C qdot
-                [0.0f0; -mp*g*l*sin(x2)]            #-G
+                [0.0f0 mp*lcm*sin(x2); -mp*sin(x2)/2.0f0 0.0f0]*v -  #-C qdot
+                [0.0f0; -mp*g*lcm*sin(x2)]            #-G
 end
 
 function startAnimator()
@@ -221,7 +307,7 @@ function createAnimateObject(x1, x2)
     vcart = vis[:cart]
 
     setobject!(vcart, MeshObject(
-        Rect(Vec(0.0, 0.0, 0.0), Vec(0.2, 0.2, 0.1)),
+        Rect(Vec(0.0, 0.0, 0.0), Vec(0.2, w, 0.1)),
         MeshLambertMaterial(color=RGBA{Float32}(0.0, 0.0, 0.0, 0.25))))
     settransform!(vcart, Translation(-0.2, x1-w/2.0f0, 0.0))
 
@@ -229,12 +315,12 @@ function createAnimateObject(x1, x2)
     setobject!(vpendulum[:link], MeshObject(
         Cylinder(Point(0.0, 0.0, 0.0), Point(0.0, 0.0, l), 0.005),
         MeshLambertMaterial(color=RGBA{Float32}(1.0, 0.0, 0.0, 1.0))))
-    settransform!(vpendulum[:link], Translation(0.0, x1, 0.0) ∘ LinearMap(RotX(x2)))
+    settransform!(vpendulum[:link], Translation(0.0, x1, 0.00) ∘ LinearMap(RotX(x2)))
 
-    setobject!(vpendulum[:bob], MeshObject(
-        HyperSphere(Point(0.0, 0.0, l), 0.015),
-        MeshLambertMaterial(color=RGBA{Float32}(0.0, 0.0, 1.0, 1.0))))
-    settransform!(vpendulum[:bob], Translation(0.0, x1, 0.0) ∘ LinearMap(RotX(x2)))
+    # setobject!(vpendulum[:bob], MeshObject(
+    #     HyperSphere(Point(0.0, 0.0, l), 0.015),
+    #     MeshLambertMaterial(color=RGBA{Float32}(0.0, 0.0, 1.0, 1.0))))
+    # settransform!(vpendulum[:bob], Translation(0.0, x1, 0.00) ∘ LinearMap(RotX(x2)))
    
     vwalls = vis[:walls]
 
@@ -260,7 +346,7 @@ function animate(Z)
         x1, x2 = z[1:2]
         settransform!(vcart, Translation(-0.2, x1-w/2.f0, 0.0))
         settransform!(vpendulum[:link], Translation(0.0, x1, 0.0) ∘ LinearMap(RotX(x2)))
-        settransform!(vpendulum[:bob], Translation(0.0, x1, 0.0) ∘ LinearMap(RotX(x2)))
+        # settransform!(vpendulum[:bob], Translation(0.0, x1, 0.0) ∘ LinearMap(RotX(x2)))
         sleep(0.04)
     end
 
