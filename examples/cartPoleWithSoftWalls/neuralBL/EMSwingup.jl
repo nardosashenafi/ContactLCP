@@ -7,15 +7,14 @@ using ForwardDiff: Chunk, GradientConfig
 using JuMP
 include("../../../src/lcp.jl")
 include("../../../src/solver.jl")
-# include("../hangingWallDynamics.jl")
 include("../hangingWallDynamics.jl")
 
-function checkContact(gn::Vector{T}, gThreshold, total_contact_num) where {T<:Real}
+function checkContact(x, gn::Vector{T}, gThreshold, total_contact_num) where {T<:Real}
      
-    whichInContact = zeros(T, total_contact_num)
+    whichInContact = zeros(T, 8)
 
-    for i in 1:total_contact_num
-        if (-wallThickness/2.0f0+gThreshold < gn[i] < gThreshold)  
+    for i in 1:8
+        if (-wallThickness/4.0f0+gThreshold < gn[i] < gThreshold)  
             # we need to detect contact on both sides of a wall. If we simply use gn < gThreshold,
             # then the pendulum would stick to the wall due to the opposing contact forces from both sides
             # of the wall. To combat that, we need to deactivate the contact force from one side of the wall
@@ -23,10 +22,27 @@ function checkContact(gn::Vector{T}, gThreshold, total_contact_num) where {T<:Re
             whichInContact[i] = 1 
         end
     end
-
     contactIndex = findall(x -> x == 1, whichInContact)
 
-    if any(i -> i ∈ contactIndex, [3,4])    #the pendulum cannot contact on the edge and along the length at the same time. Or else it will get stick
+    pendulum_xy = pendulumPos(x[1], x[2])
+
+    threshold = 2*gThreshold
+
+    if (lbl[1] + threshold <= pendulum_xy[1] <= lbr[1] - threshold) &&
+        (lbl[2] - threshold <= pendulum_xy[2] <= lbl[2] + threshold)
+        [filter!(e -> e ≠ j, contactIndex) for j in 1:4]
+        append!(contactIndex, 9)
+    end
+
+    if (rbl[1] + threshold <= pendulum_xy[1] <= rbr[1] - threshold) &&
+        (rbl[2] - threshold <= pendulum_xy[2] <= rbl[2] + threshold)
+        [filter!(e -> e ≠ j, contactIndex) for j in 5:8]
+        append!(contactIndex, 10)
+    end
+
+    if any(i -> i ∈ contactIndex, [3,4])    #the pendulum cannot contact on the edge and along the length at the same time. Or else it will get stick to the wall
+        #[3, 4] corresponds to the edge of the link contacting the wall
+        #If this contact is active while the contacts [1,2] are activated, then the edge of the link is right underneathh the wall surface
         [filter!(e -> e ≠ j, contactIndex) for j in 1:2]
     end
 
@@ -111,11 +127,11 @@ function lossPerState(x)
     x1, x2, x1dot, x2dot = x
     doubleHinge_x = 0.0f0
 
-    abs(x1) > D/2.0f0 ? doubleHinge_x = 2.0f0*abs.(x1) : nothing
+    abs(x1) > D/2.0f0 ? doubleHinge_x = 3.0f0*abs.(x1) : nothing
 
     # high cost on x1dot to lower fast impact and to encourage pumping
     return doubleHinge_x  + 12.0f0*(1.0f0-cos(x2)) + 
-            2.0f0*x1dot^2.0f0 + 0.1f0*x2dot^2.0f0
+            2.0f0*x1dot^2.0f0 + 0.4f0*x2dot^2.0f0
 
 end
 
@@ -136,9 +152,9 @@ function computeLossSampler(x0, param::AbstractArray{T}; totalTimeStep = totalTi
 
             x  = oneStep(x, input(x, θk, k) )
             lk = pk[k]*lossPerState(x) 
-            if i == totalTimeStep   #terminal loss
-                lk *= 2.0f0
-            end
+            # if i == totalTimeStep   #terminal loss
+            #     lk *= 2.0f0
+            # end
             ltotal += lk/totalTimeStep
         end
     end
@@ -165,28 +181,6 @@ function computeLoss(X, param::AbstractArray{T}, sampleEvery::Int, fullTraj::Boo
         end
     end
     return ltotal/length(X)
-end
-
-function oneBatch(xi, param::AbstractArray{T}; totalTimeStep = totalTimeStep) where {T<:Real}
-    
-    ψ, θk   = unstackParams(param)
-    ltotal  = 0.0f0
-    x       = deepcopy(xi)
-
-    for i in 1:totalTimeStep
-        pk = bin(x, ψ)
-
-        if rand() > 0.3
-            k = argmax(pk)      # improve the greedy
-        else
-            k = rand(1:1:binSize)    # exploration
-        end
-
-        x  = oneStep(x, input(x, θk, k) )
-        lk = pk[k]*lossPerState(x) 
-        ltotal += lk/totalTimeStep
-    end
-    return ltotal
 end
 
 function poi(ψ)

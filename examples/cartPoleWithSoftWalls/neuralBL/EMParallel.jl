@@ -1,3 +1,29 @@
+include("EMSwingup.jl")
+
+function oneBatch(xi, param::AbstractArray{T}; totalTimeStep = totalTimeStep) where {T<:Real}
+    
+    ψ, θk   = unstackParams(param)
+    ltotal  = 0.0f0
+    x       = deepcopy(xi)
+
+    for i in 1:totalTimeStep
+        pk = bin(x, ψ)
+
+        if rand() > 0.3
+            k = argmax(pk)      # improve the greedy
+        else
+            k = rand(1:1:binSize)    # exploration
+        end
+
+        x  = oneStep(x, input(x, θk, k) )
+        lk = pk[k]*lossPerState(x) 
+        # if i == totalTimeStep   #terminal loss
+        #     lk *= 2.0f0
+        # end
+        ltotal += lk/totalTimeStep
+    end
+    return ltotal
+end
 
 function computeLoss(x0, param::AbstractArray{T}; totalTimeStep = totalTimeStep) where {T<:Real}
     
@@ -21,7 +47,7 @@ function trainParallel()
     param       = stackParams(ψ, θk)
     opt         = Adam(0.001f0)
     counter     = 0
-    minibatch   = 6
+    minibatch   = 4
 
     for i in 1:10000
         ψ, θk   = unstackParams(param)

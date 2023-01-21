@@ -9,7 +9,7 @@ function sysAttributes(lcp::Lcp, x, param; kwargs...)
     return lcp.sys(x, param; kwargs...)
 end
 
-function checkContact(gn::AbstractArray{T}, gThreshold, total_contact_num) where {T<:Real}
+function checkContact(x, gn::AbstractArray{T}, gThreshold, total_contact_num) where {T<:Real}
      
     whichInContact = zeros(T, total_contact_num)
 
@@ -52,10 +52,10 @@ function getAb(gn, γn, γt, M, h, Wn, Wt, ϵn, ϵt, μ, contactIndex, current_c
     return A, b
 end
 
-function solveLcp(gn, γn, γt, M, h::AbstractArray{T}, Wn, Wt, ϵn, ϵt, μ, gThreshold, x; Δt=0.001f0) where {T<:Real}
+function solveLcp(gn, γn, γt, M, h::AbstractArray{T}, Wn, Wt, ϵn, ϵt, μ, gThreshold, x_mid; Δt=0.001f0) where {T<:Real}
 
     total_contact_num   = length(gn)
-    contactIndex, s     = checkContact(gn, gThreshold, total_contact_num)
+    contactIndex, s     = checkContact(x_mid, gn, gThreshold, total_contact_num)
 
     Λn  = zeros(T, total_contact_num)
     ΛR  = zeros(T, total_contact_num)
@@ -63,7 +63,7 @@ function solveLcp(gn, γn, γt, M, h::AbstractArray{T}, Wn, Wt, ϵn, ϵt, μ, gT
 
     if s > 0
         A, b = getAb(gn, γn, γt, M, h, Wn, Wt, ϵn, ϵt, μ, contactIndex, s; Δt = Δt)
-        λ    =  lemkeLexi(A, b, x)
+        λ    =  lemkeLexi(A, b, x_mid)
         # λ = lcpOpt(A, b, s)
 
         Λn[contactIndex] = @view λ[1:s]
@@ -81,7 +81,7 @@ function oneTimeStep(lcp::Lcp, x, param::AbstractArray{T}; Δt = 0.001f0, kwargs
 
     x_mid   = vcat(qM, uA)
     gn, γn, γt, M, h, Wn, Wt, ϵn, ϵt, μ, gThreshold = sysAttributes(lcp, x_mid, param; kwargs...)
-    λn, _, λR  = solveLcp(gn, γn, γt, M, h, Wn, Wt, ϵn, ϵt, μ, gThreshold, x; Δt=Δt)
+    λn, _, λR  = solveLcp(gn, γn, γt, M, h, Wn, Wt, ϵn, ϵt, μ, gThreshold, x_mid; Δt=Δt)
 
     uE = M\((Wn - Wt*diagm(0 => μ))*λn + Wt*λR + h*Δt) + uA
     qE = qM + 0.5f0*Δt*uE
@@ -89,14 +89,14 @@ function oneTimeStep(lcp::Lcp, x, param::AbstractArray{T}; Δt = 0.001f0, kwargs
     return vcat(qE,uE)
 end
 
-function stateAndForces(lcp::Lcp, x1, param::AbstractArray{T}; Δt = 0.001f0, kwargs...) where {T<:Real}
+function stateAndForces(lcp::Lcp, x, param::AbstractArray{T}; Δt = 0.001f0, kwargs...) where {T<:Real}
 
-    qA, uA  = lcp.sys(x1)
+    qA, uA  = lcp.sys(x)
     qM      = qA + 0.5f0*Δt*uA
 
     x_mid   = vcat(qM, uA)
     gn, γn, γt, M, h, Wn, Wt, ϵn, ϵt, μ, gThreshold = sysAttributes(lcp, x_mid, param; kwargs...)
-    λn, λt, λR  = solveLcp(gn, γn, γt, M, h, Wn, Wt, ϵn, ϵt, μ, gThreshold, x1; Δt=Δt)
+    λn, λt, λR  = solveLcp(gn, γn, γt, M, h, Wn, Wt, ϵn, ϵt, μ, gThreshold, x; Δt=Δt)
 
     uE = M\((Wn - Wt*diagm(0 => μ))*λn + Wt*λR + h*Δt) + uA
     qE = qM + 0.5f0*Δt*uE
