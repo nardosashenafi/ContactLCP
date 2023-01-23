@@ -7,15 +7,14 @@ using ForwardDiff: Chunk, GradientConfig
 using JuMP
 include("../../../src/lcp.jl")
 include("../../../src/solver.jl")
-# include("../hangingWallDynamics.jl")
 include("../hangingWallDynamics.jl")
 
-function checkContact(gn::Vector{T}, gThreshold, total_contact_num) where {T<:Real}
+function checkContact(x, gn::Vector{T}, gThreshold, total_contact_num) where {T<:Real}
      
-    whichInContact = zeros(T, total_contact_num)
+    whichInContact = zeros(T, 8)
 
-    for i in 1:total_contact_num
-        if (-wallThickness/2.0f0+gThreshold < gn[i] < gThreshold)  
+    for i in 1:8
+        if (-wallThickness/4.0f0+gThreshold < gn[i] < gThreshold)  
             # we need to detect contact on both sides of a wall. If we simply use gn < gThreshold,
             # then the pendulum would stick to the wall due to the opposing contact forces from both sides
             # of the wall. To combat that, we need to deactivate the contact force from one side of the wall
@@ -23,8 +22,33 @@ function checkContact(gn::Vector{T}, gThreshold, total_contact_num) where {T<:Re
             whichInContact[i] = 1 
         end
     end
-
     contactIndex = findall(x -> x == 1, whichInContact)
+
+    pendulum_xy = pendulumPos(x[1], x[2])
+
+    threshold = 2*gThreshold
+
+    if (lbl[1] + threshold <= pendulum_xy[1] <= lbr[1] - threshold) &&
+        (lbl[2] - threshold <= pendulum_xy[2] <= lbl[2] + threshold)
+        [filter!(e -> e ≠ j, contactIndex) for j in 1:4]
+        append!(contactIndex, 9)
+    end
+
+    if (rbl[1] + threshold <= pendulum_xy[1] <= rbr[1] - threshold) &&
+        (rbl[2] - threshold <= pendulum_xy[2] <= rbl[2] + threshold)
+        [filter!(e -> e ≠ j, contactIndex) for j in 5:8]
+        append!(contactIndex, 10)
+    end
+
+    if any(i -> i ∈ contactIndex, [3,4])    #the pendulum cannot contact on the edge and along the length at the same time. Or else it will get stick to the wall
+        #[3, 4] corresponds to the edge of the link contacting the wall
+        #If this contact is active while the contacts [1,2] are activated, then the edge of the link is right underneathh the wall surface
+        [filter!(e -> e ≠ j, contactIndex) for j in 1:2]
+    end
+
+    if any(i -> i ∈ contactIndex, [7,8])
+        [filter!(e -> e ≠ j, contactIndex) for j in 5:6]
+    end
 
     return contactIndex, length(contactIndex)
 end
@@ -103,11 +127,11 @@ function lossPerState(x)
     x1, x2, x1dot, x2dot = x
     doubleHinge_x = 0.0f0
 
-    abs(x1) > D/2.0f0 ? doubleHinge_x = 2.0f0*abs.(x1) : nothing
+    abs(x1) > D/2.0f0 ? doubleHinge_x = 3.0f0*abs.(x1) : nothing
 
     # high cost on x1dot to lower fast impact and to encourage pumping
     return doubleHinge_x  + 12.0f0*(1.0f0-cos(x2)) + 
-            2.0f0*x1dot^2.0f0 + 0.1f0*x2dot^2.0f0
+            2.0f0*x1dot^2.0f0 + 0.4f0*x2dot^2.0f0
 
 end
 
@@ -129,6 +153,9 @@ function computeLossSampler(x0, param::AbstractArray{T}; totalTimeStep = totalTi
 
             x  = oneStep(x, input(x, θk, k) )
             lk = pk[k]*lossPerState(x) 
+            if i == totalTimeStep   #terminal loss
+                lk *= 2.0f0
+            end
             ltotal += lk/totalTimeStep
         end
     end
@@ -179,21 +206,6 @@ function oneBatch(xi, param::AbstractArray{T}; totalTimeStep = totalTimeStep) wh
     return ltotal
 end
 
-function computeLoss(x0, param::AbstractArray{T}; totalTimeStep = totalTimeStep) where {T<:Real}
-    
-    l = Threads.Atomic{T}()
-    Threads.@threads for xi in x0
-        Threads.atomic_add!(l, oneBatch(xi, param))
-    end
-    return l.value/length(x0)
-end
-
-function gradient!(grad, x0, param::AbstractArray{T}; totalTimeStep = 1000) where {T<:Real}
-    Threads.@threads for i in eachindex(x0)
-        grad[i] = ForwardDiff.gradient((θ) -> oneBatch(x0[i], θ; totalTimeStep = totalTimeStep), param)
-    end
-end
-
 function poi(ψ)
     xi = [0.0f0, -4.0f0, 0.0f0, 2.0f0]
     return bin(xi, ψ)
@@ -237,40 +249,6 @@ function trainEM()
             end
             X = testBayesian(xi, ψ, θk; totalTimeStep=10000)
             println("loss = ", computeLossSampler([xi], param), " POI = ", poi(ψ))
-            counter = 0
-        end
-        counter += 1
-        Flux.update!(opt, param, grads)
-    end
-end
-
-function trainParallel()
-
-    ψ           = 0.5f0*randn(Float32, binNN_length)
-    θk          = [0.1f0*randn(Float32, controlNN_length[i]) for i in 1:binSize]
-    param       = stackParams(ψ, θk)
-    opt         = Adam(0.001f0)
-    counter     = 0
-    minibatch   = Threads.nthreads()
-
-    for i in 1:10000
-        ψ, θk   = unstackParams(param)
-        x0      = sampleInitialState(ψ, θk; totalTimeStep=5000, minibatch=minibatch)
-
-        lg1     = Vector{Vector{eltype(param)}}(undef, length(x0))
-        gradient!(lg1, x0, param; totalTimeStep = 4000) 
-        grads   = mean(lg1)
-
-        if counter > 5
-            ψ, θk  = unstackParams(param)
-            if rand() > 0.8
-                xi = [0.0f0, pi, 1.0f0, 0.5f0]
-            else
-                xi = deepcopy(x0[1])
-            end
-            testBayesian(xi, ψ, θk; totalTimeStep=7000)
-            l1   = oneBatch(xi, param; totalTimeStep = 7000)
-            println("loss = ", l1)
             counter = 0
         end
         counter += 1

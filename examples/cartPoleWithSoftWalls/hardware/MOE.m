@@ -1,0 +1,72 @@
+classdef MOE < matlab.System
+    properties
+        bin Chain
+        controlArray cell
+    end
+    
+    properties(Access = private)
+      binSize = 3;
+      binLayerSize = [5, 4, 3];
+      controlLayerSize = [[8, 4, 1]; [8, 4, 1]; [8, 4, 1]];
+
+      binTotalParam = 69;
+      controlTotalParam = [89, 89,89];
+    end
+    
+    methods
+    
+        function this = MOE(binSize, binLayerSize, controlLayerSize, binTotalParam, controlTotalParam, param)
+            %define as MOE(3, [5, 4, 3], [[8, 4, 1],[8, 4, 1],[8, 4, 1]], 69, [89, 89, 89], rand(336, 1))
+            
+            thetak = cell(binSize, 1);
+            
+            %parse parameters
+            paramBegin = 1;
+            paramEnd = paramBegin + binTotalParam - 1;
+            psi = param(paramBegin:paramEnd);
+            paramBegin = paramEnd+1;
+            for i = 1:binSize
+                paramEnd = paramBegin + controlTotalParam(i) - 1;
+                thetak{i} = param(paramBegin:paramEnd);
+                paramBegin = paramEnd+1;
+            end
+            
+            %construct gating network
+            this.bin = Chain(binLayerSize, psi);
+            %construct controllers and populate parameters
+            for i = 1:binSize
+               this.controlArray{i} = Chain(controlLayerSize(i,:), thetak{i}); 
+            end
+            
+        end
+        
+        function u = control(this, x)
+            z = this.inputLayer(x);
+            pk = this.bin.forwardSoftmax(z);
+            [pkmax, k] = max(pk);
+            u = this.controlArray{k}.forward(z);
+        end
+        
+        function z = inputLayer(this, x)
+             z = [x(1); cos(x(2)); sin(x(2)); x(3); x(4)];
+        end
+    end
+    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    methods(Access = protected)
+        function setupImpl(obj)
+            % Perform one-time calculations, such as computing constants
+        end
+
+        function y = stepImpl(obj,u)
+            y = obj.control(x);
+        end
+
+        function resetImpl(obj)
+            % Initialize / reset discrete-state properties
+        end
+    end
+    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    
+    
+end
+
