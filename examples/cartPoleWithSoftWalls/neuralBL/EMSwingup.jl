@@ -130,8 +130,8 @@ function lossPerState(x)
     abs(x1) > D/2.0f0 ? doubleHinge_x = 3.0f0*abs.(x1) : nothing
 
     # high cost on x1dot to lower fast impact and to encourage pumping
-    return doubleHinge_x  + 12.0f0*(1.0f0-cos(x2)) + 
-            2.0f0*x1dot^2.0f0 + 0.4f0*x2dot^2.0f0
+    return doubleHinge_x  + 20.0f0*(1.0f0-cos(x2)) + 
+            2.0f0*x1dot^2.0f0 + 0.5f0*x2dot^2.0f0
 
 end
 
@@ -153,9 +153,9 @@ function computeLossSampler(x0, param::AbstractArray{T}; totalTimeStep = totalTi
 
             x  = oneStep(x, input(x, θk, k) )
             lk = pk[k]*lossPerState(x) 
-            if i == totalTimeStep   #terminal loss
-                lk *= 2.0f0
-            end
+            # if i == totalTimeStep   #terminal loss
+            #     lk *= 2.0f0
+            # end
             ltotal += lk/totalTimeStep
         end
     end
