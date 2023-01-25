@@ -20,7 +20,7 @@ const mc            = 0.57f0
 const mp            = 0.4f0 
 # const l             = 0.6413f0       #length of pendulum
 const l             = 0.31f0       #length of pendulum
-const lcm           = l/2.0f0        #center of mass of the pendulum  
+const lcm           = l        #center of mass of the pendulum  
 const I1            = mp*lcm^2.0f0/3.0f0
 const g             = 9.81f0
 const d             = -0.4f0       #location of the left wall
@@ -33,7 +33,7 @@ const ϵn_const      = 0.5f0*ones(Float32, contactNum)
 const ϵt_const      = 0.0f0*ones(Float32, contactNum)
 const μ_const       = 0.0f0*ones(Float32, contactNum)
 const gThreshold    = 0.001f0
-const satu          = 6.0f0     #Newtons. 10 Newton corresponds to 5.8 volts
+const satu          = 9.0f0     #Newtons. 10 Newton corresponds to 5.8 volts
 const w             = 0.20f0
 
 const leftWall_bottom   = [d, wallBottomEnd]
@@ -265,7 +265,7 @@ function lqrGains()
 end
 
 function lqr(z::AbstractArray{T}) where {T<:Real}
-    k = convert.(T, vec([ -1.82579  24.3222  -3.07664  3.69428]))
+    k = convert.(T, vec([-1.82566  30.4356  -3.33462  5.88852]))
     # k = zeros(4)
     return -k'*z
 end
@@ -329,10 +329,10 @@ function createAnimateObject(x1, θ)
         MeshLambertMaterial(color=RGBA{Float32}(1.0, 0.0, 0.0, 1.0))))
     settransform!(vpendulum[:link], Translation(0.0, x1, 0.00) ∘ LinearMap(RotX(θ)))
 
-    # setobject!(vpendulum[:bob], MeshObject(
-    #     HyperSphere(Point(0.0, 0.0, l), 0.015),
-    #     MeshLambertMaterial(color=RGBA{Float32}(0.0, 0.0, 1.0, 1.0))))
-    # settransform!(vpendulum[:bob], Translation(0.0, x1, 0.00) ∘ LinearMap(RotX(θ)))
+    setobject!(vpendulum[:bob], MeshObject(
+        HyperSphere(Point(0.0, 0.0, l), 0.015),
+        MeshLambertMaterial(color=RGBA{Float32}(0.0, 0.0, 1.0, 1.0))))
+    settransform!(vpendulum[:bob], Translation(0.0, x1, 0.00) ∘ LinearMap(RotX(θ)))
    
     vwalls = vis[:walls]
 
@@ -358,7 +358,7 @@ function animate(Z)
         x1, θ = z[1:2]
         settransform!(vcart, Translation(-0.2, x1-w/2.f0, 0.0))
         settransform!(vpendulum[:link], Translation(0.0, x1, 0.0) ∘ LinearMap(RotX(θ)))
-        # settransform!(vpendulum[:bob], Translation(0.0, x1, 0.0) ∘ LinearMap(RotX(θ)))
+        settransform!(vpendulum[:bob], Translation(0.0, x1, 0.0) ∘ LinearMap(RotX(θ)))
         sleep(0.04)
     end
 

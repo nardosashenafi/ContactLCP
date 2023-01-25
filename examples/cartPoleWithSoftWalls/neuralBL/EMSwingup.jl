@@ -207,7 +207,7 @@ function oneBatch(xi, param::AbstractArray{T}; totalTimeStep = totalTimeStep) wh
 end
 
 function poi(ψ)
-    xi = [0.0f0, -4.0f0, 0.0f0, 2.0f0]
+    xi = [0.0f0, pi, 0.0f0, 0.1f0]
     return bin(xi, ψ)
 end
 
