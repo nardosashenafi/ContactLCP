@@ -1,5 +1,27 @@
 include("EMSwingup.jl")
 
+function oneBatch(xi, param::AbstractArray{T}; totalTimeStep = totalTimeStep) where {T<:Real}
+    
+    ψ, θk   = unstackParams(param)
+    ltotal  = 0.0f0
+    x       = deepcopy(xi)
+
+    for i in 1:totalTimeStep
+        pk = bin(x, ψ)
+
+        if rand() > 0.3
+            k = argmax(pk)      # improve the greedy
+        else
+            k = rand(1:1:binSize)    # exploration
+        end
+
+        x  = oneStep(x, input(x, θk, k) )
+        lk = pk[k]*lossPerState(x) 
+        ltotal += lk/totalTimeStep
+    end
+    return ltotal
+end
+
 function computeLoss(x0, param::AbstractArray{T}; totalTimeStep = totalTimeStep) where {T<:Real}
     
     l = Threads.Atomic{T}()

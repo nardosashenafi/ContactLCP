@@ -44,15 +44,14 @@ end
 
 function oneControllerLoss(x0, param::AbstractArray{T}; totalTimeStep = totalTimeStep) where {T<:Real}
     ltotal  = 0.0f0
-
     for xi in x0
-        x = xi
+        X = Vector{Vector{T}}(undef, totalTimeStep+1)
+        X[1] = xi
         for i in 1:totalTimeStep
-            u = controlArray[1](inputLayer(x), param)
-            x  = oneStep(x, u)
-            lk = lossPerState(x) 
-            ltotal += lk/totalTimeStep
+            ui = controlArray[1](inputLayer(X[i]), param)
+            X[i+1] = oneStep(X[i], ui)
         end
+        ltotal += setDistanceLoss(X) + lossPerState(X[end])
     end
     return ltotal/length(x0)
 end
@@ -75,7 +74,7 @@ function trainOneController()
     for i in 1:10000
 
         x0      = sampleInitialState(param; totalTimeStep=8000, minibatch=minibatch)
-        l1(θ)   = oneControllerLoss(x0, θ; totalTimeStep = 4000)
+        l1(θ)   = oneControllerLoss(x0, θ; totalTimeStep = 2000)
 
         ForwardDiff.gradient!(diff_results, l1, param)
         grads = DiffResults.gradient(diff_results)

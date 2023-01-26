@@ -35,6 +35,7 @@ const μ_const       = 0.0f0*ones(Float32, contactNum)
 const gThreshold    = 0.001f0
 const satu          = 9.0f0     #Newtons. 10 Newton corresponds to 5.8 volts
 const w             = 0.20f0
+const TRACK_LENGTH  = 1.0f0
 
 const leftWall_bottom   = [d, wallBottomEnd]
 const leftWall_top      = [d, wallTopEnd]

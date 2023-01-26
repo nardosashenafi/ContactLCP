@@ -123,19 +123,7 @@ function stackParams(ψ::Vector{T}, θk::Vector{Vector{T}}) where {T<:Real}
     return param
 end
 
-function lossPerState(x)
-    x1, x2, x1dot, x2dot = x
-    doubleHinge_x = 0.0f0
-
-    abs(x1) > D/2.0f0 ? doubleHinge_x = 3.0f0*abs.(x1) : nothing
-
-    # high cost on x1dot to lower fast impact and to encourage pumping
-    return doubleHinge_x  + 20.0f0*(1.0f0-cos(x2)) + 
-            2.0f0*x1dot^2.0f0 + 0.5f0*x2dot^2.0f0
-
-end
-
-function computeLossSampler(x0, param::AbstractArray{T}; totalTimeStep = totalTimeStep) where {T<:Real}
+function accumulatedLossSampler(x0, param::AbstractArray{T}; totalTimeStep = totalTimeStep) where {T<:Real}
     ψ, θk   = unstackParams(param)
     ltotal  = 0.0f0
 
@@ -153,16 +141,14 @@ function computeLossSampler(x0, param::AbstractArray{T}; totalTimeStep = totalTi
 
             x  = oneStep(x, input(x, θk, k) )
             lk = pk[k]*lossPerState(x) 
-            # if i == totalTimeStep   #terminal loss
-            #     lk *= 2.0f0
-            # end
+ 
             ltotal += lk/totalTimeStep
         end
     end
     return ltotal/length(x0)
 end
 
-function computeLoss(X, param::AbstractArray{T}, sampleEvery::Int, fullTraj::Bool ; totalTimeStep = totalTimeStep) where {T<:Real}
+function accumulatedLoss(X, param::AbstractArray{T}, sampleEvery::Int, fullTraj::Bool ; totalTimeStep = totalTimeStep) where {T<:Real}
     ψ, θk   = unstackParams(param)
     ltotal  = 0.0f0
 
@@ -184,26 +170,41 @@ function computeLoss(X, param::AbstractArray{T}, sampleEvery::Int, fullTraj::Boo
     return ltotal/length(X)
 end
 
-function oneBatch(xi, param::AbstractArray{T}; totalTimeStep = totalTimeStep) where {T<:Real}
-    
+function lossPerState(x)
+    x1, x2, x1dot, x2dot = x
+    doubleHinge_x = 0.0f0
+
+    abs(x1) > TRACK_LENGTH/2.0f0 ? doubleHinge_x = 1.0f0*abs.(x1) : nothing
+
+    # high cost on x1dot to lower fast impact and to encourage pumping
+    return doubleHinge_x  + 8.0f0*(1.0f0-cos(x2)) + 
+            1.0f0*x1dot^2.0f0 + 0.5f0*x2dot^2.0f0
+
+end
+
+function setDistanceLoss(X::Vector{Vector{T}}; r=0.3f0) where {T<:Real}
+    delta = mapreduce(lossPerState, min, X)
+    return ifelse(delta < r, 0.0f0, delta - r) 
+end
+
+function averageControlLoss(x0, param::AbstractArray{T}; totalTimeStep = totalTimeStep) where {T<:Real}
     ψ, θk   = unstackParams(param)
-    ltotal  = 0.0f0
-    x       = deepcopy(xi)
+    ltotal = 0.0f0
 
-    for i in 1:totalTimeStep
-        pk = bin(x, ψ)
+    for xi in x0
+        X = Vector{Vector{T}}(undef, totalTimeStep+1)
+        X[1] = xi
+        for i in 1:totalTimeStep
+            pk = bin(X[i], ψ)      #Gaussian: quadratic boudaries
+                                # BNN arbtrary training
 
-        if rand() > 0.3
-            k = argmax(pk)      # improve the greedy
-        else
-            k = rand(1:1:binSize)    # exploration
+            uall = [input(X[i], θk, k)[1] for k in 1:binSize]
+            ui = [dot(pk, uall)]
+            X[i+1] = oneStep(X[i], ui)
         end
-
-        x  = oneStep(x, input(x, θk, k) )
-        lk = pk[k]*lossPerState(x) 
-        ltotal += lk/totalTimeStep
+        ltotal += setDistanceLoss(X) + lossPerState(X[end])     #set distance and terminal loss
     end
-    return ltotal
+    return ltotal/length(x0)
 end
 
 function poi(ψ)
@@ -227,11 +228,9 @@ function trainEM()
         #inorder to assist exploration 
         x0      = sampleInitialState(ψ, θk; totalTimeStep=8000, minibatch=minibatch)
 
-        # X       = [trajectory(xi, ψ, θk; totalTimeStep = 3000) for xi in x0]
         # For each state in the trajectory, compute the loss incurred by each of the given by the 
         # bin generator 
-        # l1(θ)   = computeLoss(X, θ, 2, true; totalTimeStep = 2000)
-        l1(θ)   = computeLossSampler(x0, θ; totalTimeStep = 4000)
+        l1(θ)   = averageControlLoss(x0, θ; totalTimeStep = 2000)
 
         # ForwardDiff.gradient takes the gradient of the loss wrt the state bin parameters and the 
         # controller parameters in each bin
@@ -248,7 +247,7 @@ function trainEM()
                 xi = x0[1]
             end
             X = testBayesian(xi, ψ, θk; totalTimeStep=10000)
-            println("loss = ", computeLossSampler([xi], param), " POI = ", poi(ψ))
+            println("loss = ", averageControlLoss([xi], param), " POI = ", poi(ψ))
             counter = 0
         end
         counter += 1
