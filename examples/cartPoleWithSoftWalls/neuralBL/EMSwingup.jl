@@ -127,11 +127,11 @@ function lossPerState(x)
     x1, x2, x1dot, x2dot = x
     doubleHinge_x = 0.0f0
 
-    abs(x1) > D/2.0f0 ? doubleHinge_x = 3.0f0*abs.(x1) : nothing
+    abs(x1) > TRACK_LENGTH/2.0f0 ? doubleHinge_x = 3.0f0*abs.(x1) : nothing
 
     # high cost on x1dot to lower fast impact and to encourage pumping
-    return doubleHinge_x  + 12.0f0*(1.0f0-cos(x2)) + 
-            2.0f0*x1dot^2.0f0 + 0.4f0*x2dot^2.0f0
+    return 10.0*(doubleHinge_x  + 15.0f0*(1.0f0-cos(x2)) + 
+            2.0f0*x1dot^2.0f0 + 0.8f0*x2dot^2.0f0)
 
 end
 
@@ -195,7 +195,7 @@ function trainEM()
     param       = stackParams(ψ, θk)
     opt         = Adam(0.001f0)
     counter     = 0
-    minibatch   = 3
+    minibatch   = 4
     diff_results = DiffResults.GradientResult(param)
 
     for i in 1:10000
@@ -220,12 +220,14 @@ function trainEM()
         if counter > 5
             ψ, θk  = unstackParams(param)
             if rand() > 0.8
-                xi = [0.0f0, pi, 1.0f0, 0.5f0]
+                xi = [0.0f0, pi, 0.0f0, 0.5f0]
             else
                 xi = x0[1]
             end
             X = testBayesian(xi, ψ, θk; totalTimeStep=10000)
             println("loss = ", computeLossSampler([xi], param), " POI = ", poi(ψ))
+            BSON.@save "neuralBL/savedWeights/beastHangingWalls.bson" param
+
             counter = 0
         end
         counter += 1

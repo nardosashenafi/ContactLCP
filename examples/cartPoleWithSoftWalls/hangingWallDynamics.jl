@@ -16,23 +16,26 @@ export CartPoleWithSoftWalls
 # const I1            = mp*l^2.0f0/3.0f0
 ##Hardware parameters
 const mc            = 0.57f0    
-const mp            = 0.23f0 
-const l             = 0.6413f0       #length of pendulum
-const lcm           = l/2.0f0        #center of mass of the pendulum  
+# const mp            = 0.107f0 
+const mp            = 0.4f0 
+# const l             = 0.6413f0       #length of pendulum
+const l             = 0.31f0       #length of pendulum
+const lcm           = l        #center of mass of the pendulum  
 const I1            = mp*lcm^2.0f0/3.0f0
 const g             = 9.81f0
-const d             = -0.45f0       #location of the left wall
+const d             = -0.4f0       #location of the left wall
 const wallThickness = 0.05f0
-const D             = 0.9f0         #gap between the walls
-const wallBottomEnd = 0.45f0        #the bottom edge of the walls
-const wallTopEnd    = 0.9f0         #the top edge of the walls
+const D             = 0.8f0         #gap between the walls
+const wallBottomEnd = 0.25f0        #the bottom edge of the walls
+const wallTopEnd    = 0.6f0         #the top edge of the walls
 const contactNum    = 10
 const ϵn_const      = 0.5f0*ones(Float32, contactNum)
 const ϵt_const      = 0.0f0*ones(Float32, contactNum)
 const μ_const       = 0.0f0*ones(Float32, contactNum)
 const gThreshold    = 0.001f0
-const satu          = 4.0f0     #Newtons. 10 Newton corresponds to 5.8 volts
+const satu          = 9.0f0     #Newtons. 10 Newton corresponds to 5.8 volts
 const w             = 0.20f0
+const TRACK_LENGTH  = 1.0f0
 
 const leftWall_bottom   = [d, wallBottomEnd]
 const leftWall_top      = [d, wallTopEnd]
@@ -257,13 +260,13 @@ function lqrGains()
 
     C = Matrix{Float32}(LinearAlgebra.I, (4, 4)) 
     cartLinearized = ControlSystems.ss(A, B, C, 0.0f0)
-    Q = 20.0f0*Matrix{Float32}(LinearAlgebra.I, (4, 4)) 
+    Q = 10.0f0*Matrix{Float32}(LinearAlgebra.I, (4, 4)) 
     R = 3.0f0
     ControlSystems.lqr(cartLinearized, Q, R)
 end
 
 function lqr(z::AbstractArray{T}) where {T<:Real}
-    k = convert.(T, vec([ -2.58192  32.2164  -4.41508  6.84527]))
+    k = convert.(T, vec([-1.82566  30.4356  -3.33462  5.88852]))
     # k = zeros(4)
     return -k'*z
 end
@@ -327,10 +330,10 @@ function createAnimateObject(x1, θ)
         MeshLambertMaterial(color=RGBA{Float32}(1.0, 0.0, 0.0, 1.0))))
     settransform!(vpendulum[:link], Translation(0.0, x1, 0.00) ∘ LinearMap(RotX(θ)))
 
-    # setobject!(vpendulum[:bob], MeshObject(
-    #     HyperSphere(Point(0.0, 0.0, l), 0.015),
-    #     MeshLambertMaterial(color=RGBA{Float32}(0.0, 0.0, 1.0, 1.0))))
-    # settransform!(vpendulum[:bob], Translation(0.0, x1, 0.00) ∘ LinearMap(RotX(θ)))
+    setobject!(vpendulum[:bob], MeshObject(
+        HyperSphere(Point(0.0, 0.0, l), 0.015),
+        MeshLambertMaterial(color=RGBA{Float32}(0.0, 0.0, 1.0, 1.0))))
+    settransform!(vpendulum[:bob], Translation(0.0, x1, 0.00) ∘ LinearMap(RotX(θ)))
    
     vwalls = vis[:walls]
 
@@ -356,7 +359,7 @@ function animate(Z)
         x1, θ = z[1:2]
         settransform!(vcart, Translation(-0.2, x1-w/2.f0, 0.0))
         settransform!(vpendulum[:link], Translation(0.0, x1, 0.0) ∘ LinearMap(RotX(θ)))
-        # settransform!(vpendulum[:bob], Translation(0.0, x1, 0.0) ∘ LinearMap(RotX(θ)))
+        settransform!(vpendulum[:bob], Translation(0.0, x1, 0.0) ∘ LinearMap(RotX(θ)))
         sleep(0.04)
     end
 
