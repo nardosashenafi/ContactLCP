@@ -16,8 +16,8 @@ export CartPoleWithSoftWalls
 # const I1            = mp*l^2.0f0/3.0f0
 ##Hardware parameters
 const mc            = 0.57f0    
-# const mp            = 0.107f0 
-const mp            = 0.4f0 
+const mp            = 0.184f0 
+# const mp            = 0.4f0 
 # const l             = 0.6413f0       #length of pendulum
 const l             = 0.31f0       #length of pendulum
 const lcm           = l        #center of mass of the pendulum  
@@ -28,13 +28,13 @@ const wallThickness = 0.05f0
 const D             = 0.8f0         #gap between the walls
 const wallBottomEnd = 0.25f0        #the bottom edge of the walls
 const wallTopEnd    = 0.6f0         #the top edge of the walls
-const contactNum    = 10
+const contactNum    = 12
 const ϵn_const      = 0.5f0*ones(Float32, contactNum)
 const ϵt_const      = 0.0f0*ones(Float32, contactNum)
 const μ_const       = 0.0f0*ones(Float32, contactNum)
 const gThreshold    = 0.001f0
-const satu          = 9.0f0     #Newtons. 10 Newton corresponds to 5.8 volts
-const w             = 0.20f0
+const satu          = 17.0f0     #Newtons. 10 Newton corresponds to 5.8 volts
+const w             = 0.10f0
 const TRACK_LENGTH  = 1.0f0
 
 const leftWall_bottom   = [d, wallBottomEnd]
@@ -173,6 +173,14 @@ function gapPendulumToBottomWall(pendulum_xy, bottomEdge, θ)
     return g, wn
 end
 
+function gapCartLimits(x1)
+    gnleft = (x1 - w/2.0f0) + TRACK_LENGTH/2.0f0
+    gnright = TRACK_LENGTH/2.0 - (x1 + w/2.0f0)
+    wnleft = [1.0f0; 0.f0]
+    wnright =  [-1.0f0; 0.0f0]
+    return gnleft, gnright, wnleft, wnright
+end
+
 function gap(x1, θ)
     #this function checks for two forms of contact on the two sides of the two walls (total of 8 cases)
     #The first set of gap functions checks if the pendulum link is in contact with the corners of the walls
@@ -216,17 +224,18 @@ function gap(x1, θ)
         wn4innerleft = wn3innerleft
         wn4outerleft = -wn4innerleft
     end
+    gnleft, gnright, wnleft, wnright = gapCartLimits(x1)
     gbottomright, wnbottomright = gapPendulumToBottomWall(pendulum_xy, rbl[2], θ)
-
-    gn = [g1innerleft, g1outerleft, g2innerleft, g2outerleft, g3innerleft, g3outerleft, g4innerleft, g4outerleft, gbottomleft, gbottomright] 
-    wn = hcat(wn1innerleft, wn1outerleft, wn2innerleft, wn2outerleft, wn3innerleft, wn3outerleft, wn4innerleft, wn4outerleft, wnbottomleft, wnbottomright)
+    gn = [g1innerleft, g1outerleft, g2innerleft, g2outerleft, g3innerleft, g3outerleft, g4innerleft, g4outerleft,  gnleft, gnright, gbottomleft, gbottomright] 
+    wn = hcat(wn1innerleft, wn1outerleft, wn2innerleft, wn2outerleft, wn3innerleft, wn3outerleft, wn4innerleft, wn4outerleft, wnleft, wnright, wnbottomleft, wnbottomright)
     return gn, wn
 end
 
 function wt(x1, θ) 
     w1 = [0.0f0; -l*sin(θ)]
     wtbottom = [1; -l*cos(θ)]
-    return hcat(-w1, w1, -w1, w1, w1, -w1, w1, -w1, wtbottom, wtbottom)
+    wtracklimits = [0.0f0; 0.0f0]
+    return hcat(-w1, w1, -w1, w1, w1, -w1, w1, -w1, wtracklimits, wtracklimits, wtbottom, wtbottom)
 end
 
 function vnormal(Wn, v)
@@ -260,20 +269,20 @@ function lqrGains()
 
     C = Matrix{Float32}(LinearAlgebra.I, (4, 4)) 
     cartLinearized = ControlSystems.ss(A, B, C, 0.0f0)
-    Q = 10.0f0*Matrix{Float32}(LinearAlgebra.I, (4, 4)) 
+    Q = diagm(0 => [5.0, 10.0, 2.0, 8.0])
     R = 3.0f0
     ControlSystems.lqr(cartLinearized, Q, R)
 end
 
 function lqr(z::AbstractArray{T}) where {T<:Real}
-    k = convert.(T, vec([-1.82566  30.4356  -3.33462  5.88852]))
+    k = convert.(T, vec([ -1.29099  26.7418  -2.28048  5.10149]))
     # k = zeros(4)
     return -k'*z
 end
 
 inputLayer(z) = [z[1], cos(z[2]), sin(z[2]), z[3], z[4]]
 
-function control(z, u::AbstractArray{T}; expert=false, lqr_max = 10.0f0) where {T<:Real}
+function control(z, u::AbstractArray{T}; expert=false, lqr_max = 17.0f0) where {T<:Real}
     q, v = parseStates(z)
 
     if expert #working expert controller
@@ -281,7 +290,7 @@ function control(z, u::AbstractArray{T}; expert=false, lqr_max = 10.0f0) where {
     else
         x1, θ = q 
         x1dot, θdot = v
-        if ((1.0f0-cos(θ) <= (1.0f0-cosd(15.0))) && (abs(θdot) <= 0.5f0))
+        if ((1.0f0-cos(θ) <= (1.0f0-cosd(12.0))) && (abs(θdot) <= 0.6f0))
             return clamp(lqr(z), -lqr_max, lqr_max)
         else
             return clamp(u[1], -satu, satu)
@@ -346,6 +355,18 @@ function createAnimateObject(x1, θ)
         Rect(Vec(0.0, 0.0, wallBottomEnd), Vec(0.0, wallThickness, wallTopEnd-wallBottomEnd)),
         MeshLambertMaterial(color=RGBA{Float32}(0.0, 0.0, 0.0, 1.0))))
     settransform!(vwalls[:right], Translation(0.0, d+D, 0.0))
+
+    vtrackLimits = vis[:trackLimits]
+
+    setobject!(vtrackLimits[:left], MeshObject(
+        Rect(Vec(0.0, 0.0, 0.0), Vec(0.0, wallThickness, 0.1)),
+        MeshLambertMaterial(color=RGBA{Float32}(0.0, 0.0, 0.0, 1.0))))
+    settransform!(vtrackLimits[:left], Translation(0.0, -TRACK_LENGTH/2.0-wallThickness, 0.0))
+
+    setobject!(vtrackLimits[:right], MeshObject(
+        Rect(Vec(0.0, 0.0, 0.0), Vec(0.0, wallThickness, 0.1)),
+        MeshLambertMaterial(color=RGBA{Float32}(0.0, 0.0, 0.0, 1.0))))
+    settransform!(vtrackLimits[:right], Translation(0.0, TRACK_LENGTH/2.0, 0.0))
 
 
     return vcart, vpendulum

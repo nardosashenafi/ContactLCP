@@ -20,8 +20,8 @@ function testBayesian(xi, ψ, θk; totalTimeStep = totalTimeStep)
     plotPartition(X, ψ, θk)
     fig1.canvas.draw()      #draws tupdates in for loop
     fig1.canvas.flush_events()  #gets new figure in for loop
-    # animate(X)
-    # sleep(1)
+    animate(X)
+    sleep(1)
     return X
 end
 
@@ -36,6 +36,12 @@ function plots(X, fig1)
     scatter(X[end][2], X[end][4])
     ylabel("thetadot")
     xlabel("theta")
+
+    plt.subplot(2, 2, 3)
+    plot(getindex.(X, 1), getindex.(X, 3))
+    scatter(X[end][1], X[end][3])
+    ylabel("xdot")
+    xlabel("x")
 end
 
 function plotPartition(X, ψ, θk)
@@ -86,11 +92,11 @@ function plotPartition(X, ψ, θk)
         end
     end
 
-    plt.subplot(2, 2, 3)
+    # plt.subplot(2, 2, 3)
 
-    imshow(u, extent = [X1[1], X1[end], X1dot[1], X1dot[end]])
-    ylabel("Control")
-    xlabel("x1 vs x1dot")
+    # imshow(u, extent = [X1[1], X1[end], X1dot[1], X1dot[end]])
+    # ylabel("Control")
+    # xlabel("x1 vs x1dot")
 
 end
 

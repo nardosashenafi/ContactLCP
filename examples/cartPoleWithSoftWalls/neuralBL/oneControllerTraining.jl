@@ -2,7 +2,7 @@ include("EMSwingup.jl")
 
 function sampleInitialState(param::Vector{T}; totalTimeStep = totalTimeStep, minibatch=4) where {T<:Real}
     
-    x0          = T.([rand(d+w/2:0.01:D+d-w/2), rand(0.0:0.005:2pi), 
+    x0  = T.([rand(-TRACK_LENGTH/2.0:0.01:TRACK_LENGTH/2.0), rand(0.0:0.005:2pi), 
                   rand(-0.5:0.001:0.5), rand(-3.0:0.001:3.0)])
 
     X           = trajectory(x0, param)
@@ -16,8 +16,8 @@ function sampleInitialState(param::Vector{T}; totalTimeStep = totalTimeStep, min
             #Hence sampling from this trajectory tends to overwhelm the reply buffer with large x1 values.
             #Clamping x1 is bad because it tends to always work under the edge cases
             #so simply randomize x1 when it goes too far
-            if !(d+w/2 - cropBuffer <= select[1] <= D+d-w/2 + cropBuffer)
-                select[1]  = rand(d+w/2 - cropBuffer:0.01:D+d-w/2 + cropBuffer) 
+            if  !(-TRACK_LENGTH/2.0 <= select[1] <= TRACK_LENGTH/2.0)
+                select[1]  = rand(-TRACK_LENGTH/2.0:0.01:TRACK_LENGTH/2.0) 
             end
             samples[i] = select
         else
@@ -51,7 +51,7 @@ function oneControllerLoss(x0, param::AbstractArray{T}; totalTimeStep = totalTim
             ui = controlArray[1](inputLayer(X[i]), param)
             X[i+1] = oneStep(X[i], ui)
         end
-        ltotal += setDistanceLoss(X) + lossPerState(X[end])
+        ltotal += setDistanceLoss(X) 
     end
     return ltotal/length(x0)
 end
@@ -74,14 +74,14 @@ function trainOneController()
     for i in 1:10000
 
         x0      = sampleInitialState(param; totalTimeStep=8000, minibatch=minibatch)
-        l1(θ)   = oneControllerLoss(x0, θ; totalTimeStep = 2000)
+        l1(θ)   = oneControllerLoss(x0, θ; totalTimeStep = 1500)
 
         ForwardDiff.gradient!(diff_results, l1, param)
         grads = DiffResults.gradient(diff_results)
 
         if counter > 5
             if rand() > 0.8
-                xi = [0.0f0, pi, 1.0f0, 0.5f0]
+                xi = [0.0f0, pi, 0.0f0, 0.2f0]
             else
                 xi = x0[1]
             end

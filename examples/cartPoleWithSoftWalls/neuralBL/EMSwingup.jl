@@ -1,6 +1,6 @@
 using LinearAlgebra, Flux, DiffEqFlux, LogExpFunctions, ForwardDiff
 using Distributions
-using PyPlot 
+using PyPlot, BSON 
 using ForwardDiff: Chunk, GradientConfig
 # import ContactLCP
 
@@ -11,9 +11,9 @@ include("../hangingWallDynamics.jl")
 
 function checkContact(x, gn::Vector{T}, gThreshold, total_contact_num) where {T<:Real}
      
-    whichInContact = zeros(T, 8)
+    whichInContact = zeros(T, 10)
 
-    for i in 1:8
+    for i in 1:10
         if (-wallThickness/4.0f0+gThreshold < gn[i] < gThreshold)  
             # we need to detect contact on both sides of a wall. If we simply use gn < gThreshold,
             # then the pendulum would stick to the wall due to the opposing contact forces from both sides
@@ -31,13 +31,13 @@ function checkContact(x, gn::Vector{T}, gThreshold, total_contact_num) where {T<
     if (lbl[1] + threshold <= pendulum_xy[1] <= lbr[1] - threshold) &&
         (lbl[2] - threshold <= pendulum_xy[2] <= lbl[2] + threshold)
         [filter!(e -> e ≠ j, contactIndex) for j in 1:4]
-        append!(contactIndex, 9)
+        append!(contactIndex, 11)
     end
 
     if (rbl[1] + threshold <= pendulum_xy[1] <= rbr[1] - threshold) &&
         (rbl[2] - threshold <= pendulum_xy[2] <= rbl[2] + threshold)
         [filter!(e -> e ≠ j, contactIndex) for j in 5:8]
-        append!(contactIndex, 10)
+        append!(contactIndex, 12)
     end
 
     if any(i -> i ∈ contactIndex, [3,4])    #the pendulum cannot contact on the edge and along the length at the same time. Or else it will get stick to the wall
@@ -49,7 +49,7 @@ function checkContact(x, gn::Vector{T}, gThreshold, total_contact_num) where {T<
     if any(i -> i ∈ contactIndex, [7,8])
         [filter!(e -> e ≠ j, contactIndex) for j in 5:6]
     end
-
+    #DONT TOUCH CONTACTS 9 AND 10. THEY ARE FOR THE TRACK LIMITS
     return contactIndex, length(contactIndex)
 end
 
@@ -60,6 +60,7 @@ lcp  = Lcp(Float32, sys)
 oneStep(x, param) = oneTimeStep(lcp, x, param; Δt=Δt)
 
 fig1 = figure()
+vis = startAnimator()
 include("trainingHelpers.jl")
 include("testHelpers.jl")
 
@@ -90,8 +91,13 @@ println("Make sure that bin(x, ψ) does not return a large probability in some s
         This causes argmax(bin(x, ψ)) to return the same value for a long time in the training
         until the highest probability crosses 0.5")
 
-function bin(x, θ::AbstractArray{T}) where {T<:Real} 
-    return Flux.softmax(binNN(inputLayer(x), θ))
+
+function softargmax(x; β=50.0f0) 
+    return exp.(β*x)/sum(exp.(β*x))
+end
+
+function bin(x, ψ::AbstractArray{T}) where {T<:Real} 
+    return softargmax(binNN(inputLayer(x), ψ))
 end
 
 function input(x, θk, i::Int)
@@ -174,7 +180,7 @@ function lossPerState(x)
     x1, x2, x1dot, x2dot = x
     doubleHinge_x = 0.0f0
 
-    abs(x1) > TRACK_LENGTH/2.0f0 ? doubleHinge_x = 1.0f0*abs.(x1) : nothing
+    abs(x1) > D/2.0f0 ? doubleHinge_x = 7.0f0*abs.(x1) : nothing
 
     # high cost on x1dot to lower fast impact and to encourage pumping
     return doubleHinge_x  + 8.0f0*(1.0f0-cos(x2)) + 
@@ -202,20 +208,19 @@ function averageControlLoss(x0, param::AbstractArray{T}; totalTimeStep = totalTi
             ui = [dot(pk, uall)]
             X[i+1] = oneStep(X[i], ui)
         end
-        ltotal += setDistanceLoss(X) + lossPerState(X[end])     #set distance and terminal loss
+        ltotal += setDistanceLoss(X)  #set distance and terminal loss
     end
     return ltotal/length(x0)
 end
 
-function poi(ψ)
-    xi = [0.0f0, pi, 0.0f0, 0.1f0]
-    return bin(xi, ψ)
+function poi(x, ψ)
+    return bin(x, ψ)
 end
 
 function trainEM()
 
-    ψ           = 0.5f0*randn(Float32, binNN_length)
-    θk          = [0.1f0*randn(Float32, controlNN_length[i]) for i in 1:binSize]
+    ψ           = 0.5f0*randn(Float64, binNN_length)
+    θk          = [0.1f0*randn(Float64, controlNN_length[i]) for i in 1:binSize]
     param       = stackParams(ψ, θk)
     opt         = Adam(0.001f0)
     counter     = 0
@@ -230,7 +235,7 @@ function trainEM()
 
         # For each state in the trajectory, compute the loss incurred by each of the given by the 
         # bin generator 
-        l1(θ)   = averageControlLoss(x0, θ; totalTimeStep = 2000)
+        l1(θ)   = averageControlLoss(x0, θ; totalTimeStep = 1000)
 
         # ForwardDiff.gradient takes the gradient of the loss wrt the state bin parameters and the 
         # controller parameters in each bin
@@ -242,12 +247,13 @@ function trainEM()
         if counter > 5
             ψ, θk  = unstackParams(param)
             if rand() > 0.8
-                xi = [0.0f0, pi, 1.0f0, 0.5f0]
+                xi = [0.0f0, pi, 0.0f0, 0.2f0]
             else
                 xi = x0[1]
             end
             X = testBayesian(xi, ψ, θk; totalTimeStep=10000)
-            println("loss = ", averageControlLoss([xi], param), " POI = ", poi(ψ))
+            println("loss = ", averageControlLoss([xi], param), " POI = ", poi(xi, ψ))
+            BSON.@save "neuralBL/savedWeights/setdistancetraining.bson" param
             counter = 0
         end
         counter += 1

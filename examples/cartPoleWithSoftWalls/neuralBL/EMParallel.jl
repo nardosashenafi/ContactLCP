@@ -4,21 +4,17 @@ function oneBatch(xi, param::AbstractArray{T}; totalTimeStep = totalTimeStep) wh
     
     ψ, θk   = unstackParams(param)
     ltotal  = 0.0f0
-    x       = deepcopy(xi)
 
+    X = Vector{Vector{T}}(undef, totalTimeStep+1)
+    X[1] = xi
     for i in 1:totalTimeStep
-        pk = bin(x, ψ)
+        pk = bin(X[i], ψ)    
 
-        if rand() > 0.3
-            k = argmax(pk)      # improve the greedy
-        else
-            k = rand(1:1:binSize)    # exploration
-        end
-
-        x  = oneStep(x, input(x, θk, k) )
-        lk = pk[k]*lossPerState(x) 
-        ltotal += lk/totalTimeStep
+        uall = [input(X[i], θk, k)[1] for k in 1:binSize]
+        ui = [dot(pk, uall)]
+        X[i+1] = oneStep(X[i], ui)
     end
+    ltotal += setDistanceLoss(X) + 0.1f0*lossPerState(X[end]) 
     return ltotal
 end
 
@@ -44,14 +40,14 @@ function trainParallel()
     param       = stackParams(ψ, θk)
     opt         = Adam(0.001f0)
     counter     = 0
-    minibatch   = 6
+    minibatch   = 4
 
     for i in 1:10000
         ψ, θk   = unstackParams(param)
-        x0      = sampleInitialState(ψ, θk; totalTimeStep=10000, minibatch=minibatch)
+        x0      = sampleInitialState(ψ, θk; totalTimeStep=8000, minibatch=minibatch)
 
         lg1     = Vector{Vector{eltype(param)}}(undef, length(x0))
-        gradient!(lg1, x0, param; totalTimeStep = 4000) 
+        gradient!(lg1, x0, param; totalTimeStep = 1500) 
         grads   = mean(lg1)
 
         if counter > 10
@@ -63,7 +59,7 @@ function trainParallel()
             end
             testBayesian(xi, ψ, θk; totalTimeStep=7000)
             l1   = oneBatch(xi, param; totalTimeStep = 7000)
-            println("loss = ", l1)
+            println("loss = ", l1, " POI = ", poi(xi, ψ))
             BSON.@save "neuralBL/savedWeights/beastHangingWalls.bson" param
             counter = 0
         end

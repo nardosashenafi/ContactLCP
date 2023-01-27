@@ -9,7 +9,13 @@ function integrate(xi, ψ::Vector{T}, θk; totalTimeStep = totalTimeStep) where 
     for i in 1:totalTimeStep-1
         pk      = bin(X[i], ψ)           #holds a softmax
         c       = argmax(pk)             # can be categorical
-        U[i]    = input(X[i], θk, c)
+        #select greedy control
+        # U[i]    = input(X[i], θk, c)
+
+        #average control
+        uall = [input(X[i], θk, k)[1] for k in 1:binSize]
+        U[i] = [dot(pk, uall)]
+
         X[i+1]  = oneStep(X[i], U[i])
     end
 
@@ -28,7 +34,7 @@ end
 
 function sampleInitialState(ψ::Vector{T}, θk; totalTimeStep = totalTimeStep, minibatch=4) where {T<:Real}
     
-    x0          = T.([rand(d+w/2:0.01:D+d-w/2), rand(0.0:0.005:2pi), 
+    x0          = T.([rand(-TRACK_LENGTH/2.0+w/2.0:0.01:TRACK_LENGTH/2.0-w/2.0), rand(0.0:0.005:2pi), 
                   rand(-0.5:0.001:0.5), rand(-3.0:0.001:3.0)])
 
     X           = trajectory(x0, ψ, θk)
@@ -36,14 +42,14 @@ function sampleInitialState(ψ::Vector{T}, θk; totalTimeStep = totalTimeStep, m
     cropBuffer  = 0.3f0
 
     for i in 1:minibatch
-        if rand() > 0.2
+        if rand() > 0.4
             select     = rand(X)
             #It is highly likely that the initial parameter cause the cart to go far from x1 = 0
             #Hence sampling from this trajectory tends to overwhelm the reply buffer with large x1 values.
             #Clamping x1 is bad because it tends to always work under the edge cases
             #so simply randomize x1 when it goes too far
-            if !(d+w/2 - cropBuffer <= select[1] <= D+d-w/2 + cropBuffer)
-                select[1]  = rand(d+w/2 - cropBuffer:0.01:D+d-w/2 + cropBuffer) 
+            if !(-TRACK_LENGTH/2.0+w/2.0 <= select[1] <= TRACK_LENGTH/2.0-w/2.0)
+                select[1]  = rand(-TRACK_LENGTH/2.0+w/2.0:0.01:TRACK_LENGTH/2.0-w/2.0) 
             end
             samples[i] = select
         else
