@@ -180,7 +180,7 @@ function lossPerState(x)
     x1, x2, x1dot, x2dot = x
     doubleHinge_x = 0.0f0
 
-    abs(x1) > D/2.0f0 ? doubleHinge_x = 7.0f0*abs.(x1) : nothing
+    abs(x1) > D/2.0f0 ? doubleHinge_x = 20.0f0*(abs(x1)-D/2.0f0) : nothing
 
     # high cost on x1dot to lower fast impact and to encourage pumping
     return doubleHinge_x  + 8.0f0*(1.0f0-cos(x2)) + 
@@ -190,7 +190,11 @@ end
 
 function setDistanceLoss(X::Vector{Vector{T}}; r=0.3f0) where {T<:Real}
     delta = mapreduce(lossPerState, min, X)
-    return ifelse(delta < r, 0.0f0, delta - r) 
+    doubleHingeLoss = 0.0f0
+    for x in X
+        abs(x[1]) > D/2.0f0 ? doubleHingeLoss += 5.0f0*(abs(x[1])-D/2.0f0) : nothing
+    end
+    return ifelse(delta < r, 0.0f0, delta - r) + doubleHingeLoss
 end
 
 function averageControlLoss(x0, param::AbstractArray{T}; totalTimeStep = totalTimeStep) where {T<:Real}
@@ -202,13 +206,12 @@ function averageControlLoss(x0, param::AbstractArray{T}; totalTimeStep = totalTi
         X[1] = xi
         for i in 1:totalTimeStep
             pk = bin(X[i], ψ)      #Gaussian: quadratic boudaries
-                                # BNN arbtrary training
 
             uall = [input(X[i], θk, k)[1] for k in 1:binSize]
             ui = [dot(pk, uall)]
             X[i+1] = oneStep(X[i], ui)
         end
-        ltotal += setDistanceLoss(X)  #set distance and terminal loss
+        ltotal += setDistanceLoss(X) #set distance and terminal loss
     end
     return ltotal/length(x0)
 end
