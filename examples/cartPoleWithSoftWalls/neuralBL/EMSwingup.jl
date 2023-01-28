@@ -175,39 +175,41 @@ function accumulatedLoss(X, param::AbstractArray{T}, sampleEvery::Int, fullTraj:
     return ltotal/length(X)
 end
 
+function accumulatedLossPerState(x)
+    x1, x2, x1dot, x2dot = x
+    doubleHinge_x = 0.0f0
+    incurCostAt = TRACK_LENGTH
+
+    abs(x1) > incurCostAt/2.0f0 ? doubleHinge_x = 15.0f0*(abs(x1)-incurCostAt/2.0f0) : nothing
+
+    # high cost on x1dot to lower fast impact and to encourage pumping
+    return doubleHinge_x  + 4.0f0*(1.0f0-cos(x2)) + 
+            0.25f0*x1dot^2.0f0 + 0.1f0*x2dot^2.0f0
+end
+
 function setDistancelossPerState(x)
     x1, x2, x1dot, x2dot = x
     doubleHinge_x = 0.0f0
-    incurCostAt = 0.75f0
-
-    abs(x1) > incurCostAt/2.0f0 ? doubleHinge_x = 20.0f0*(abs(x1)-incurCostAt/2.0f0) : nothing
+    incurCostAt = TRACK_LENGTH
 
     # high cost on x1dot to lower fast impact and to encourage pumping
-    return doubleHinge_x  + 8.0f0*(1.0f0-cos(x2)) + 
+    return doubleHinge_x  + 12.0f0*(1.0f0-cos(x2)) + 
             1.0f0*x1dot^2.0f0 + 0.5f0*x2dot^2.0f0
 
 end
 
-function setDistanceLoss(X::Vector{Vector{T}}; r=0.3f0) where {T<:Real}
-    delta = mapreduce(setDistancelossPerState, min, X)
+function setDistanceLoss(X::Vector{Vector{T}}, pk, k; r=0.2f0) where {T<:Real}
+    lmin, lminIndex = findmin(map(setDistancelossPerState, X))
+    actionProbability = 1.0f0 - mean(map((pki, ki) -> pki[ki], pk[1:lminIndex], k[1:lminIndex]))
+    delta = lmin*actionProbability
+
+    incurCostAt = TRACK_LENGTH
     doubleHingeLoss = 0.0f0
-    # incurCostAt = 0.75f0
-    # for x in X
-    #     abs(x[1]) > incurCostAt/2.0f0 ? doubleHingeLoss += 5.0f0*(abs(x[1])-incurCostAt/2.0f0) : nothing
-    # end
+    for x in X 
+        abs(x[1]) > incurCostAt/2.0f0 ? doubleHingeLoss += 5.0f0*(abs(x[1])-incurCostAt/2.0f0) : nothing
+    end
+
     return ifelse(delta < r, 0.0f0, delta - r) + doubleHingeLoss
-end
-
-function accumulatedLossPerState(x)
-    x1, x2, x1dot, x2dot = x
-    doubleHinge_x = 0.0f0
-    incurCostAt = 0.75f0
-
-    abs(x1) > incurCostAt/2.0f0 ? doubleHinge_x = 20.0f0*(abs(x1)-incurCostAt/2.0f0) : nothing
-
-    # high cost on x1dot to lower fast impact and to encourage pumping
-    return doubleHinge_x  + 4.0f0*(1.0f0-cos(x2)) + 
-            0.5f0*x1dot^2.0f0 + 0.25f0*x2dot^2.0f0
 end
 
 function averageControlLoss(x0, param::AbstractArray{T}; totalTimeStep = totalTimeStep) where {T<:Real}
@@ -217,25 +219,21 @@ function averageControlLoss(x0, param::AbstractArray{T}; totalTimeStep = totalTi
     for xi in x0
         X = Vector{Vector{T}}(undef, totalTimeStep+1)
         X[1] = xi
-        lxi = 0.0f0
+        pk = Vector{Vector{T}}(undef, totalTimeStep)
+        k = Vector{Int}(undef, totalTimeStep)
         for i in 1:totalTimeStep
-            pk = bin(X[i], ψ)      #Gaussian: quadratic boudaries
+            pk[i] = bin(X[i], ψ)      #Gaussian: quadratic boudaries
 
             if rand() > 0.3
-                k = argmax(pk)
+                k[i] = argmax(pk[i])
             else
-                k = rand(1:1:binSize)
+                k[i] = rand(1:1:binSize)
             end
-            ui = input(X[i], θk, k)
-            # uall = [input(X[i], θk, k)[1] for k in 1:binSize]
-            # ui = [dot(pk, uall)]
+            ui = input(X[i], θk, k[i])
             X[i+1] = oneStep(X[i], ui)
-            lxi += pk[k]*accumulatedLossPerState(X[i+1])
-            #Constructing loss as pk[k]*lossPerState(x) creates distinct regions that help catch the pendulum against the wall
-            #this method also helps promote exploration
         end
-        ltotal += setDistanceLoss(X) + lxi/totalTimeStep #set distance and terminal loss
-    end
+        ltotal += setDistanceLoss(X[1:totalTimeStep], pk, k) 
+       end
     return ltotal/length(x0)
 end
 
@@ -261,7 +259,7 @@ function trainEM()
 
         # For each state in the trajectory, compute the loss incurred by each of the given by the 
         # bin generator 
-        l1(θ)   = averageControlLoss(x0, θ; totalTimeStep = 1000)
+        l1(θ)   = averageControlLoss(x0, θ; totalTimeStep = 1500)
 
         # ForwardDiff.gradient takes the gradient of the loss wrt the state bin parameters and the 
         # controller parameters in each bin
@@ -277,7 +275,7 @@ function trainEM()
             else
                 xi = x0[1]
             end
-            X = testBayesian(xi, ψ, θk; totalTimeStep=10000)
+            X = testBayesian(xi, ψ, θk; totalTimeStep=7000)
             println("loss = ", averageControlLoss([xi], param), " POI = ", poi(xi, ψ))
             BSON.@save "neuralBL/savedWeights/setdistancetraining.bson" param
             counter = 0
