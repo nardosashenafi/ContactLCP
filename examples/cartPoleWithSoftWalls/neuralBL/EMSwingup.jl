@@ -11,9 +11,9 @@ include("../hangingWallDynamics.jl")
 
 function checkContact(x, gn::Vector{T}, gThreshold, total_contact_num) where {T<:Real}
      
-    whichInContact = zeros(T, 10)
+    whichInContact = zeros(T, 8)
 
-    for i in 1:10
+    for i in 1:8
         if (-wallThickness/4.0f0+gThreshold < gn[i] < gThreshold)  
             # we need to detect contact on both sides of a wall. If we simply use gn < gThreshold,
             # then the pendulum would stick to the wall due to the opposing contact forces from both sides
@@ -31,13 +31,13 @@ function checkContact(x, gn::Vector{T}, gThreshold, total_contact_num) where {T<
     if (lbl[1] + threshold <= pendulum_xy[1] <= lbr[1] - threshold) &&
         (lbl[2] - threshold <= pendulum_xy[2] <= lbl[2] + threshold)
         [filter!(e -> e ≠ j, contactIndex) for j in 1:4]
-        append!(contactIndex, 11)
+        append!(contactIndex, 9)
     end
 
     if (rbl[1] + threshold <= pendulum_xy[1] <= rbr[1] - threshold) &&
         (rbl[2] - threshold <= pendulum_xy[2] <= rbl[2] + threshold)
         [filter!(e -> e ≠ j, contactIndex) for j in 5:8]
-        append!(contactIndex, 12)
+        append!(contactIndex, 10)
     end
 
     if any(i -> i ∈ contactIndex, [3,4])    #the pendulum cannot contact on the edge and along the length at the same time. Or else it will get stick to the wall
@@ -49,7 +49,6 @@ function checkContact(x, gn::Vector{T}, gThreshold, total_contact_num) where {T<
     if any(i -> i ∈ contactIndex, [7,8])
         [filter!(e -> e ≠ j, contactIndex) for j in 5:6]
     end
-    #DONT TOUCH CONTACTS 9 AND 10. THEY ARE FOR THE TRACK LIMITS
     return contactIndex, length(contactIndex)
 end
 
@@ -97,7 +96,7 @@ function softargmax(x; β=50.0f0)
 end
 
 function bin(x, ψ::AbstractArray{T}) where {T<:Real} 
-    return softargmax(binNN(inputLayer(x), ψ))
+    return Flux.softmax(binNN(inputLayer(x), ψ))
 end
 
 function input(x, θk, i::Int)
@@ -176,11 +175,12 @@ function accumulatedLoss(X, param::AbstractArray{T}, sampleEvery::Int, fullTraj:
     return ltotal/length(X)
 end
 
-function lossPerState(x)
+function setDistancelossPerState(x)
     x1, x2, x1dot, x2dot = x
     doubleHinge_x = 0.0f0
+    incurCostAt = 0.75f0
 
-    abs(x1) > D/2.0f0 ? doubleHinge_x = 20.0f0*(abs(x1)-D/2.0f0) : nothing
+    abs(x1) > incurCostAt/2.0f0 ? doubleHinge_x = 20.0f0*(abs(x1)-incurCostAt/2.0f0) : nothing
 
     # high cost on x1dot to lower fast impact and to encourage pumping
     return doubleHinge_x  + 8.0f0*(1.0f0-cos(x2)) + 
@@ -189,12 +189,25 @@ function lossPerState(x)
 end
 
 function setDistanceLoss(X::Vector{Vector{T}}; r=0.3f0) where {T<:Real}
-    delta = mapreduce(lossPerState, min, X)
+    delta = mapreduce(setDistancelossPerState, min, X)
     doubleHingeLoss = 0.0f0
-    for x in X
-        abs(x[1]) > D/2.0f0 ? doubleHingeLoss += 5.0f0*(abs(x[1])-D/2.0f0) : nothing
-    end
+    # incurCostAt = 0.75f0
+    # for x in X
+    #     abs(x[1]) > incurCostAt/2.0f0 ? doubleHingeLoss += 5.0f0*(abs(x[1])-incurCostAt/2.0f0) : nothing
+    # end
     return ifelse(delta < r, 0.0f0, delta - r) + doubleHingeLoss
+end
+
+function accumulatedLossPerState(x)
+    x1, x2, x1dot, x2dot = x
+    doubleHinge_x = 0.0f0
+    incurCostAt = 0.75f0
+
+    abs(x1) > incurCostAt/2.0f0 ? doubleHinge_x = 20.0f0*(abs(x1)-incurCostAt/2.0f0) : nothing
+
+    # high cost on x1dot to lower fast impact and to encourage pumping
+    return doubleHinge_x  + 4.0f0*(1.0f0-cos(x2)) + 
+            0.5f0*x1dot^2.0f0 + 0.25f0*x2dot^2.0f0
 end
 
 function averageControlLoss(x0, param::AbstractArray{T}; totalTimeStep = totalTimeStep) where {T<:Real}
@@ -204,14 +217,24 @@ function averageControlLoss(x0, param::AbstractArray{T}; totalTimeStep = totalTi
     for xi in x0
         X = Vector{Vector{T}}(undef, totalTimeStep+1)
         X[1] = xi
+        lxi = 0.0f0
         for i in 1:totalTimeStep
             pk = bin(X[i], ψ)      #Gaussian: quadratic boudaries
 
-            uall = [input(X[i], θk, k)[1] for k in 1:binSize]
-            ui = [dot(pk, uall)]
+            if rand() > 0.3
+                k = argmax(pk)
+            else
+                k = rand(1:1:binSize)
+            end
+            ui = input(X[i], θk, k)
+            # uall = [input(X[i], θk, k)[1] for k in 1:binSize]
+            # ui = [dot(pk, uall)]
             X[i+1] = oneStep(X[i], ui)
+            lxi += pk[k]*accumulatedLossPerState(X[i+1])
+            #Constructing loss as pk[k]*lossPerState(x) creates distinct regions that help catch the pendulum against the wall
+            #this method also helps promote exploration
         end
-        ltotal += setDistanceLoss(X) #set distance and terminal loss
+        ltotal += setDistanceLoss(X) + lxi/totalTimeStep #set distance and terminal loss
     end
     return ltotal/length(x0)
 end
@@ -230,7 +253,7 @@ function trainEM()
     minibatch   = 3
     diff_results = DiffResults.GradientResult(param)
 
-    for i in 1:10000
+    for i in 1:90000
         ψ, θk   = unstackParams(param)
         #Apply combination of DAgger and uniform sampling around the desired equilbrium state
         #inorder to assist exploration 

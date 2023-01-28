@@ -23,12 +23,12 @@ const l             = 0.31f0       #length of pendulum
 const lcm           = l        #center of mass of the pendulum  
 const I1            = mp*lcm^2.0f0/3.0f0
 const g             = 9.81f0
-const d             = -0.3f0       #location of the left wall
+const d             = -0.35f0       #location of the left wall
 const wallThickness = 0.05f0
 const D             = 2.0f0*abs(d)         #gap between the walls
 const wallBottomEnd = 0.20f0        #the bottom edge of the walls
 const wallTopEnd    = 0.6f0         #the top edge of the walls
-const contactNum    = 12
+const contactNum    = 10
 const ϵn_const      = 0.5f0*ones(Float32, contactNum)
 const ϵt_const      = 0.0f0*ones(Float32, contactNum)
 const μ_const       = 0.0f0*ones(Float32, contactNum)
@@ -224,18 +224,22 @@ function gap(x1, θ)
         wn4innerleft = wn3innerleft
         wn4outerleft = -wn4innerleft
     end
-    gnleft, gnright, wnleft, wnright = gapCartLimits(x1)
+    # gnleft, gnright, wnleft, wnright = gapCartLimits(x1)
     gbottomright, wnbottomright = gapPendulumToBottomWall(pendulum_xy, rbl[2], θ)
-    gn = [g1innerleft, g1outerleft, g2innerleft, g2outerleft, g3innerleft, g3outerleft, g4innerleft, g4outerleft,  gnleft, gnright, gbottomleft, gbottomright] 
-    wn = hcat(wn1innerleft, wn1outerleft, wn2innerleft, wn2outerleft, wn3innerleft, wn3outerleft, wn4innerleft, wn4outerleft, wnleft, wnright, wnbottomleft, wnbottomright)
+
+    gn = [g1innerleft, g1outerleft, g2innerleft, g2outerleft, g3innerleft, g3outerleft, g4innerleft, g4outerleft, gbottomleft, gbottomright] 
+    wn = hcat(wn1innerleft, wn1outerleft, wn2innerleft, wn2outerleft, wn3innerleft, wn3outerleft, wn4innerleft, wn4outerleft, wnbottomleft, wnbottomright)
+    # gn = [g1innerleft, g1outerleft, g2innerleft, g2outerleft, g3innerleft, g3outerleft, g4innerleft, g4outerleft,  gnleft, gnright, gbottomleft, gbottomright] 
+    # wn = hcat(wn1innerleft, wn1outerleft, wn2innerleft, wn2outerleft, wn3innerleft, wn3outerleft, wn4innerleft, wn4outerleft, wnleft, wnright, wnbottomleft, wnbottomright)
     return gn, wn
 end
 
 function wt(x1, θ) 
     w1 = [0.0f0; -l*sin(θ)]
     wtbottom = [1; -l*cos(θ)]
-    wtracklimits = [0.0f0; 0.0f0]
-    return hcat(-w1, w1, -w1, w1, w1, -w1, w1, -w1, wtracklimits, wtracklimits, wtbottom, wtbottom)
+    # wtracklimits = [0.0f0; 0.0f0]
+    # return hcat(-w1, w1, -w1, w1, w1, -w1, w1, -w1, wtracklimits, wtracklimits, wtbottom, wtbottom)
+    return hcat(-w1, w1, -w1, w1, w1, -w1, w1, -w1, wtbottom, wtbottom)
 end
 
 function vnormal(Wn, v)
@@ -356,17 +360,17 @@ function createAnimateObject(x1, θ)
         MeshLambertMaterial(color=RGBA{Float32}(0.0, 0.0, 0.0, 1.0))))
     settransform!(vwalls[:right], Translation(0.0, d+D, 0.0))
 
-    vtrackLimits = vis[:trackLimits]
+    # vtrackLimits = vis[:trackLimits]
 
-    setobject!(vtrackLimits[:left], MeshObject(
-        Rect(Vec(0.0, 0.0, 0.0), Vec(0.0, wallThickness, 0.1)),
-        MeshLambertMaterial(color=RGBA{Float32}(0.0, 0.0, 0.0, 1.0))))
-    settransform!(vtrackLimits[:left], Translation(0.0, -TRACK_LENGTH/2.0-wallThickness, 0.0))
+    # setobject!(vtrackLimits[:left], MeshObject(
+    #     Rect(Vec(0.0, 0.0, 0.0), Vec(0.0, wallThickness, 0.1)),
+    #     MeshLambertMaterial(color=RGBA{Float32}(0.0, 0.0, 0.0, 1.0))))
+    # settransform!(vtrackLimits[:left], Translation(0.0, -TRACK_LENGTH/2.0-wallThickness, 0.0))
 
-    setobject!(vtrackLimits[:right], MeshObject(
-        Rect(Vec(0.0, 0.0, 0.0), Vec(0.0, wallThickness, 0.1)),
-        MeshLambertMaterial(color=RGBA{Float32}(0.0, 0.0, 0.0, 1.0))))
-    settransform!(vtrackLimits[:right], Translation(0.0, TRACK_LENGTH/2.0, 0.0))
+    # setobject!(vtrackLimits[:right], MeshObject(
+    #     Rect(Vec(0.0, 0.0, 0.0), Vec(0.0, wallThickness, 0.1)),
+    #     MeshLambertMaterial(color=RGBA{Float32}(0.0, 0.0, 0.0, 1.0))))
+    # settransform!(vtrackLimits[:right], Translation(0.0, TRACK_LENGTH/2.0, 0.0))
 
 
     return vcart, vpendulum

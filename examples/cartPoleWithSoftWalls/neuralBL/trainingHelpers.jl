@@ -10,11 +10,11 @@ function integrate(xi, ψ::Vector{T}, θk; totalTimeStep = totalTimeStep) where 
         pk      = bin(X[i], ψ)           #holds a softmax
         c       = argmax(pk)             # can be categorical
         #select greedy control
-        # U[i]    = input(X[i], θk, c)
+        U[i]    = input(X[i], θk, c)
 
         #average control
-        uall = [input(X[i], θk, k)[1] for k in 1:binSize]
-        U[i] = [dot(pk, uall)]
+        # uall = [input(X[i], θk, k)[1] for k in 1:binSize]
+        # U[i] = [dot(pk, uall)]
 
         X[i+1]  = oneStep(X[i], U[i])
     end
