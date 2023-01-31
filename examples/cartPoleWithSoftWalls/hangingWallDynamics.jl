@@ -16,11 +16,12 @@ export CartPoleWithSoftWalls
 # const I1            = mp*l^2.0f0/3.0f0
 ##Hardware parameters
 const mc            = 0.57f0    
-const mp            = 0.184f0 
+# const mp            = 0.184f0 
+const mp            = 0.165f0 
 # const mp            = 0.4f0 
 # const l             = 0.6413f0       #length of pendulum
 const l             = 0.31f0       #length of pendulum
-const lcm           = l        #center of mass of the pendulum  
+const lcm           = 0.20f0        #center of mass of the pendulum  
 const I1            = mp*lcm^2.0f0/3.0f0
 const g             = 9.81f0
 const d             = -0.45f0       #location of the left wall
@@ -33,7 +34,7 @@ const ϵn_const      = 0.5f0*ones(Float32, contactNum)
 const ϵt_const      = 0.0f0*ones(Float32, contactNum)
 const μ_const       = 0.0f0*ones(Float32, contactNum)
 const gThreshold    = 0.001f0
-const satu          = 17.0f0     #Newtons. 10 Newton corresponds to 5.8 volts
+const satu          = 13.0f0     #Newtons. 9 Newton corresponds to 2 A
 const w             = 0.10f0
 const TRACK_LENGTH  = 1.0f0
 
@@ -273,20 +274,20 @@ function lqrGains()
 
     C = Matrix{Float32}(LinearAlgebra.I, (4, 4)) 
     cartLinearized = ControlSystems.ss(A, B, C, 0.0f0)
-    Q = diagm(0 => [5.0, 10.0, 2.0, 8.0])
+    Q = diagm(0 => [0.5, 10.0, 2.0, 8.0])
     R = 3.0f0
     ControlSystems.lqr(cartLinearized, Q, R)
 end
 
 function lqr(z::AbstractArray{T}) where {T<:Real}
-    k = convert.(T, vec([ -1.29099  26.7418  -2.28048  5.10149]))
+    k = convert.(T, vec([ -0.408248  18.8039  -1.27734  3.30856]))
     # k = zeros(4)
-    return -k'*z
+    return -k'*[z[1], sin(z[2]), z[3], z[4]]
 end
 
 inputLayer(z) = [z[1], cos(z[2]), sin(z[2]), z[3], z[4]]
 
-function control(z, u::AbstractArray{T}; expert=false, lqr_max = 17.0f0) where {T<:Real}
+function control(z, u::AbstractArray{T}; expert=false, lqr_max = 13.0f0) where {T<:Real}
     q, v = parseStates(z)
 
     if expert #working expert controller
@@ -295,6 +296,7 @@ function control(z, u::AbstractArray{T}; expert=false, lqr_max = 17.0f0) where {
         x1, θ = q 
         x1dot, θdot = v
         if ((1.0f0-cos(θ) <= (1.0f0-cosd(12.0))) && (abs(θdot) <= 0.6f0))
+        # if ((1.0f0-cos(θ) <= (1.0f0-cosd(20.0))) && (abs(θdot) <= 0.6f0))
             return clamp(lqr(z), -lqr_max, lqr_max)
         else
             return clamp(u[1], -satu, satu)

@@ -194,11 +194,10 @@ function setDistancelossPerState(x)
 
     # high cost on x1dot to lower fast impact and to encourage pumping
     return doubleHinge_x  + 12.0f0*(1.0f0-cos(x2)) + 
-            1.0f0*x1dot^2.0f0 + 0.5f0*x2dot^2.0f0
-
+            0.5f0*abs(x1dot) + 1.0f0*abs(x2dot)
 end
 
-function setDistanceLoss(X::Vector{Vector{T}}, pk, k; r=0.2f0) where {T<:Real}
+function setDistanceLoss(X::Vector{Vector{T}}, pk, k; r=0.1f0) where {T<:Real}
     lmin, lminIndex = findmin(map(setDistancelossPerState, X))
     actionProbability = 1.0f0 - mean(map((pki, ki) -> pki[ki], pk[1:lminIndex], k[1:lminIndex]))
     delta = lmin*actionProbability
@@ -259,7 +258,7 @@ function trainEM()
 
         # For each state in the trajectory, compute the loss incurred by each of the given by the 
         # bin generator 
-        l1(θ)   = averageControlLoss(x0, θ; totalTimeStep = 1500)
+        l1(θ)   = averageControlLoss(x0, θ; totalTimeStep=800)
 
         # ForwardDiff.gradient takes the gradient of the loss wrt the state bin parameters and the 
         # controller parameters in each bin
@@ -268,7 +267,7 @@ function trainEM()
         ForwardDiff.gradient!(diff_results, l1, param)
         grads = DiffResults.gradient(diff_results)
 
-        if counter > 5
+        if counter > 10
             ψ, θk  = unstackParams(param)
             if rand() > 0.8
                 xi = [0.0f0, pi, 0.0f0, 0.2f0]

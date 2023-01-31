@@ -20,8 +20,8 @@ function testBayesian(xi, ψ, θk; totalTimeStep = totalTimeStep)
     plotPartition(X, ψ, θk)
     fig1.canvas.draw()      #draws tupdates in for loop
     fig1.canvas.flush_events()  #gets new figure in for loop
-    # animate(X)
-    # sleep(1)
+    animate(X)
+    sleep(1)
     return X
 end
 
