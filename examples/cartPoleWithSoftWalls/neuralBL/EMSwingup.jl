@@ -194,7 +194,7 @@ function setDistancelossPerState(x)
 
     # high cost on x1dot to lower fast impact and to encourage pumping
     return doubleHinge_x  + 12.0f0*(1.0f0-cos(x2)) + 
-            0.5f0*abs(x1dot) + 1.0f0*abs(x2dot)
+            0.5f0*abs(x1dot) + 0.5f0*abs(x2dot)
 end
 
 function setDistanceLoss(X::Vector{Vector{T}}, pk, k; r=0.1f0) where {T<:Real}

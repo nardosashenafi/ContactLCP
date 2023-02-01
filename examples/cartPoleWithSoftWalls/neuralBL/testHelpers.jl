@@ -1,4 +1,10 @@
+using CSV 
+using DataFrames 
 
+function loadWeights(param)
+    df =  DataFrame(param = param)
+    CSV.write("neuralBL/savedWeights/hardwareParams2.csv", df)
+end
 function evaluateControl(x, ψ, θk)
     pk = bin(x, ψ)
     k = argmax(pk)

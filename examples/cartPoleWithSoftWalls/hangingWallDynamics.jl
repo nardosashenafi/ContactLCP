@@ -15,9 +15,10 @@ export CartPoleWithSoftWalls
 # const l             = 0.5f0     #center of mass of the pendulum  
 # const I1            = mp*l^2.0f0/3.0f0
 ##Hardware parameters
-const mc            = 0.57f0    
+const mc            = 0.75f0    
 # const mp            = 0.184f0 
 const mp            = 0.165f0 
+const b             = 4.16          #viscous friction coefficient
 # const mp            = 0.4f0 
 # const l             = 0.6413f0       #length of pendulum
 const l             = 0.31f0       #length of pendulum
@@ -30,11 +31,11 @@ const D             = 2.0f0*abs(d)         #gap between the walls
 const wallBottomEnd = 0.20f0        #the bottom edge of the walls
 const wallTopEnd    = 0.6f0         #the top edge of the walls
 const contactNum    = 10
-const ϵn_const      = 0.5f0*ones(Float32, contactNum)
+const ϵn_const      = 0.05f0*ones(Float32, contactNum)
 const ϵt_const      = 0.0f0*ones(Float32, contactNum)
 const μ_const       = 0.0f0*ones(Float32, contactNum)
 const gThreshold    = 0.001f0
-const satu          = 13.0f0     #Newtons. 9 Newton corresponds to 2 A
+const satu          = 9.0f0     #Newtons. 9 Newton corresponds to 2 A
 const w             = 0.10f0
 const TRACK_LENGTH  = 1.0f0
 
@@ -287,7 +288,7 @@ end
 
 inputLayer(z) = [z[1], cos(z[2]), sin(z[2]), z[3], z[4]]
 
-function control(z, u::AbstractArray{T}; expert=false, lqr_max = 13.0f0) where {T<:Real}
+function control(z, u::AbstractArray{T}; expert=false, lqr_max = 9.0f0) where {T<:Real}
     q, v = parseStates(z)
 
     if expert #working expert controller
@@ -319,7 +320,7 @@ function genForces(x, u::AbstractArray{T}; expert=false) where {T<:Real}
     #h = Bu - C qdot - G
 
     return  [1.0f0, 0.0f0]*control(x, u; expert=expert) -  #Bu 
-                [0.0f0 mp*lcm*sin(θ); -mp*sin(θ)/2.0f0 0.0f0]*v -  #-C qdot
+                [b mp*lcm*sin(θ); -mp*sin(θ)/2.0f0 0.0f0]*v -  #-C qdot
                 [0.0f0; -mp*g*lcm*sin(θ)]            #-G
 end
 
