@@ -42,6 +42,18 @@ function trajectory(xi, param::AbstractArray{T}; totalTimeStep = totalTimeStep) 
     return X
 end
 
+function setDistanceLoss(X::Vector{Vector{T}}; r=0.1f0) where {T<:Real}
+    delta, _ = findmin(map(setDistancelossPerState, X))
+
+    incurCostAt = TRACK_LENGTH
+    doubleHingeLoss = 0.0f0
+    for x in X 
+        abs(x[1]) > incurCostAt/2.0f0 ? doubleHingeLoss += 5.0f0*(abs(x[1])-incurCostAt/2.0f0) : nothing
+    end
+
+    return ifelse(delta < r, 0.0f0, delta - r) + doubleHingeLoss
+end
+
 function oneControllerLoss(x0, param::AbstractArray{T}; totalTimeStep = totalTimeStep) where {T<:Real}
     ltotal  = 0.0f0
     for xi in x0
@@ -60,6 +72,8 @@ function testBayesian(xi, param; totalTimeStep = totalTimeStep)
     X =  trajectory(xi, param; totalTimeStep = totalTimeStep)
     clf()
     plots(X, fig1)
+    animate(X)
+    sleep(1)
     # plotPartition(X, ψ, θk)
     return X
 end
@@ -74,7 +88,7 @@ function trainOneController()
     for i in 1:10000
 
         x0      = sampleInitialState(param; totalTimeStep=8000, minibatch=minibatch)
-        l1(θ)   = oneControllerLoss(x0, θ; totalTimeStep = 1500)
+        l1(θ)   = oneControllerLoss(x0, θ; totalTimeStep = 800)
 
         ForwardDiff.gradient!(diff_results, l1, param)
         grads = DiffResults.gradient(diff_results)
