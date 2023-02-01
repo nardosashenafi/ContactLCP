@@ -1,16 +1,18 @@
+lqr_gains = [-0.408248;  18.8039;  -1.27734;  3.30856];
 binSize = 3;
 binLayerSize = [5, 4, 3];
 controlLayerSize = [[8, 4, 1]; [8, 4, 1]; [8, 4, 1]];
 
 binTotalParam = 69;
 controlTotalParam = [89, 89,89];
-param = rand(336, 1);
+savedWeights = readtable("hardwareParams.csv");
+param = savedWeights.param; 
 
 %parse parameters for each neural network
 nnParamRanges = zeros(binSize, 2);
 paramBegin = 1;
 paramEnd = paramBegin + binTotalParam - 1;
-psi = param(paramBegin:paramEnd);
+psi = param(paramBegin:paramEnd); 
 paramBegin = paramEnd+1;
 for i = 1:binSize
     paramEnd = paramBegin + controlTotalParam(i) - 1;

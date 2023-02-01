@@ -1,7 +1,7 @@
 % Inverted Pendulum
 clc; clear all; close all
 
-Vmax = 5;
+Vmax = 10;
 T = 0.001;     % Sample period
 theta_0 = 1*pi/180;  %Initial pendulum angle
 x_0 = 0*0.1;   % Initial cart position
@@ -9,12 +9,13 @@ rg = 3.71;     % Gear ratio n2/n1
 Kt = 0.00767;  % Motor torque constant Nm/A
 rm = 6.35e-3;  % Radius of the powered wheel
 M = 0.57;      % M = Mc2+Mw = 0.57 + 0.37
-m = 0.23;      % Mass of the pendulum bar
+m = 0.165;      % Mass of the pendulum bar
 g = 9.81;      % m/sec^2 acceleration of gravity
 Lp = 0.6413/2; % length of pendulum rod is 0.6413               
 R = 2.6;       % Armature resistance in Ohms
 % Jp = 7.88e-3;  % Moment of inertia of the pendulum about its COM
 Jp = m*Lp*Lp/3; %
+r_enc = 0.01483;        % Encoder wheel radius in meters
 Nenc = 4096;   % Number of counts per rev
 Kenc = 2.275e-5; % Kenc = (2*pi/4096)*r_enc or r_enc = Kenc*4096/2/pi=0.0148
 % r_enc = Kenc*4096/2/pi;
