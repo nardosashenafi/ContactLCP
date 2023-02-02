@@ -85,12 +85,6 @@ for i in 1:binSize
     controlNN_length[i] = DiffEqFlux.paramlength(controlArray[i]) 
 end
 
-println("Check the following properties in the initialization")
-println("Make sure that bin(x, ψ) does not return a large probability in some state.
-        This causes argmax(bin(x, ψ)) to return the same value for a long time in the training
-        until the highest probability crosses 0.5")
-
-
 function softargmax(x; β=50.0f0) 
     return exp.(β*x)/sum(exp.(β*x))
 end
@@ -194,7 +188,7 @@ function setDistancelossPerState(x)
 
     # high cost on x1dot to lower fast impact and to encourage pumping
     return doubleHinge_x  + 12.0f0*(1.0f0-cos(x2)) + 
-            0.5f0*abs(x1dot) + 0.5f0*abs(x2dot)
+            0.5f0*abs(x1dot) + 0.2f0*abs(x2dot)
 end
 
 function setDistanceLoss(X::Vector{Vector{T}}, pk, k; r=0.1f0) where {T<:Real}
@@ -243,7 +237,7 @@ end
 function trainEM()
 
     ψ           = 0.5f0*randn(Float64, binNN_length)
-    θk          = [0.1f0*randn(Float64, controlNN_length[i]) for i in 1:binSize]
+    θk          = [0.3f0*randn(Float64, controlNN_length[i]) for i in 1:binSize]
     param       = stackParams(ψ, θk)
     opt         = Adam(0.001f0)
     counter     = 0
@@ -258,7 +252,7 @@ function trainEM()
 
         # For each state in the trajectory, compute the loss incurred by each of the given by the 
         # bin generator 
-        l1(θ)   = averageControlLoss(x0, θ; totalTimeStep=800)
+        l1(θ)   = averageControlLoss(x0, θ; totalTimeStep=500)
 
         # ForwardDiff.gradient takes the gradient of the loss wrt the state bin parameters and the 
         # controller parameters in each bin

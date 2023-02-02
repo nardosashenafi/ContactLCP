@@ -31,11 +31,11 @@ const D             = 2.0f0*abs(d)         #gap between the walls
 const wallBottomEnd = 0.20f0        #the bottom edge of the walls
 const wallTopEnd    = 0.6f0         #the top edge of the walls
 const contactNum    = 10
-const ϵn_const      = 0.05f0*ones(Float32, contactNum)
+const ϵn_const      = 0.1f0*ones(Float32, contactNum)
 const ϵt_const      = 0.0f0*ones(Float32, contactNum)
 const μ_const       = 0.0f0*ones(Float32, contactNum)
 const gThreshold    = 0.001f0
-const satu          = 9.0f0     #Newtons. 9 Newton corresponds to 2 A
+const satu          = 13.0f0     #Newtons. 9 Newton corresponds to 2 A
 const w             = 0.10f0
 const TRACK_LENGTH  = 1.0f0
 
@@ -281,7 +281,7 @@ function lqrGains()
 end
 
 function lqr(z::AbstractArray{T}) where {T<:Real}
-    k = convert.(T, vec([ -0.408248  18.8039  -1.27734  3.30856]))
+    k = convert.(T, vec([ -0.408248  32.3941  -8.62334  5.38177]))
     # k = zeros(4)
     return -k'*[z[1], sin(z[2]), z[3], z[4]]
 end

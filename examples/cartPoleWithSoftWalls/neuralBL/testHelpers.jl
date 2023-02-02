@@ -3,8 +3,9 @@ using DataFrames
 
 function loadWeights(param)
     df =  DataFrame(param = param)
-    CSV.write("neuralBL/savedWeights/hardwareParams2.csv", df)
+    CSV.write("neuralBL/savedWeights/hardwareParam2.csv", df)
 end
+
 function evaluateControl(x, ψ, θk)
     pk = bin(x, ψ)
     k = argmax(pk)
@@ -26,8 +27,8 @@ function testBayesian(xi, ψ, θk; totalTimeStep = totalTimeStep)
     plotPartition(X, ψ, θk)
     fig1.canvas.draw()      #draws tupdates in for loop
     fig1.canvas.flush_events()  #gets new figure in for loop
-    animate(X)
-    sleep(1)
+    # animate(X)
+    # sleep(1)
     return X
 end
 
@@ -50,7 +51,7 @@ function plots(X, fig1)
     xlabel("x")
 end
 
-function plotPartition(X, ψ, θk)
+function plotPartition(X::Vector{Vector{T}}, ψ, θk) where {T<:Real}
     width = 30
     
     X2    = range(-2.0f0pi, 2.0f0pi, length=width)
@@ -106,3 +107,33 @@ function plotPartition(X, ψ, θk)
 
 end
 
+function plotPartition(ψ, θk, x1)
+    width = 30
+    
+    X2    = range(-2.0f0pi, 2.0f0pi, length=width)
+    X2dot = range(-10.0f0, 10.0f0, length=width)
+
+    u = Matrix{Float32}(undef, width, width)
+    c = Matrix{Int}(undef, width, width)
+
+    for i in 1:width    #row
+        for j in 1:width    #column
+            x       = vcat(x1, X2[j], 0.0f0, X2dot[width-i+1])
+            pk      = bin(x, ψ)
+            c[i,j]  = argmax(pk)
+            u[i, j] = input(x, θk, c[i,j])[1]
+        end
+    end
+
+    plt.subplot(2, 2, 2)
+    imshow(u, extent = [X2[1], X2[end], X2dot[1], X2dot[end]])
+    ylabel("Control")
+    xlabel("x2 vs x2dot")
+
+    ################################################
+    plt.subplot(2, 2, 4)
+    imshow(c, extent = [X2[1], X2[end], X2dot[1], X2dot[end]])
+    ylabel("State Partitions")
+    xlabel("x2 vs x2dot")
+
+end
