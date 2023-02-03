@@ -187,8 +187,8 @@ function setDistancelossPerState(x)
     incurCostAt = TRACK_LENGTH
 
     # high cost on x1dot to lower fast impact and to encourage pumping
-    return doubleHinge_x  + 12.0f0*(1.0f0-cos(x2)) + 
-            0.5f0*abs(x1dot) + 0.2f0*abs(x2dot)
+    return doubleHinge_x  + 15.0f0*(1.0f0-cos(x2)) + 
+            0.2f0*abs(x1dot) + 0.2f0*abs(x2dot)
 end
 
 function setDistanceLoss(X::Vector{Vector{T}}, pk, k; r=0.1f0) where {T<:Real}
@@ -199,13 +199,13 @@ function setDistanceLoss(X::Vector{Vector{T}}, pk, k; r=0.1f0) where {T<:Real}
     incurCostAt = TRACK_LENGTH
     doubleHingeLoss = 0.0f0
     for x in X 
-        abs(x[1]) > incurCostAt/2.0f0 ? doubleHingeLoss += 5.0f0*(abs(x[1])-incurCostAt/2.0f0) : nothing
+        abs(x[1]) > incurCostAt/2.0f0 ? doubleHingeLoss += 2.0f0*(abs(x[1])-incurCostAt/2.0f0) : nothing
     end
 
     return ifelse(delta < r, 0.0f0, delta - r) + doubleHingeLoss
 end
 
-function averageControlLoss(x0, param::AbstractArray{T}; totalTimeStep = totalTimeStep) where {T<:Real}
+function averageControlLoss(x0, param::AbstractArray{T}, explorationPercent; totalTimeStep = totalTimeStep) where {T<:Real}
     ψ, θk   = unstackParams(param)
     ltotal = 0.0f0
 
@@ -217,7 +217,7 @@ function averageControlLoss(x0, param::AbstractArray{T}; totalTimeStep = totalTi
         for i in 1:totalTimeStep
             pk[i] = bin(X[i], ψ)      #Gaussian: quadratic boudaries
 
-            if rand() > 0.3
+            if rand() > explorationPercent
                 k[i] = argmax(pk[i])
             else
                 k[i] = rand(1:1:binSize)
@@ -236,13 +236,14 @@ end
 
 function trainEM()
 
-    ψ           = 0.5f0*randn(Float64, binNN_length)
+    ψ           = 1.0f0*randn(Float64, binNN_length)
     θk          = [0.3f0*randn(Float64, controlNN_length[i]) for i in 1:binSize]
     param       = stackParams(ψ, θk)
     opt         = Adam(0.001f0)
     counter     = 0
     minibatch   = 3
     diff_results = DiffResults.GradientResult(param)
+    initialExploration = 0.7
 
     for i in 1:90000
         ψ, θk   = unstackParams(param)
@@ -252,7 +253,8 @@ function trainEM()
 
         # For each state in the trajectory, compute the loss incurred by each of the given by the 
         # bin generator 
-        l1(θ)   = averageControlLoss(x0, θ; totalTimeStep=500)
+        explorationPercent = exp.(-i*0.0001)*initialExploration
+        l1(θ)   = averageControlLoss(x0, θ, explorationPercent; totalTimeStep=800)
 
         # ForwardDiff.gradient takes the gradient of the loss wrt the state bin parameters and the 
         # controller parameters in each bin
@@ -269,7 +271,7 @@ function trainEM()
                 xi = x0[1]
             end
             X = testBayesian(xi, ψ, θk; totalTimeStep=7000)
-            println("loss = ", averageControlLoss([xi], param), " POI = ", poi(xi, ψ))
+            println("loss = ", averageControlLoss([xi], param, explorationPercent), " POI = ", poi(xi, ψ))
             BSON.@save "neuralBL/savedWeights/setdistancetraining.bson" param
             counter = 0
         end

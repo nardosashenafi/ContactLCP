@@ -18,7 +18,7 @@ export CartPoleWithSoftWalls
 const mc            = 0.75f0    
 # const mp            = 0.184f0 
 const mp            = 0.165f0 
-const b             = 4.16          #viscous friction coefficient
+const b             = 1.2          #viscous friction coefficient
 # const mp            = 0.4f0 
 # const l             = 0.6413f0       #length of pendulum
 const l             = 0.31f0       #length of pendulum
@@ -35,7 +35,7 @@ const ϵn_const      = 0.1f0*ones(Float32, contactNum)
 const ϵt_const      = 0.0f0*ones(Float32, contactNum)
 const μ_const       = 0.0f0*ones(Float32, contactNum)
 const gThreshold    = 0.001f0
-const satu          = 13.0f0     #Newtons. 9 Newton corresponds to 2 A
+const satu          = 8.0f0     #Newtons. 9 Newton corresponds to 2 A
 const w             = 0.10f0
 const TRACK_LENGTH  = 1.0f0
 
@@ -288,7 +288,7 @@ end
 
 inputLayer(z) = [z[1], cos(z[2]), sin(z[2]), z[3], z[4]]
 
-function control(z, u::AbstractArray{T}; expert=false, lqr_max = 9.0f0) where {T<:Real}
+function control(z, u::AbstractArray{T}; expert=false, lqr_max = satu) where {T<:Real}
     q, v = parseStates(z)
 
     if expert #working expert controller
