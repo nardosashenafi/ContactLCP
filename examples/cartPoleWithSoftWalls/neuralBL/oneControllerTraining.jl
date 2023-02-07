@@ -72,14 +72,14 @@ function testBayesian(xi, param; totalTimeStep = totalTimeStep)
     X =  trajectory(xi, param; totalTimeStep = totalTimeStep)
     clf()
     plots(X, fig1)
-    animate(X)
-    sleep(1)
-    # plotPartition(X, ψ, θk)
+    # animate(X)
+    # sleep(1)
+    plotPartition(X, param)
     return X
 end
 
 function trainOneController()
-    param       = 0.1f0*randn(Float32, controlNN_length[1])
+    param       = 0.3f0*randn(Float32, controlNN_length[1])
     opt         = Adam(0.001f0)
     counter     = 0
     minibatch   = 3
@@ -93,7 +93,7 @@ function trainOneController()
         ForwardDiff.gradient!(diff_results, l1, param)
         grads = DiffResults.gradient(diff_results)
 
-        if counter > 5
+        if counter > 10
             if rand() > 0.8
                 xi = [0.0f0, pi, 0.0f0, 0.2f0]
             else
@@ -106,4 +106,32 @@ function trainOneController()
         counter += 1
         Flux.update!(opt, param, grads)
     end
+end
+
+
+function plotPartition(X, param)
+    width = 30
+    
+    X2    = range(-2.0f0pi, 2.0f0pi, length=width)
+    X2dot = range(-6.0f0, 6.0f0, length=width)
+
+    u = Matrix{Float32}(undef, width, width)
+
+    for i in 1:width    #row
+        for j in 1:width    #column
+            x       = vcat(D+d, X2[j], 0.0f0, X2dot[width-i+1])
+            u[i, j] = controlArray[1](inputLayer(x), param)[1]
+        end
+    end
+
+    plt.subplot(2, 2, 2)
+    imshow(u, extent = [X2[1], X2[end], X2dot[1], X2dot[end]])
+    ylabel("Control")
+    xlabel("x2 vs x2dot")
+
+    #overlap the trajectory on the control heat map
+    plot(getindex.(X, 2), getindex.(X, 4), "r")
+    scatter(X[end][2], X[end][4])
+
+
 end
