@@ -14,3 +14,10 @@ current loss = 5.0f0*(doubleHinge_x  + 8.0f0*(1.0f0-cos(x2)) + 1.0f0*abs(x1dot) 
 
 This allows it to pump. Catching against the wall is not shown yet. The positive x2dot space
 seems to be filled with only one bin. This does not seem rights
+
+Feb 6/2023
+Set distance loss has much easier time pumping. Catching is not as robust.
+Set distance loss is min(8.0f0*(1.0f0-cos(x2)) + 1.0f0*abs(x1dot) + 0.8f0*abs(x2dot)) + doubleHingeLoss.
+
+-Ever since adding the damping and the low restitution, it has not needed a third bin.
+

@@ -13,14 +13,11 @@ export CartPoleWithSoftWalls
 # const mc            = 1.0f0    
 # const mp            = 0.5f0 
 # const l             = 0.5f0     #center of mass of the pendulum  
-# const I1            = mp*l^2.0f0/3.0f0
+# const b               = 0.0
 ##Hardware parameters
 const mc            = 0.75f0    
-# const mp            = 0.184f0 
 const mp            = 0.165f0 
 const b             = 1.2          #viscous friction coefficient
-# const mp            = 0.4f0 
-# const l             = 0.6413f0       #length of pendulum
 const l             = 0.31f0       #length of pendulum
 const lcm           = 0.20f0        #center of mass of the pendulum  
 const I1            = mp*lcm^2.0f0/3.0f0
@@ -31,11 +28,11 @@ const D             = 2.0f0*abs(d)         #gap between the walls
 const wallBottomEnd = 0.20f0        #the bottom edge of the walls
 const wallTopEnd    = 0.6f0         #the top edge of the walls
 const contactNum    = 10
-const ϵn_const      = 0.1f0*ones(Float32, contactNum)
+const ϵn_const      = 0.25f0*ones(Float32, contactNum)
 const ϵt_const      = 0.0f0*ones(Float32, contactNum)
 const μ_const       = 0.0f0*ones(Float32, contactNum)
 const gThreshold    = 0.001f0
-const satu          = 8.0f0     #Newtons. 9 Newton corresponds to 2 A
+const satu          = 4.5f0     #Newtons. 9 Newton corresponds to 2 A
 const w             = 0.10f0
 const TRACK_LENGTH  = 1.0f0
 
@@ -266,22 +263,24 @@ function lqrGains()
               mp*g*lcm]
     B̂ = Minv*[1.0f0, 0.0f0]
 
+    Ĉ = Minv*[-b, 0.0f0]
+
     A = [0.0f0 0.0f0 1.0f0 0.0f0;
         0.0f0  0.0f0 0.0f0 1.0f0;
-        0.0f0  Ĝ[1]  0.0f0 0.0f0;
-        0.0f0  Ĝ[2]  0.0f0 0.0f0]
+        0.0f0  Ĝ[1]  Ĉ[1] 0.0f0;
+        0.0f0  Ĝ[2]  Ĉ[2] 0.0f0]
 
     B = [0.0f0, 0.0f0, B̂[1], B̂[2]]
 
     C = Matrix{Float32}(LinearAlgebra.I, (4, 4)) 
     cartLinearized = ControlSystems.ss(A, B, C, 0.0f0)
-    Q = diagm(0 => [0.5, 10.0, 2.0, 8.0])
-    R = 3.0f0
+    Q = diagm(0 => [1.0, 20.0, 3.0, 8.0])
+    R = 2.0f0
     ControlSystems.lqr(cartLinearized, Q, R)
 end
 
 function lqr(z::AbstractArray{T}) where {T<:Real}
-    k = convert.(T, vec([ -0.408248  32.3941  -8.62334  5.38177]))
+    k = convert.(T, vec([ -0.707107  25.8856  -3.51898  4.49824]))
     # k = zeros(4)
     return -k'*[z[1], sin(z[2]), z[3], z[4]]
 end
@@ -296,7 +295,7 @@ function control(z, u::AbstractArray{T}; expert=false, lqr_max = satu) where {T<
     else
         x1, θ = q 
         x1dot, θdot = v
-        if ((1.0f0-cos(θ) <= (1.0f0-cosd(12.0))) && (abs(θdot) <= 0.6f0))
+        if ((1.0f0-cos(θ) <= (1.0f0-cosd(15.0))) && (abs(θdot) <= 0.6f0))
         # if ((1.0f0-cos(θ) <= (1.0f0-cosd(20.0))) && (abs(θdot) <= 0.6f0))
             return clamp(lqr(z), -lqr_max, lqr_max)
         else

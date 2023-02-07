@@ -68,9 +68,9 @@ const Δt            = 0.001f0
 const totalTimeStep = Int(floor(tspan[2]/Δt))
 const binSize       = 3
 
-binNN = FastChain(FastDense(5, 5, elu),
-                    FastDense(5, 4, elu),
-                    FastDense(4, binSize))
+binNN = FastChain(FastDense(5, 4, elu),
+                    FastDense(4, 3, elu),
+                    FastDense(3, binSize))
 
 const binNN_length = DiffEqFlux.paramlength(binNN) 
 
@@ -78,8 +78,8 @@ controlArray     = Array{Function}(undef, binSize);
 controlNN_length = Vector{Int}(undef, binSize)
 
 for i in 1:binSize 
-    controlArray[i] = FastChain(FastDense(5, 8, elu),
-                            FastDense(8, 4, elu),
+    controlArray[i] = FastChain(FastDense(5, 10, elu),
+                            FastDense(10, 4, elu),
                             FastDense(4, 1))
     
     controlNN_length[i] = DiffEqFlux.paramlength(controlArray[i]) 
@@ -122,31 +122,6 @@ function stackParams(ψ::Vector{T}, θk::Vector{Vector{T}}) where {T<:Real}
     return param
 end
 
-function accumulatedLossSampler(x0, param::AbstractArray{T}; totalTimeStep = totalTimeStep) where {T<:Real}
-    ψ, θk   = unstackParams(param)
-    ltotal  = 0.0f0
-
-    for xi in x0
-        x = xi
-        for i in 1:totalTimeStep
-            pk = bin(x, ψ)      #Gaussian: quadratic boudaries
-                                # BNN arbtrary training
-
-            if rand() > 0.3
-                k = argmax(pk)      # improve the greedy
-            else
-                k = rand(1:1:binSize)    # exploration
-            end
-
-            x  = oneStep(x, input(x, θk, k) )
-            lk = pk[k]*lossPerState(x) 
- 
-            ltotal += lk/totalTimeStep
-        end
-    end
-    return ltotal/length(x0)
-end
-
 function accumulatedLoss(X, param::AbstractArray{T}, sampleEvery::Int, fullTraj::Bool ; totalTimeStep = totalTimeStep) where {T<:Real}
     ψ, θk   = unstackParams(param)
     ltotal  = 0.0f0
@@ -181,28 +156,78 @@ function accumulatedLossPerState(x)
             0.25f0*x1dot^2.0f0 + 0.1f0*x2dot^2.0f0
 end
 
-function setDistancelossPerState(x)
-    x1, x2, x1dot, x2dot = x
-    doubleHinge_x = 0.0f0
-    incurCostAt = TRACK_LENGTH
+function accumulatedLossSampler(x0, param::AbstractArray{T}, explorationPercent; incurCostAt=TRACK_LENGTH, totalTimeStep = totalTimeStep) where {T<:Real}
+    ψ, θk   = unstackParams(param)
+    ltotal  = 0.0f0
 
-    # high cost on x1dot to lower fast impact and to encourage pumping
-    return doubleHinge_x  + 15.0f0*(1.0f0-cos(x2)) + 
-            0.2f0*abs(x1dot) + 0.2f0*abs(x2dot)
+    for xi in x0
+        X = Vector{Vector{T}}(undef, totalTimeStep+1)
+        X[1] = xi
+        for i in 1:totalTimeStep
+            pk = bin(X[i], ψ)      #Gaussian: quadratic boudaries
+                                # BNN arbtrary training
+            if rand() > explorationPercent
+                k = argmax(pk)      # improve the greedy
+            else
+                k = rand(1:1:binSize)    # exploration
+            end
+
+            X[i+1]  = oneStep(X[i], input(X[i], θk, k) )
+            lk = pk[k]*lossPerState(X[i+1]) 
+            ltotal += lk/totalTimeStep 
+        end
+    end
+    return ltotal/length(x0)
 end
 
-function setDistanceLoss(X::Vector{Vector{T}}, pk, k; r=0.1f0) where {T<:Real}
-    lmin, lminIndex = findmin(map(setDistancelossPerState, X))
-    actionProbability = 1.0f0 - mean(map((pki, ki) -> pki[ki], pk[1:lminIndex], k[1:lminIndex]))
-    delta = lmin*actionProbability
+function lossPerState(x)
+    x1, x2, x1dot, x2dot = x
+    incurCostAt = (TRACK_LENGTH-w)/2.0 
+    doubleHingeLoss = 0.0f0
+    abs(x1) > incurCostAt/2.0f0 ? doubleHingeLoss = 2.0f0*(abs(x1)-incurCostAt/2.0f0) : nothing 
 
-    incurCostAt = TRACK_LENGTH
+    # high cost on x1dot to lower fast impact and to encourage pumping
+    return doubleHingeLoss + 8.0f0*(1.0f0-cos(x2)) + 
+            0.8f0*abs(x1dot) + 0.5f0*abs(x2dot)
+end
+
+function setDistancelossPerState(x)
+    x1, x2, x1dot, x2dot = x
+
+    # high cost on x1dot to lower fast impact and to encourage pumping
+    return 15.0f0*(1.0f0-cos(x2)) + 
+            0.8f0*abs(x1dot) + 0.8f0*abs(x2dot)
+end
+
+# function setDistanceLoss(X::Vector{Vector{T}}, pk, k; r=0.1f0) where {T<:Real}
+#     lmin, lminIndex = findmin(map(setDistancelossPerState, X))
+
+#     actionProbability = mean(map((pki, ki) -> log(pki[ki]), pk[1:lminIndex], k[1:lminIndex]))
+#     delta = lmin
+
+#     incurCostAt = (TRACK_LENGTH-w)/2.0 
+#     doubleHingeLoss = 0.0f0
+#     for x in X 
+#         abs(x[1]) > incurCostAt ? doubleHingeLoss += 3.0f0*(abs(x[1])-incurCostAt) : nothing
+#     end
+
+#     return ifelse(delta < r, 0.0f0, delta - r) + doubleHingeLoss  - 0.001*actionProbability 
+# end
+
+
+function setDistanceLoss(X::Vector{Vector{T}}, pk, k; r=0.05f0) where {T<:Real}
+    lmin, lminIndex = findmin(map(setDistancelossPerState, X))
+
+    actionProbability = 1.0f0 - mean(map((pki, ki) -> pki[ki], pk[1:lminIndex], k[1:lminIndex]))
+    actionProbability > 0.05 ? delta = lmin*actionProbability : delta = lmin
+
+    incurCostAt = (TRACK_LENGTH)/2.0 
     doubleHingeLoss = 0.0f0
     for x in X 
-        abs(x[1]) > incurCostAt/2.0f0 ? doubleHingeLoss += 2.0f0*(abs(x[1])-incurCostAt/2.0f0) : nothing
+        abs(x[1]) > incurCostAt ? doubleHingeLoss += 2.0f0*(abs(x[1])-incurCostAt) : nothing
     end
 
-    return ifelse(delta < r, 0.0f0, delta - r) + doubleHingeLoss
+    return ifelse(delta < r, 0.0f0, delta - r) + doubleHingeLoss 
 end
 
 function averageControlLoss(x0, param::AbstractArray{T}, explorationPercent; totalTimeStep = totalTimeStep) where {T<:Real}
@@ -236,16 +261,16 @@ end
 
 function trainEM()
 
-    ψ           = 1.0f0*randn(Float64, binNN_length)
-    θk          = [0.3f0*randn(Float64, controlNN_length[i]) for i in 1:binSize]
+    ψ           = 0.5f0*randn(Float64, binNN_length)
+    θk          = [0.1f0*randn(Float64, controlNN_length[i]) for i in 1:binSize]
     param       = stackParams(ψ, θk)
     opt         = Adam(0.001f0)
     counter     = 0
     minibatch   = 3
     diff_results = DiffResults.GradientResult(param)
-    initialExploration = 0.7
+    initialExploration = 0.60
 
-    for i in 1:90000
+    for i in 50000:90000
         ψ, θk   = unstackParams(param)
         #Apply combination of DAgger and uniform sampling around the desired equilbrium state
         #inorder to assist exploration 
@@ -253,8 +278,9 @@ function trainEM()
 
         # For each state in the trajectory, compute the loss incurred by each of the given by the 
         # bin generator 
-        explorationPercent = exp.(-i*0.0001)*initialExploration
-        l1(θ)   = averageControlLoss(x0, θ, explorationPercent; totalTimeStep=800)
+        explorationPercent = exp.(-i*0.05)*initialExploration + 0.05
+        l1(θ)   = averageControlLoss(x0, θ, explorationPercent; totalTimeStep=1500)
+        # l1(θ)   = accumulatedLossSampler(x0, θ, explorationPercent; totalTimeStep=1500)
 
         # ForwardDiff.gradient takes the gradient of the loss wrt the state bin parameters and the 
         # controller parameters in each bin

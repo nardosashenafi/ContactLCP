@@ -55,7 +55,7 @@ function plotPartition(X::Vector{Vector{T}}, ψ, θk) where {T<:Real}
     width = 30
     
     X2    = range(-2.0f0pi, 2.0f0pi, length=width)
-    X2dot = range(-6.0f0, 6.0f0, length=width)
+    X2dot = range(-10.0f0, 10.0f0, length=width)
 
     u = Matrix{Float32}(undef, width, width)
     c = Matrix{Int}(undef, width, width)
