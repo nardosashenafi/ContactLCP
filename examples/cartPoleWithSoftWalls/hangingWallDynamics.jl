@@ -295,7 +295,7 @@ function control(z, u::AbstractArray{T}; expert=false, lqr_max = satu) where {T<
     else
         x1, θ = q 
         x1dot, θdot = v
-        if ((1.0f0-cos(θ) <= (1.0f0-cosd(15.0))) && (abs(θdot) <= 0.6f0))
+        if ((1.0f0-cos(θ) <= (1.0f0-cosd(15.0))) && (abs(θdot) <= 1.5f0))
         # if ((1.0f0-cos(θ) <= (1.0f0-cosd(20.0))) && (abs(θdot) <= 0.6f0))
             return clamp(lqr(z), -lqr_max, lqr_max)
         else

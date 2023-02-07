@@ -195,7 +195,7 @@ function setDistancelossPerState(x)
     x1, x2, x1dot, x2dot = x
 
     # high cost on x1dot to lower fast impact and to encourage pumping
-    return 15.0f0*(1.0f0-cos(x2)) + 
+    return 12.0f0*(1.0f0-cos(x2)) + 
             0.8f0*abs(x1dot) + 0.8f0*abs(x2dot)
 end
 
@@ -297,7 +297,7 @@ function trainEM()
                 xi = x0[1]
             end
             X = testBayesian(xi, ψ, θk; totalTimeStep=7000)
-            println("loss = ", averageControlLoss([xi], param, explorationPercent), " POI = ", poi(xi, ψ))
+            println("loss = ", averageControlLoss([xi], param, explorationPercent; totalTimeStep=7000), " POI = ", poi(xi, ψ))
             BSON.@save "neuralBL/savedWeights/setdistancetraining.bson" param
             counter = 0
         end
