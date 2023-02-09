@@ -68,9 +68,9 @@ const Δt            = 0.001f0
 const totalTimeStep = Int(floor(tspan[2]/Δt))
 const binSize       = 3
 
-binNN = FastChain(FastDense(5, 4, elu),
-                    FastDense(4, 3, elu),
-                    FastDense(3, binSize))
+binNN = FastChain(FastDense(5, 5, elu),
+                    FastDense(5, 4, elu),
+                    FastDense(4, binSize))
 
 const binNN_length = DiffEqFlux.paramlength(binNN) 
 
@@ -78,8 +78,8 @@ controlArray     = Array{Function}(undef, binSize);
 controlNN_length = Vector{Int}(undef, binSize)
 
 for i in 1:binSize 
-    controlArray[i] = FastChain(FastDense(5, 10, elu),
-                            FastDense(10, 4, elu),
+    controlArray[i] = FastChain(FastDense(5, 8, elu),
+                            FastDense(8, 4, elu),
                             FastDense(4, 1))
     
     controlNN_length[i] = DiffEqFlux.paramlength(controlArray[i]) 
