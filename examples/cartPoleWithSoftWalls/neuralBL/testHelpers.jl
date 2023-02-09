@@ -24,8 +24,8 @@ function testBayesian(xi, ψ, θk; totalTimeStep = totalTimeStep)
     X, _ = integrate(xi, ψ, θk; totalTimeStep = totalTimeStep)
     clf()
     plots(X, fig1)
-    plotPartition2(X, ψ, θk)
-    # plotPartition(X, ψ, θk)
+    # plotPartition2(X, ψ, θk)
+    plotPartition(X, ψ, θk)
     fig1.canvas.draw()      #draws tupdates in for loop
     fig1.canvas.flush_events()  #gets new figure in for loop
     # animate(X)
