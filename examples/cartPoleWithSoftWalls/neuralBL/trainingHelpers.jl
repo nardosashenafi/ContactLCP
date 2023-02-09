@@ -49,7 +49,7 @@ function sampleInitialState(ψ::Vector{T}, θk; totalTimeStep = totalTimeStep, m
             end
             samples[i] = select
         else
-            samples[i] =  [rand(-0.1:0.001:0.1), rand(-0.5:0.001:0.5), 
+            samples[i] =  [rand(d:0.01:D+d), rand(-0.5:0.001:0.5), 
                             rand(-0.5:0.001:0.5), rand(-1.0:0.001:1.0)]
         end
     end

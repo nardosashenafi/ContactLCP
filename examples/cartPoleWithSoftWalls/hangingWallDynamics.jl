@@ -281,7 +281,6 @@ end
 
 function lqr(z::AbstractArray{T}) where {T<:Real}
     k = convert.(T, vec([ -0.707107  25.8856  -3.51898  4.49824]))
-    # k = zeros(4)
     return -k'*[z[1], sin(z[2]), z[3], z[4]]
 end
 
@@ -310,7 +309,7 @@ function genForces(x, u::AbstractArray{T}; expert=false) where {T<:Real}
     x1, θ = q[1:2]
     # B = [1.0f0, 0.0f0]
 
-    # C = [0.0f0 mp*l*sin(θ); 
+    # C = [b mp*l*sin(θ); 
     #     -mp*sin(θ)/2.0f0 0.0f0]
 
     # G = [0.0f0;

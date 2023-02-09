@@ -62,7 +62,7 @@ function plotPartition(X::Vector{Vector{T}}, ψ, θk) where {T<:Real}
 
     for i in 1:width    #row
         for j in 1:width    #column
-            x       = vcat(D+d, X2[j], 0.0f0, X2dot[width-i+1])
+            x       = vcat(d+D, X2[j], 0.0f0, X2dot[width-i+1])
             pk      = bin(x, ψ)
             c[i,j]  = argmax(pk)
             u[i, j] = input(x, θk, c[i,j])[1]
