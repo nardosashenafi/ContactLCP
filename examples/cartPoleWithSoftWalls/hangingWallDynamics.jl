@@ -10,19 +10,19 @@ using Rotations
 export CartPoleWithSoftWalls
 
 ##Posa's parameters
-const mc            = 1.0f0    
-const mp            = 0.5f0 
-const l             = 0.5f0     #center of mass of the pendulum 
-const lcm           = l 
-const b             = 0.0
-const I1            = mp*lcm^2.0f0
+# const mc            = 1.0f0    
+# const mp            = 0.5f0 
+# const l             = 0.5f0     #center of mass of the pendulum 
+# const lcm           = l 
+# const b             = 0.0
+# const I1            = mp*lcm^2.0f0
 ##Hardware parameters
-# const mc            = 0.75f0    
-# const mp            = 0.165f0 
-# const b             = 1.2          #viscous friction coefficient
-# const l             = 0.31f0       #length of pendulum
-# const lcm           = 0.20f0        #center of mass of the pendulum  
-# const I1            = mp*lcm^2.0f0/3.0f0
+const mc            = 0.75f0    
+const mp            = 0.165f0 
+const b             = 1.2          #viscous friction coefficient
+const l             = 0.31f0       #length of pendulum
+const lcm           = 0.20f0        #center of mass of the pendulum  
+const I1            = mp*lcm^2.0f0/3.0f0
 const g             = 9.81f0
 const d             = -0.75f0       #location of the left wall
 const wallThickness = 0.05f0
@@ -282,8 +282,7 @@ function lqrGains()
 end
 
 function lqr(z::AbstractArray{T}) where {T<:Real}
-    k = convert.(T, vec([ -2.58182  50.3793  -5.04367  12.0988]))
-    # k = zeros(4)
+    k = convert.(T, vec([ -0.707107  25.8856  -3.51898  4.49824]))
     return -k'*[z[1], sin(z[2]), z[3], z[4]]
 end
 
@@ -297,7 +296,7 @@ function control(z, u::AbstractArray{T}; expert=false, lqr_max = satu) where {T<
     else
         x1, θ = q 
         x1dot, θdot = v
-        if ((1.0f0-cos(θ) <= (1.0f0-cosd(17.0))) && (abs(θdot) <= 0.5f0))
+        if ((1.0f0-cos(θ) <= (1.0f0-cosd(15.0))) && (abs(θdot) <= 1.5f0))
         # if ((1.0f0-cos(θ) <= (1.0f0-cosd(20.0))) && (abs(θdot) <= 0.6f0))
             return clamp(lqr(z), -lqr_max, lqr_max)
         else
@@ -312,7 +311,7 @@ function genForces(x, u::AbstractArray{T}; expert=false) where {T<:Real}
     x1, θ = q[1:2]
     # B = [1.0f0, 0.0f0]
 
-    # C = [0.0f0 mp*l*sin(θ); 
+    # C = [b mp*l*sin(θ); 
     #     -mp*sin(θ)/2.0f0 0.0f0]
 
     # G = [0.0f0;

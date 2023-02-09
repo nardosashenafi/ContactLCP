@@ -52,8 +52,6 @@ function checkContact(x, gn::Vector{T}, gThreshold, total_contact_num) where {T<
     return contactIndex, length(contactIndex)
 end
 
-# include("../longWallDynamics.jl")
-
 sys  = CartPoleWithSoftWalls()
 lcp  = Lcp(Float32, sys)
 oneStep(x, param) = oneTimeStep(lcp, x, param; Δt=Δt)
@@ -68,9 +66,9 @@ const Δt            = 0.001f0
 const totalTimeStep = Int(floor(tspan[2]/Δt))
 const binSize       = 3
 
-binNN = FastChain(FastDense(5, 5, elu),
-                    FastDense(5, 4, elu),
-                    FastDense(4, binSize))
+binNN = FastChain(FastDense(5, 4, elu),
+                    FastDense(4, 3, elu),
+                    FastDense(3, binSize))
 
 const binNN_length = DiffEqFlux.paramlength(binNN) 
 
@@ -78,11 +76,15 @@ controlArray     = Array{Function}(undef, binSize);
 controlNN_length = Vector{Int}(undef, binSize)
 
 for i in 1:binSize 
-    controlArray[i] = FastChain(FastDense(5, 8, elu),
-                            FastDense(8, 4, elu),
+    controlArray[i] = FastChain(FastDense(5, 10, elu),
+                            FastDense(10, 4, elu),
                             FastDense(4, 1))
     
     controlNN_length[i] = DiffEqFlux.paramlength(controlArray[i]) 
+end
+
+function control(z, u::AbstractArray{T}; expert=false, lqr_max = satu) where {T<:Real}
+    return clamp(u[1], -satu, satu)     # LQR is not needed
 end
 
 function softargmax(x; β=50.0f0) 
@@ -94,7 +96,11 @@ function bin(x, ψ::AbstractArray{T}) where {T<:Real}
 end
 
 function input(x, θk, i::Int)
-    return controlArray[i](inputLayer(x), θk[i])
+    if i <= 2
+        return controlArray[i](inputLayer(x), θk[i])
+    else
+        return [lqr(x)]
+    end
 end
 
 function unstackControlParam(param::AbstractArray{T}) where {T<:Real}
@@ -125,8 +131,9 @@ end
 function setDistancelossPerState(x)
     x1, x2, x1dot, x2dot = x
 
-    return 15.0f0*(1.0f0-cos(x2)) + 
-            0.8f0*abs(x1dot) + 0.8f0*abs(x2dot)
+    # high cost on x1dot to lower fast impact and to encourage pumping
+    return 15.0f0*sqrt(1.0f0-cos(x2)) + 
+            1.0f0*abs(x1dot) + 0.8f0*abs(x2dot)
 end
 
 function setDistanceLoss(X::Vector{Vector{T}}, pk, k; r=1e-10) where {T<:Real}
@@ -153,17 +160,19 @@ function averageControlLoss(x0, param::AbstractArray{T}, explorationPercent; tot
     for xi in x0
         X = Vector{Vector{T}}(undef, totalTimeStep+1)
         X[1] = xi
-
         pk = Vector{Vector{T}}(undef, totalTimeStep)
         k = Vector{Int}(undef, totalTimeStep)
-
         for i in 1:totalTimeStep
             pk[i] = bin(X[i], ψ)      #Gaussian: quadratic boudaries
 
             if rand() > explorationPercent
                 k[i] = argmax(pk[i])
             else
-                k[i] = rand(1:1:binSize)
+                if rand() > 0.4     #to help LQR
+                    k[i] = 3
+                else
+                    k[i] = rand(1:1:binSize-1)
+                end
             end
 
             ui = input(X[i], θk, k[i])
@@ -198,7 +207,7 @@ function trainEM()
         # For each state in the trajectory, compute the loss incurred by each of the given by the 
         # bin generator 
         explorationPercent = exp.(-i*0.0005)*initialExploration + 0.05
-        l1(θ)   = averageControlLoss(x0, θ, explorationPercent; totalTimeStep=1200)
+        l1(θ)   = averageControlLoss(x0, θ, explorationPercent; totalTimeStep=1500)
         # l1(θ)   = accumulatedLossSampler(x0, θ, explorationPercent; totalTimeStep=1500)
 
         # ForwardDiff.gradient takes the gradient of the loss wrt the state bin parameters and the 
