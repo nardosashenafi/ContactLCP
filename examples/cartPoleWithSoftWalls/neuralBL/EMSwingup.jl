@@ -189,7 +189,7 @@ function trainEM()
     diff_results = DiffResults.GradientResult(param)
     initialExploration = 0.60
 
-    for i in 1:90000
+    for i in 20000:90000
         ψ, θk   = unstackParams(param)
         #Apply combination of DAgger and uniform sampling around the desired equilbrium state
         #inorder to assist exploration 
@@ -197,7 +197,7 @@ function trainEM()
 
         # For each state in the trajectory, compute the loss incurred by each of the given by the 
         # bin generator 
-        explorationPercent = exp.(-i*0.0005)*initialExploration + 0.05
+        explorationPercent = exp.(-i*0.05)*initialExploration + 0.05
         l1(θ)   = averageControlLoss(x0, θ, explorationPercent; totalTimeStep=1200)
         # l1(θ)   = accumulatedLossSampler(x0, θ, explorationPercent; totalTimeStep=1500)
 
@@ -216,7 +216,7 @@ function trainEM()
                 xi = x0[1]
             end
             X = testBayesian(xi, ψ, θk; totalTimeStep=7000)
-            println("loss = ", averageControlLoss([xi], param, explorationPercent; totalTimeStep=7000), " POI = ", poi(xi, ψ))
+            println("MOE loss = ", averageControlLoss([xi], param, explorationPercent; totalTimeStep=7000), " POI = ", poi(xi, ψ))
             # BSON.@save "neuralBL/savedWeights/setdistancetraining.bson" param
             counter = 0
         end
