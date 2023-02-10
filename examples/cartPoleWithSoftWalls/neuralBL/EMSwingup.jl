@@ -1,6 +1,6 @@
 using LinearAlgebra, Flux, DiffEqFlux, LogExpFunctions, ForwardDiff
 using Distributions
-using PyPlot, BSON 
+using PyPlot, BSON, LaTeXStrings, FileIO, MATLAB 
 using ForwardDiff: Chunk, GradientConfig
 # import ContactLCP
 

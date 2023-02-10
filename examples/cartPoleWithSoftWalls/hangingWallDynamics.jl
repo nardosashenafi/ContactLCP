@@ -333,22 +333,25 @@ function startAnimator()
 end
 
 function createAnimateObject(x1, θ)
+    createAnimateObject(x1, θ, 1.0)
+end
+function createAnimateObject(x1, θ, saturation_ratio)
     vcart = vis[:cart]
 
     setobject!(vcart, MeshObject(
         Rect(Vec(0.0, 0.0, 0.0), Vec(0.2, w, 0.1)),
-        MeshLambertMaterial(color=RGBA{Float32}(0.0, 0.0, 0.0, 0.25))))
+        MeshLambertMaterial(color=RGBA{Float32}(0.0, 0.0, 0.0, 0.25/saturation_ratio))))
     settransform!(vcart, Translation(-0.2, x1-w/2.0f0, 0.0))
 
     vpendulum = vis[:pendulum]
     setobject!(vpendulum[:link], MeshObject(
         Cylinder(Point(0.0, 0.0, 0.0), Point(0.0, 0.0, l), 0.005),
-        MeshLambertMaterial(color=RGBA{Float32}(1.0, 0.0, 0.0, 1.0))))
+        MeshLambertMaterial(color=RGBA{Float32}(1.0, 0.0, 0.0, 1.0/saturation_ratio))))
     settransform!(vpendulum[:link], Translation(0.0, x1, 0.00) ∘ LinearMap(RotX(θ)))
 
     setobject!(vpendulum[:bob], MeshObject(
         HyperSphere(Point(0.0, 0.0, l), 0.015),
-        MeshLambertMaterial(color=RGBA{Float32}(0.0, 0.0, 1.0, 1.0))))
+        MeshLambertMaterial(color=RGBA{Float32}(0.0, 0.0, 1.0, 1.0/saturation_ratio))))
     settransform!(vpendulum[:bob], Translation(0.0, x1, 0.00) ∘ LinearMap(RotX(θ)))
    
     vwalls = vis[:walls]
@@ -380,9 +383,12 @@ function createAnimateObject(x1, θ)
 end
 
 function animate(Z)
+    animate(Z, 1.0)
+end
+function animate(Z, saturation_ratio)
 
     x1, θ = Z[1][1:2]
-    vcart, vpendulum = createAnimateObject(x1, θ)
+    vcart, vpendulum = createAnimateObject(x1, θ, saturation_ratio)
     for z in Z[1:20:end]
         x1, θ = z[1:2]
         settransform!(vcart, Translation(-0.2, x1-w/2.f0, 0.0))
@@ -391,4 +397,52 @@ function animate(Z)
         sleep(0.04)
     end
 
+end
+
+function animateMultipleStates(X)
+
+    ################first state animation
+
+    vwalls = vis[:walls]
+    setobject!(vwalls[:left], MeshObject(
+        Rect(Vec(0.0, 0.0, wallBottomEnd), Vec(0.0, wallThickness, wallTopEnd-wallBottomEnd)),
+        MeshLambertMaterial(color=RGBA{Float32}(0.0, 0.0, 0.0, 1.0))))
+    settransform!(vwalls[:left], Translation(0.0, d-wallThickness, 0.0))
+
+    setobject!(vwalls[:right], MeshObject(
+        Rect(Vec(0.0, 0.0, wallBottomEnd), Vec(0.0, wallThickness, wallTopEnd-wallBottomEnd)),
+        MeshLambertMaterial(color=RGBA{Float32}(0.0, 0.0, 0.0, 1.0))))
+    settransform!(vwalls[:right], Translation(0.0, d+D, 0.0))
+
+    vtrack = vis[:tracks]
+    setobject!(vtrack, MeshObject(
+        Rect(Vec(0.0, 0.1, 0.0), Vec(0.0, 2.0, 0.01)),
+        MeshLambertMaterial(color=RGBA{Float32}(0.0, 0.0, 0.0, 0.2))))
+    settransform!(vtrack, Translation(0.0, -1.0, -0.01))
+
+    for i in eachindex(X)
+        x, θ = X[i][1:2]
+        vcart = vis["cart" * string(i)]
+
+        saturation_ratio = i/16
+        setobject!(vcart, MeshObject(
+            Rect(Vec(0.0, 0.0, 0.0), Vec(0.2, w, 0.1)),
+            MeshLambertMaterial(color=RGBA{Float32}(0.0, 0.0, 0.0, 0.25*saturation_ratio))))
+        settransform!(vcart, Translation(-0.2, x-w/2.0f0, 0.0))
+    
+        vpendulum = vcart = vis["pendulum" * string(i)]
+        setobject!(vpendulum[:link], MeshObject(
+            Cylinder(Point(0.0, 0.0, 0.0), Point(0.0, 0.0, l), 0.005),
+            MeshLambertMaterial(color=RGBA{Float32}(1.0, 0.0, 0.0, 1.0*saturation_ratio))))
+        settransform!(vpendulum[:link], Translation(0.0, x, 0.00) ∘ LinearMap(RotX(θ)))
+    
+        setobject!(vpendulum[:bob], MeshObject(
+            HyperSphere(Point(0.0, 0.0, l), 0.015),
+            MeshLambertMaterial(color=RGBA{Float32}(0.0, 0.0, 1.0, 1.0*saturation_ratio))))
+        settransform!(vpendulum[:bob], Translation(0.0, x, 0.00) ∘ LinearMap(RotX(θ)))    
+
+    end
+
+    # animateMultipleStates(X[3600:100:4000])
+    # animateMultipleStates(vcat(X[4000:50:4200],X[6300:1000:6500], X[8000:7000:15000]))
 end
