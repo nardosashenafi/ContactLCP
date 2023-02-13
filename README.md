@@ -14,3 +14,7 @@ Rimless wheel: controlled via data-driven passivity-based control (NeuralPBC)
 Cart-pole with soft wall contact: controlled via LQR
 
 ![ezgif com-gif-maker(1)](https://user-images.githubusercontent.com/36546726/203182031-972f14d3-be52-440b-9b0e-7909e83a93ab.gif)
+
+Cart-pole swing up with Deep-net Mixture of Experts
+
+![MOESimExpPlots](https://user-images.githubusercontent.com/36546726/218184094-8ead79bc-fce8-4901-b2ca-6fc32d9bdebb.png)
