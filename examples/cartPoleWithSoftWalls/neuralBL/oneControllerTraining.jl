@@ -85,7 +85,7 @@ function trainOneController()
     minibatch   = 3
     diff_results = DiffResults.GradientResult(param)
 
-    for i in 1:80000
+    for i in 30000:80000
 
         x0      = sampleInitialState(param; totalTimeStep=8000, minibatch=minibatch)
         l1(θ)   = oneControllerLoss(x0, θ; totalTimeStep = 1200)
