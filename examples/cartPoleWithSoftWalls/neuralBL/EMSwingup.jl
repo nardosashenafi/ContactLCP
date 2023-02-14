@@ -125,7 +125,7 @@ end
 function setDistancelossPerState(x)
     x1, x2, x1dot, x2dot = x
 
-    return 15.0f0*(1.0f0-cos(x2)) + 
+    return 12.0f0*(1.0f0-cos(x2)) + 
             0.8f0*abs(x1dot) + 0.8f0*abs(x2dot)
 end
 
@@ -197,8 +197,8 @@ function trainEM()
 
         # For each state in the trajectory, compute the loss incurred by each of the given by the 
         # bin generator 
-        explorationPercent = exp.(-i*0.0005)*initialExploration + 0.05
-        l1(θ)   = averageControlLoss(x0, θ, explorationPercent; totalTimeStep=1200)
+        explorationPercent = exp.(-i*0.05)*initialExploration 
+        l1(θ)   = averageControlLoss(x0, θ, explorationPercent; totalTimeStep=1500)
         # l1(θ)   = accumulatedLossSampler(x0, θ, explorationPercent; totalTimeStep=1500)
 
         # ForwardDiff.gradient takes the gradient of the loss wrt the state bin parameters and the 
@@ -216,7 +216,7 @@ function trainEM()
                 xi = x0[1]
             end
             X = testBayesian(xi, ψ, θk; totalTimeStep=7000)
-            println("loss = ", averageControlLoss([xi], param, explorationPercent; totalTimeStep=7000), " POI = ", poi(xi, ψ))
+            println("MOE loss = ", averageControlLoss([xi], param, explorationPercent; totalTimeStep=7000), " POI = ", poi(xi, ψ))
             # BSON.@save "neuralBL/savedWeights/setdistancetraining.bson" param
             counter = 0
         end

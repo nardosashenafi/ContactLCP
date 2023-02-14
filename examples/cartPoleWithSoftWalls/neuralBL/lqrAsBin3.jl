@@ -83,8 +83,8 @@ for i in 1:binSize
     controlNN_length[i] = DiffEqFlux.paramlength(controlArray[i]) 
 end
 
-function control(z, u::AbstractArray{T}; expert=false, lqr_max = satu) where {T<:Real}
-    return clamp(u[1], -satu, satu)     # LQR is not needed
+function control(z, u::AbstractArray{T}; expert=false, max_u = 2.0) where {T<:Real}
+    return clamp(u[1], -max_u, max_u)     # LQR is not needed
 end
 
 function softargmax(x; β=50.0f0) 
@@ -132,8 +132,8 @@ function setDistancelossPerState(x)
     x1, x2, x1dot, x2dot = x
 
     # high cost on x1dot to lower fast impact and to encourage pumping
-    return 15.0f0*sqrt(1.0f0-cos(x2)) + 
-            1.0f0*abs(x1dot) + 0.8f0*abs(x2dot)
+    return 15.0f0*(1.0f0-cos(x2)) + 
+            0.8f0*abs(x1dot) + 0.8f0*abs(x2dot)
 end
 
 function setDistanceLoss(X::Vector{Vector{T}}, pk, k; r=1e-10) where {T<:Real}
@@ -206,7 +206,7 @@ function trainEM()
 
         # For each state in the trajectory, compute the loss incurred by each of the given by the 
         # bin generator 
-        explorationPercent = exp.(-i*0.0005)*initialExploration + 0.05
+        explorationPercent = exp.(-i*0.001)*initialExploration + 0.05
         l1(θ)   = averageControlLoss(x0, θ, explorationPercent; totalTimeStep=1500)
         # l1(θ)   = accumulatedLossSampler(x0, θ, explorationPercent; totalTimeStep=1500)
 
@@ -224,8 +224,8 @@ function trainEM()
             else
                 xi = x0[1]
             end
-            X = testBayesian(xi, ψ, θk; totalTimeStep=7000)
-            println("loss = ", averageControlLoss([xi], param, explorationPercent; totalTimeStep=7000), " POI = ", poi(xi, ψ))
+            X = testBayesian(xi, ψ, θk; totalTimeStep=4000)
+            println("LQR as bin3 loss = ", averageControlLoss([xi], param, explorationPercent; totalTimeStep=7000), " POI = ", poi(xi, ψ))
             # BSON.@save "neuralBL/savedWeights/setdistancetraining.bson" param
             counter = 0
         end
