@@ -13,22 +13,18 @@ lcp            = Lcp(Float32, sys)
 
 oneStep(x, θ; kwargs...) = oneTimeStep(lcp, x, θ; kwargs...)
 
-function trajectory(x0, param::Vector{T}; expert=false, Δt = 0.001f0, totalTimeStep = 1000) where {T<:Real}
+function trajectory(x0, param::Vector{T}; expert=false, Δt = 0.0005f0, totalTimeStep = 1000) where {T<:Real}
 
     X       = Vector{Vector{T}}(undef, totalTimeStep)
-    Λn      = Vector{Vector{T}}(undef, totalTimeStep)
-    Λt      = Vector{Vector{T}}(undef, totalTimeStep)
     x       = deepcopy(x0)
  
     for i in 1:totalTimeStep
-        x, λn, λt  = oneStep(x, param; Δt=Δt, expert=expert)
+        x = oneStep(x, param; Δt=Δt, expert=expert)
         X[i]    = x
-        Λn[i]   = λn
-        Λt[i]   = λt
     end
     # isStumbling(X) ? println("We got stumbling! Beware of gradient jumps") : nothing
 
-    return X, Λn, Λt
+    return X
 end
 
 function isStumbling(x)
@@ -46,7 +42,7 @@ function sampleInitialStates(param::Vector{T}, sampleNum; α=α, totalTime=1000)
                                     0.0, 
                                     rand(-1.0:0.1:1.0)) )
 
-        S, _, _ = trajectory(x0, param; totalTimeStep=totalTime)
+        S = trajectory(x0, param; totalTimeStep=totalTime)
         push!(sampleTrajectories, S)
     end
 

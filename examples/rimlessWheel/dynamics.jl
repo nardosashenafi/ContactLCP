@@ -1,16 +1,17 @@
 export RimlessWheel
 
-const m1           = 2.32f0    
-const m2           = 4.194f0 
-const I1           = 0.0784160f0
-const I2           = 0.0380256f0
+const m1           = 2.0f0    
+const m2           = 6.0f0
+const l1           = 0.3f0        #wheel
+const l2           = 0.06f0          #torso COM
 const mt           = m1 + m2
-const l1           = 0.26f0        #wheel
-const l2           = 0.05f0          #torso
+const I1           = 0.0885f0
+const I2           = m2*l2^2.0f0/3.0f0
 const g            = 9.81f0
 const k            = 10
 const α            = Float32(360.0/k/2.0 * pi/180.0)
 const γ            = Float32(0.0*pi/180.0)
+const ls           = 5.0f0              #length of the slope (runway)
 const ϵn_const     = 0.0f0*ones(Float32, k)
 const ϵt_const     = 0.0f0*ones(Float32, k)
 const μ_const      = 0.6f0*ones(Float32, k)
@@ -19,11 +20,13 @@ const gThreshold   = 0.001f0
 struct RimlessWheel{}  
 end
 
-function initialState(θ0, θ0dot, ϕ0, ϕ0dot)
-    @assert pi-α <= θ0 <= pi+α "Give an initial spoke angle for the spoke in contact. This will help set the rimless wheel in contact with the surface"
+function initialState(θ0, θ0dot, ϕ0, ϕ0dot; γi = 0.0f0)
+    @assert pi-α <= θ0 <= pi+α "Give an initial spoke angle for the spoke in contact. This helps calculate (x, y) correctly and sets the rimless wheel in contact with the surface. Pick initial θ0 such that pi-α <= θ0 <= pi+α"
     
-    x = l1*sin(pi-θ0)
-    y = l1*cos(pi-θ0)
+    xs = ls - ls*cos(γi)
+    ys = ls*sin(γi)
+    x = xs + l1*sin(pi-θ0)
+    y = ys + l1*cos(pi-θ0)
     ϕ = ϕ0 
     θ = θ0 
     xdot = -l1*cos(pi-θ0) * θ0dot
@@ -34,15 +37,33 @@ function initialState(θ0, θ0dot, ϕ0, ϕ0dot)
     return [x, y, ϕ, θ, xdot, ydot, ϕdot, θdot]
 end
 
-#returns the attributes need to model contact
-function (sys::RimlessWheel)(x, θ::Vector{T}; ϵn=ϵn_const, ϵt=ϵt_const, μ=μ_const, gThreshold=gThreshold, expert=false) where {T<:Real}
-    gn  = gap(x)  
-    γn  = vnormal(x)
-    γt  = vtang(x)
-    M   = massMatrix(x)
-    h   = genForces(x, θ; expert=expert)
-    Wn  = wn(x)
-    Wt  = wt(x)
+#returns the attributes needed to model contact
+function (sys::RimlessWheel)(z, param::Vector{T}; ϵn=ϵn_const, ϵt=ϵt_const, μ=μ_const, gThreshold=gThreshold, expert=false) where {T<:Real}
+    q, v = parseStates(z)
+    x, y, ϕ, θ = q
+    gn  = gap(z)  
+    Wn  = wn(θ)
+    Wt  = wt(θ)
+    γn  = vnormal(Wn, v)
+    γt  = vtang(Wt, v)
+    M   = massMatrix(ϕ)
+    h   = genForces(z, param; expert=expert)
+
+
+    return gn, γn, γt, M, h, Wn, Wt, ϵn, ϵt, μ, gThreshold
+end
+
+function (sys::RimlessWheel)(z, sysParam, controlParam::Vector{T}; ϵn=ϵn_const, ϵt=ϵt_const, μ=μ_const, gThreshold=gThreshold, expert=false) where {T<:Real}
+    q, v = parseStates(z)
+    x, y, ϕ, θ = q
+    gn  = gap(z)  
+    Wn  = wn(θ)
+    Wt  = wt(θ)
+    γn  = vnormal(Wn, v)
+    γt  = vtang(Wt, v)
+    M   = massMatrix(ϕ)
+    h   = genForces(z, sysParam, controlParam; expert=expert)
+
 
     return gn, γn, γt, M, h, Wn, Wt, ϵn, ϵt, μ, gThreshold
 end
@@ -53,9 +74,9 @@ function (sys::RimlessWheel)(x::Vector{T}) where {T<:Real}
 end
 
 function parseStates(x::Vector{T}) where {T<:Real}
-    q = x[1:4]      #[x, y, ϕ, θ]
-    u = x[5:8]      #[xdot, ydot, ϕdot, θdot]
-    return q, u
+    q = x[1:4]      #[x, y, ϕ, θ], ϕ is torso angle and θ is angle of the spoke in contact. If there are two in contact, it can be either one. Gap function checks either anyway
+    v = x[5:8]      #[xdot, ydot, ϕdot, θdot]
+    return q, v
 end
 
 function gap(z)
@@ -65,26 +86,41 @@ function gap(z)
     return y .+ l1*cos.(θ .+ 2*α*k_range) 
 end
 
-function vnormal(z)
-    Wn = wn(z)
-    _, v = parseStates(z)
+function wn(θ::T) where {T<:Real}
+
+    k_range  = range(0, stop=k-1, step=1)
+    Wn       = zeros(T, 4, k)
+    Wn[2, :] = ones(T, k)
+    Wn[4, :] = -l1 .* sin.(θ .+ 2.0*α.*k_range)
+
+   return Wn 
+
+end
+
+function wt(θ::T) where {T<:Real}
+
+    k_range  = range(0, stop=k-1, step=1)
+    Wt       = zeros(T, 4, k)
+    Wt[1, :] = ones(T, k)
+    Wt[4, :] = -l1 .* cos.(θ .+ 2.0*α.*k_range)
+
+    return Wt
+end
+
+function vnormal(Wn, v)
     return Wn'*v
 end
 
-function vtang(z)
-    Wt = wt(z)
-    _, v = parseStates(z)
+function vtang(Wt, v)
     return Wt'*v
 end
 
-function massMatrix(z)
-    q, v = parseStates(z)
-    x, y, ϕ, θ = q
+function massMatrix(ϕ)
     
-    M = [mt 0.0 m2*l2*cos(ϕ) 0.0;
-        0.0 mt m2*l2*sin(ϕ) 0.0;
-        m2*l2*cos(ϕ) m2*l2*sin(ϕ) I2+m2*l2^2 0.0;
-        0.0 0.0 0.0 I1]
+    M = [mt 0.0f0 m2*l2*cos(ϕ) 0.0f0;
+        0.0f0 mt m2*l2*sin(ϕ) 0.0f0;
+        m2*l2*cos(ϕ) m2*l2*sin(ϕ) I2+m2*l2^2 0.0f0;
+        0.0f0 0.0f0 0.0f0 I1]
 
     return M
 end
@@ -129,6 +165,27 @@ function genForces(z, param::Vector{T}; expert=false) where {T<:Real}
     return B*control(z, param; expert=expert) - C*v - G
 end
 
+function genForces(z, γi, param::Vector{T}; expert=false) where {T<:Real}
+
+    q, v = parseStates(z)
+    x, y, ϕ, θ = q
+    xdot, ydot, ϕdot, θdot = v
+    #h = Bu - C qdot - G
+    B = [0.0f0, 0.0f0, 1.0f0, -1.0f0]
+
+    C = [0.0f0 0.0f0 -m2*l2*sin(ϕ)*ϕdot 0.0f0;
+        0.0f0 0.0f0 m2*l2*cos(ϕ)*ϕdot 0.0f0;
+        -m2*l2*sin(ϕ)*ϕdot m2*l2*cos(ϕ)*ϕdot 0.0f0 0.0f0;
+        0.0f0 0.0f0 0.0f0 0.0f0]
+
+    G = [-mt*g*sin(γi), 
+        mt*g*cos(γi), 
+        m2*g*l2*sin(ϕ - γi),
+        0.0f0]
+
+    return B*control(z, param; expert=expert) - C*v - G
+end
+
 function impactMap(ϕ)
 
     det = I1*I2 + I1*m2*l2^2 + I2*mt*l1^2 + 
@@ -146,14 +203,14 @@ function impactMap(ϕ)
 
 end
 
-function comparePostImpact(lcp, x, param; Δt = 0.001)
+function comparePostImpact(lcp, x, param; Δt = 0.001f0)
     
     ϕ = x[3]
     θdot, ϕdot = [x[8], x[7]]
     postImpactMap = impactMap(ϕ) * [θdot, ϕdot]
 
     gn, γn, γt, M, h, Wn, Wt, ϵn, ϵt, μ, gThreshold = sysAttributes(lcp, x, param)
-    λn, λt, λR  = solveLcp(gn, γn, γt, M, h, Wn, Wt, ϵn, ϵt, μ, gThreshold; Δt=Δt)
+    λn, λt, λR  = solveLcp(gn, γn, γt, M, h, Wn, Wt, ϵn, ϵt, μ, gThreshold, x; Δt=Δt)
 
     qM, uA = sys(x)
     uE = M\((Wn - Wt*diagm(0 => lcp.μ))*λn + Wt*λR + h*Δt) + uA
@@ -165,70 +222,66 @@ function comparePostImpact(lcp, x, param; Δt = 0.001)
 
 end
 
-function wn(z::Vector{T}) where {T<:Real}
+function createAnimateObject(x, y, ϕ, θ; spokeGap = 0.2, k=k, α=α)
 
-    θ        = z[4]
-    k_range  = range(0, stop=k-1, step=1)
-    Wn       = zeros(T, 4, k)
-    Wn[2, :] = ones(T, k)
-    Wn[4, :] = -l1 .* sin.(θ .+ 2.0*α.*k_range)
-
-   return Wn 
-
-end
-
-function wt(z::Vector{T}) where {T<:Real}
-
-    θ        = z[4]
-    k_range  = range(0, stop=k-1, step=1)
-    Wt       = zeros(T, 4, k)
-    Wt[1, :] = ones(T, k)
-    Wt[4, :] = -l1 .* cos.(θ .+ 2.0*α.*k_range)
-
-    return Wt
-end
-
-function createAnimateObject(x, y, ϕ, θ; k=k, α=α)
-    vspokes = vis[:spokes]
+    vspokes1 = vis[:spokes1]
 
     for ki in range(0, stop=k-1, step=1)
-        vki = vspokes[Symbol("spoke" * String("$ki"))]
+        vki = vspokes1[Symbol("spoke" * String("$ki"))]
+
+        setobject!(vki, MeshObject(
+            Cylinder(Point(0.0, 0.0, 0.0), Point(0.0, 0.0, l1), 0.015),
+            MeshLambertMaterial(color=RGBA{Float32}(0.0, 0.0, 0.0, 0.7))))
+        settransform!(vki, Translation(0.0, x, y) ∘ LinearMap(RotX(θ+2*α*ki)))
+    end
+
+    vspokes2 = vis[:spokes2]
+
+    for ki in range(0, stop=k-1, step=1)
+        vki = vspokes2[Symbol("spoke" * String("$ki"))]
 
         setobject!(vki, MeshObject(
             Cylinder(Point(0.0, 0.0, 0.0), Point(0.0, 0.0, l1), 0.015),
             MeshLambertMaterial(color=RGBA{Float32}(0.0, 0.0, 0.0, 0.25))))
-        settransform!(vki, Translation(0.0, x, y) ∘ LinearMap(RotX(θ+2*α*ki)))
+        settransform!(vki, Translation(spokeGap, x, y) ∘ LinearMap(RotX(θ+2*α*ki)))
     end
 
     vtorso = vis[:torso]
     setobject!(vtorso[:link], MeshObject(
-        Cylinder(Point(0.0, 0.0, 0.0), Point(0.0, 0.0, -l2), 0.005),
+        HyperRectangle(Vec(0.0, 0.0, 0.0), Vec(spokeGap, 0.02, l2+0.1)),
         MeshLambertMaterial(color=RGBA{Float32}(1.0, 0.0, 0.0, 1.0))))
-    settransform!(vtorso[:link], Translation(0.0, x, y) ∘ LinearMap(RotX(ϕ)))
-
-    setobject!(vtorso[:bob], MeshObject(
-        HyperSphere(Point(0.0, 0.0, -l2), 0.015),
-        MeshLambertMaterial(color=RGBA{Float32}(0.0, 0.0, 1.0, 1.0))))
-    settransform!(vtorso[:bob], Translation(0.0, x, y) ∘ LinearMap(RotX(ϕ)))
+    settransform!(vtorso[:link], Translation(0.0, x, y) ∘ LinearMap(RotX(ϕ+pi)))
    
-    return vspokes, vtorso
+    return vspokes1, vspokes2, vtorso
 end
 
 function animate(Z)
 
     x0, y0, ϕ0, θ0 = Z[1][1:4]
-    vspokes, vtorso = createAnimateObject(x0, y0, ϕ0, θ0)
-    for z in Z[1:50:end]
+    spokeGap = 0.1
+    vspokes1, vspokes2, vtorso = createAnimateObject(x0, y0, ϕ0, θ0; spokeGap=spokeGap)
+    for z in Z[1:30:end]
         x, y, ϕ, θ = z[1:4]
         for ki in range(0, stop=k-1, step=1)
-            vki = vspokes[Symbol("spoke" * String("$ki"))]
+            vki = vspokes1[Symbol("spoke" * String("$ki"))]
             settransform!(vki, Translation(0.0, x, y) ∘ LinearMap(RotX(θ+2*α*ki)))
         end
-        settransform!(vtorso[:link], Translation(0.0, x, y) ∘ LinearMap(RotX(ϕ)))
-        settransform!(vtorso[:bob], Translation(0.0, x, y) ∘ LinearMap(RotX(ϕ)))
-        sleep(0.04)
+        for ki in range(0, stop=k-1, step=1)
+            vki = vspokes2[Symbol("spoke" * String("$ki"))]
+            settransform!(vki, Translation(spokeGap, x, y) ∘ LinearMap(RotX(θ+2*α*ki)))
+        end
+        settransform!(vtorso[:link], Translation(0.0, x, y) ∘ LinearMap(RotX(ϕ+pi)))
+        sleep(0.01)
     end
 
+end
+
+function startAnimator()
+    window = Window()
+    vis = Visualizer()
+    open(vis, window)
+
+    return vis
 end
 
 function animate_random(lcp, param; totalTimeStep = 5000)
@@ -257,10 +310,12 @@ function plots(Z, fig1)
     subplot(2, 2, 2)
     θ = spokeInContact(Z)
     plot(θ, getindex.(Z, 8))
+    scatter(θ[end], Z[end][8])
     ylabel(L"\dot{\theta} [rad/s]", fontsize=15)
     subplot(2, 2, 3)
     plot(getindex.(Z, 5))
     ylabel("vx [m/s]", fontsize=15)
+    println("Average hip speed = ", mean(getindex.(Z, 5)))
 end
 
 function plots(Z, t, Λn, Λt)

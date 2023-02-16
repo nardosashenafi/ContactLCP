@@ -2,12 +2,14 @@
 using DiffEqFlux
 using MLBasedESC
 using Statistics
+using ProgressMeter, BSON
+using MeshCat, GeometryBasics, CoordinateTransformations, ColorTypes, Blink, Rotations
 
-include("trainingHelpers.jl")
+include("deterministicTrainingHelpers.jl")
 
 Δt = 0.001f0; totalTimeStep = 1500
 
-x0             = initialState(pi, -1.0f0, 0.0f0, 0.0f0)
+x0             = Float32.(initialState(pi, -1.0f0, 0.0f0, 0.0f0))
 param_expert   = Float32[30.0, 5.0]
 # unn            = FastChain(FastDense(6, 8, elu), 
 #                             FastDense(8, 5, elu),
@@ -19,17 +21,14 @@ Hd              = FastChain(FastDense(6, 8, elu),
                   FastDense(5, 1))
 const N         = 6
 npbc            = MLBasedESC.NeuralPBC(N, Hd)
-ps              = 0.1f0*randn(Float32, DiffEqFlux.paramlength(Hd)+N)
-ps[end-N+1:end] = 0.1*rand(N)
-
-const satu     = 1.5f0
+const satu      = 3.0f0
 
 function trajLoss(X0, param::Vector{T}; totalTime=500) where {T<:Real}
 
     l = 0.0f0
     for x0 in X0
-        S, _, _ = trajectory(x0, param; totalTimeStep=totalTime)
-        l       += hipSpeedLoss(S)
+        S  = trajectory(x0, param; totalTimeStep=totalTime)
+        l  += hipSpeedLoss(S)
         # l       += 3.0f0/length(S)*sum([abs.(unn(inputLayer(s), param)[1]) for s in S])
     end
 
@@ -38,7 +37,7 @@ end
 
 function testControl(X0, ps, grad, fig1; timeSteps=5000)
 
-    S, _, _ = trajectory(X0[1], ps; totalTimeStep = timeSteps);
+    S       = trajectory(X0[1], ps; totalTimeStep = timeSteps);
     loss    = trajLoss(X0, ps; totalTime=timeSteps)
 
     plots(S, fig1)
@@ -60,10 +59,12 @@ function hipSpeedLoss(Z; gThreshold=gThreshold, k=k, α=α)
 
     for z in Z
         gn = gap(z)
-        contactIndex, _ = checkContact(gn, gThreshold, k)
+        contactIndex, _ = checkContact(z, gn, gThreshold, k)
 
-        if any(contactIndex .> 0.0) 
-            ki      = findfirst(x -> x == 1.0, contactIndex) - 1
+        #loss between desired ẋ and actual ẋ should not be computed using getindex.(Z, 1) because this state does not directly depend on the control.
+        #Using getindex.(Z, 1) as ẋ in auto-diff gives zero gradient
+        if !isempty(contactIndex)
+            ki      = contactIndex[1] - 1
             loss    += xd_dot - (l1 * cos(z[4] + 2*α*ki) * z[8])
             ki_prev = ki
         else
@@ -91,29 +92,31 @@ function hipSpeedLoss(Z; gThreshold=gThreshold, k=k, α=α)
     return 1.0f0/length(Z)*lmag
 end
 
-function controlToHipSpeed(ps) where {T<:Real}
+function controlToHipSpeed()
     
-    opt           = Adam(0.001)
-  
-    counter       = 0
-    X0            = Vector{Vector{T}}()
-    replaybuffer  = Vector{Vector{T}}()
-    samples       = Vector{Vector{T}}()
-    fig1          = plt.figure()
-    param         = deepcopy(ps)
-    minibatchSize = 4
+    opt                 = Adam(0.001)
 
-    test(X, θ, grad)  = testControl(X, θ, grad, fig1; timeSteps=3000)
+    counter             = 0
+    X0                  = Vector{Vector{T}}()
+    fig1                = plt.figure()
+    param               = 0.4f0*randn(Float32, DiffEqFlux.paramlength(Hd)+N)
+    param[end-N+1:end]  = 0.1*rand(N)
+    minibatchSize       = 2
+    xi_test             = Float32.(initialState(rand(pi-α+0.05:0.05:pi+α-0.05), 
+                            rand(-3.0:0.05:-0.5), 
+                            0.0, 
+                            rand(-1.0:0.1:1.0)) )
+                            
+    test(X, θ, grad)  = testControl(X, θ, grad, fig1; timeSteps=5000)
 
-    for i in 1:10000
+    @showprogress for i in 1:500
+        X0 = sampleInitialStates(param, minibatchSize; totalTime=5000)
 
-        X0 = sampleInitialStates(param, minibatchSize; totalTime=2000)
-        # push!(replaybuffer, X0...)
-        # [push!(samples, rand(rand(replaybuffer))) for i in minibatchSize]
-
-        l(θ)  = trajLoss(X0, θ; totalTime=500)
+        l(θ)  = trajLoss(X0, θ; totalTime=2000)
         lg    = ForwardDiff.gradient(l, param)
-        if counter > 2
+
+        if counter > 4
+            println(" ")
             test([X0[1]], param, lg)
             counter = 0
         end
