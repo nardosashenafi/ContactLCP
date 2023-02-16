@@ -24,8 +24,8 @@ function testBayesian(xi, ψ, θk; totalTimeStep = totalTimeStep)
     X, _ = integrate(xi, ψ, θk; totalTimeStep = totalTimeStep)
     clf()
     plots(X, fig1)
-    plotPartition2(X, ψ, θk)
-    # plotPartition(X, ψ, θk)
+    # plotPartition2(X, ψ, θk)
+    plotPartition(X, ψ, θk)
     fig1.canvas.draw()      #draws tupdates in for loop
     fig1.canvas.flush_events()  #gets new figure in for loop
     # animate(X)
@@ -136,8 +136,8 @@ function plotPartition(X::Vector{Vector{T}}, ψ, θk) where {T<:Real}
     xlabel("x2 vs x2dot")
     # fig.colorbar(u, ax=ax1)
     #overlap the trajectory on the control heat map
-    # plot(getindex.(X, 2), getindex.(X, 4), "r")
-    # scatter(X[end][2], X[end][4])
+    plot(getindex.(X, 2), getindex.(X, 4), "r")
+    scatter(X[end][2], X[end][4])
 
     ################################################
     plt.subplot(2, 2, 4)
