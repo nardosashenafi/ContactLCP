@@ -54,6 +54,11 @@ end
 
 # include("../longWallDynamics.jl")
 
+const tspan         = (0.0f0, 4.0f0) 
+const Δt            = 0.0007f0
+const totalTimeStep = Int(floor(tspan[2]/Δt))
+const binSize       = 3
+
 sys  = CartPoleWithSoftWalls()
 lcp  = Lcp(Float32, sys)
 oneStep(x, param) = oneTimeStep(lcp, x, param; Δt=Δt)
@@ -62,11 +67,6 @@ fig1 = figure()
 vis = startAnimator()
 include("trainingHelpers.jl")
 include("testHelpers.jl")
-
-const tspan         = (0.0f0, 4.0f0) 
-const Δt            = 0.001f0
-const totalTimeStep = Int(floor(tspan[2]/Δt))
-const binSize       = 3
 
 binNN = FastChain(FastDense(5, 4, elu),
                     FastDense(4, 3, elu),
