@@ -4,16 +4,16 @@ using JuMP, LinearAlgebra
 using ForwardDiff
 using Flux
 
-include("dynamics.jl")
-include("../../src/lcp.jl")
-include("../../src/solver.jl")
+include("../dynamics.jl")
+include("../../../src/lcp.jl")
+include("../../../src/solver.jl")
 
 sys            = RimlessWheel()
 lcp            = Lcp(Float32, sys)
-
+Δt = 0.0005f0; totalTimeStep = 1500
 oneStep(x, θ; kwargs...) = oneTimeStep(lcp, x, θ; kwargs...)
 
-function trajectory(x0, param::Vector{T}; expert=false, Δt = 0.0005f0, totalTimeStep = 1000) where {T<:Real}
+function trajectory(x0, param::Vector{T}; expert=false, Δt = Δt, totalTimeStep = totalTimeStep) where {T<:Real}
 
     X       = Vector{Vector{T}}(undef, totalTimeStep)
     x       = deepcopy(x0)

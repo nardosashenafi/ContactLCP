@@ -7,8 +7,6 @@ using MeshCat, GeometryBasics, CoordinateTransformations, ColorTypes, Blink, Rot
 
 include("deterministicTrainingHelpers.jl")
 
-Δt = 0.001f0; totalTimeStep = 1500
-
 x0             = Float32.(initialState(pi, -1.0f0, 0.0f0, 0.0f0))
 param_expert   = Float32[30.0, 5.0]
 # unn            = FastChain(FastDense(6, 8, elu), 
@@ -58,7 +56,7 @@ function hipSpeedLoss(Z; gThreshold=gThreshold, k=k, α=α)
     ki_prev = 0
 
     for z in Z
-        gn = gap(z)
+        gn,_,_ = gap(z)
         contactIndex, _ = checkContact(z, gn, gThreshold, k)
 
         #loss between desired ẋ and actual ẋ should not be computed using getindex.(Z, 1) because this state does not directly depend on the control.
@@ -72,10 +70,10 @@ function hipSpeedLoss(Z; gThreshold=gThreshold, k=k, α=α)
         end
     end
 
-    lmag = dot(loss, loss)
+    lmag = 0.001f0*dot(loss, loss)
 
     ϕdot = getindex.(Z, 7)
-    lmag += 2.0f0*dot(ϕdot, ϕdot)
+    lmag += 0.05f0*dot(ϕdot, ϕdot)
 
     # #add cost on contact frequency
     # β       = 0.2f0
@@ -89,7 +87,7 @@ function hipSpeedLoss(Z; gThreshold=gThreshold, k=k, α=α)
     #     lmag += 0.1f0*(f - (1+β) .* freq_d)
     # end
 
-    return 1.0f0/length(Z)*lmag
+    return lmag
 end
 
 function controlToHipSpeed()
