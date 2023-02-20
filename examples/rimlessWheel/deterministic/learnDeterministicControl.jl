@@ -52,11 +52,11 @@ function hipSpeedLoss(Z; gThreshold=gThreshold, k=k, α=α)
     #loss of one trajectory
     xd_dot  = 0.5f0
 
-    loss = 0.0f0
+    loss    = 0.0f0
     ki_prev = 0
 
     for z in Z
-        gn,_,_ = gap(z)
+        gn ,_ ,_ = gap(z)
         contactIndex, _ = checkContact(z, gn, gThreshold, k)
 
         #loss between desired ẋ and actual ẋ should not be computed using getindex.(Z, 1) because this state does not directly depend on the control.
@@ -70,10 +70,10 @@ function hipSpeedLoss(Z; gThreshold=gThreshold, k=k, α=α)
         end
     end
 
-    lmag = 0.001f0*dot(loss, loss)
+    lmag = 1.0f0*dot(loss, loss)
 
-    ϕdot = getindex.(Z, 7)
-    lmag += 0.05f0*dot(ϕdot, ϕdot)
+    ϕdot = getindex.(Z, 7)          #large ϕdot causes the robot to leap
+    lmag += 3.0f0*dot(ϕdot, ϕdot)
 
     # #add cost on contact frequency
     # β       = 0.2f0
@@ -87,27 +87,23 @@ function hipSpeedLoss(Z; gThreshold=gThreshold, k=k, α=α)
     #     lmag += 0.1f0*(f - (1+β) .* freq_d)
     # end
 
-    return lmag
+    return lmag/length(Z)
 end
 
-function controlToHipSpeed()
+function controlToHipSpeed(;T=Float32)
     
     opt                 = Adam(0.001)
 
     counter             = 0
     X0                  = Vector{Vector{T}}()
     fig1                = plt.figure()
-    param               = 0.4f0*randn(Float32, DiffEqFlux.paramlength(Hd)+N)
-    param[end-N+1:end]  = 0.1*rand(N)
+    param               = 0.3f0*randn(Float32, DiffEqFlux.paramlength(Hd)+N)
+    param[end-N+1:end]  = 0.1f0*rand(N)
     minibatchSize       = 2
-    xi_test             = Float32.(initialState(rand(pi-α+0.05:0.05:pi+α-0.05), 
-                            rand(-3.0:0.05:-0.5), 
-                            0.0, 
-                            rand(-1.0:0.1:1.0)) )
                             
     test(X, θ, grad)  = testControl(X, θ, grad, fig1; timeSteps=5000)
 
-    @showprogress for i in 1:500
+    @showprogress for i in 1:5000
         X0 = sampleInitialStates(param, minibatchSize; totalTime=5000)
 
         l(θ)  = trajLoss(X0, θ; totalTime=2000)

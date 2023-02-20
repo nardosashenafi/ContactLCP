@@ -17,7 +17,7 @@ include("../../src/solver.jl")
 # vis = Visualizer()
 # open(vis, window)
 
-param = Float32[30.0, 5.0]
+param_expert = Float32[30.0, 5.0]
 # param = Float32[0.0, 0.0]
 
 sys  = RimlessWheel()
@@ -26,6 +26,6 @@ x0   = Float32.(initialState(pi, -0.5f0, 0.0f0, 0.0f0))
 # x0 = Float32([0.0, 0.26, 0.0, 0.0, 2.0, 0.0, 0.0, 0.0])
 lcp  = ContactLCP.Lcp(Float32, sys)
 
-X, t, Λn, Λt = ContactLCP.fulltimestep(lcp, x0, param; expert=true, Δt = 0.001f0, totalTimeStep = 5000)
+X, t, Λn, Λt = ContactLCP.fulltimestep(lcp, x0, param_expert; expert=true, Δt = 0.001f0, totalTimeStep = 5000)
 plots(X, t, Λn, Λt)
 

@@ -19,21 +19,25 @@ function stateAndForcesWithNoise(lcp::Lcp, x, sysParam, controlParam::AbstractAr
     x_mid   = vcat(qM, uA)
     gn, γn, γt, M, h, Wn, Wt, ϵn, ϵt, μ, gThreshold = sysAttributes(lcp, x_mid, sysParam, controlParam; kwargs...)
     contactIndex, _ = checkContact(x_mid, gn, gThreshold, k)
-    λn, _, λR  = solveLcp(gn, γn, γt, M, h, Wn, Wt, ϵn, ϵt, μ, gThreshold, x_mid; Δt=Δt)
+    λn, λt, λR  = solveLcp(gn, γn, γt, M, h, Wn, Wt, ϵn, ϵt, μ, gThreshold, x_mid; Δt=Δt)
 
     ######add noise on the angle of contact force to simulate uneven/uncertain terrain
-    Wn_noise    = deepcopy(Wn)
-    μ_Wn_noise  = 0.5f0 .* Wn_noise[1, contactIndex]   #change only the x component of the contact force to prevent penetrating the ground
-    σ_Wn_noise  = 0.3f0 .* Wn_noise[1, contactIndex]
-    noise       = σ_Wn_noise .* randn(length(contactIndex)) .+ μ_Wn_noise
+    Wn_noise        = deepcopy(Wn)
+    σx_Wn_noise     = 0.3f0 
+    μx_Wn_noise     = 0.5f0 .* Wn_noise[1, contactIndex]   
+    noise_nx        = σx_Wn_noise .* randn(length(contactIndex)) .+ μx_Wn_noise
+    Wn_noise[1, contactIndex] += noise_nx 
 
-    Wn_noise[1, contactIndex] += noise 
+    σy_Wn_noise  = 0.3f0 .* Wn_noise[2, contactIndex]
+    μy_Wn_noise  = 0.5f0 .* Wn_noise[2, contactIndex]  
+    noise_ny     = abs.(σy_Wn_noise .* randn(length(contactIndex)) .+ μy_Wn_noise)      #don't change the sign of the y component of the contact force in order to prevent it from penetrating into the ground
+    Wn_noise[2, contactIndex] += noise_ny 
 
     ####complete integration
     uE = M\((Wn_noise - Wt*diagm(0 => μ))*λn + Wt*λR + h*Δt) + uA
     qE = qM + 0.5f0*Δt*uE
 
-    return vcat(qE,uE), λn, λR
+    return vcat(qE,uE), λn, λt
 end
 
 function oneTimeStepWithNoise(lcp::Lcp, x, sysParam, controlParam::AbstractArray{T}; Δt = 0.001f0, kwargs...) where {T<:Real}
@@ -67,13 +71,14 @@ function sampleInitialStates(sysParam, controlParam::Vector{T}, sampleNum; α=α
     sampleTrajectories = Vector{Vector{Vector{T}}}()
 
     for i in 1:2
+        w  = rand(getq(controlParam))
         x0 = Float32.(initialState(rand(pi-α:0.05:pi+α), 
                                     rand(-3.0:0.05:-0.5), 
                                     0.0, 
-                                    rand(-1.0:0.1:1.0)); γi = sysParam)
+                                    rand(-1.0:0.1:1.0)))
 
 
-        S = trajectory(x0, sysParam, controlParam; totalTimeStep=totalTime)
+        S = trajectory(x0, sysParam, w; totalTimeStep=totalTime)
         push!(sampleTrajectories, S)
     end
 

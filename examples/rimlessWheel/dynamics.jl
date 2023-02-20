@@ -93,21 +93,57 @@ function gap(z::Vector{T}) where {T<:Real}     #assumes flat surface
     
     k_range         = range(0, stop=k-1, step=1)
     xhip, yhip, θ   = (z[1], z[2], z[4])
+    y_floor         = 0.0f0
+    ȳ_f             = y_floor       ###NOTE: this is only true for level ground
     gn              = zeros(T, k)
+    gt              = zeros(T, k)
     Wn              = zeros(T, 4, k)
     Wt              = zeros(T, 4, k)
-    for ki in k_range 
+    δ               = 1e-5                  #for divide by zeros
 
+    for ki in k_range 
         θi          = θ + 2.0f0*α*ki
-        xs, ys      = (xhip - l1*sin(θ + 2.0f0*α*ki), yhip + l1*cos(θi) )
+        xs, ys      = (xhip - l1*sin(θi), yhip + l1*cos(θi) )
         x_floor     = (ys*xhip - xs*yhip) / (ys-yhip)
-        gn[ki+1]    = sign(ys)*sqrt((xs - x_floor)^2 + ys^2)
-        Wn[:, ki+1] = 1.0f0/(gn[ki+1]+1e-5) .* [(xs-x_floor) ys 0.0f0 l1*cos(θi)*(x_floor-xs)-ys*l1*sin(θi)]
-        Wt[:, ki+1] = [1.0f0 0.0f0 0.f0 -l1*cos(θi)]
+
+        if abs(cos(θi)) < δ      #for the perfectly horizontal spoke, the intersection between the spoke and the floor is at infinity
+            x_floor = xs + sign(xs - xhip)*100.0f0
+        end
+        
+        gn[ki+1]    = sign(ys)*sqrt((xs - x_floor)^2 + (ys-y_floor)^2)
+        Wn[:, ki+1] = 1.0f0/(gn[ki+1]+δ) .* [(xs-x_floor) (ys-y_floor) 0.0f0 l1*cos(θi)*(x_floor-xs)-(ys-y_floor)*l1*sin(θi)]
+        ##### compute tangential component
+        θx = θi - pi/2
+        sinθx = sin(pi/2.0f0 - θx)
+        # abs(sinθx) < δ ? x̄_f = x_floor : x̄_f = x_floor + gn[ki+1]/sinθx
+        x̄_f = x_floor + gn[ki+1]/(sinθx)
+        gt[ki+1] = sqrt((xs - x̄_f)^2 + (ys - ȳ_f)^2)
+
+        # Wt[:,ki+1] = 1.0f0/(gt[ki+1]+δ) .* [xs-x̄_f; (ys-ȳ_f); 0.0f0; (xs - x̄_f)*(-l1*cos(θi) - gn[ki+1]*cos(pi/2.0 - θx)/((sinθx)^2+δ)) - (ys-ȳ_f)*l1*sin(θi)] +
+        #              -1.0f0/(gt[ki+1]+δ) * (xs-x̄_f)/(sinθx + δ) .* Wn[:,ki+1]
+
+        Wt[:,ki+1] = 1.0f0/(gt[ki+1]+δ) .* [xs-x̄_f; (ys-ȳ_f); 0.0f0; (xs - x̄_f)*(-l1*cos(θi)) - (ys-ȳ_f)*l1*sin(θi)]         
+        # Wt[:, ki+1] = [1.0f0 0.0f0 0.0f0 -l1*cos(θi)]
 
     end
     return gn, Wn, Wt
 end
+
+# function gap(z::Vector{T}) where {T<:Real}
+    
+#     k_range = range(0, stop=k-1, step=1)
+#     y, θ     = (z[2], z[4])
+#     gn       = y .+ l1*cos.(θ .+ 2*α*k_range) 
+#     Wn       = zeros(T, 4, k)
+#     Wn[2, :] = ones(T, k)
+#     Wn[4, :] = -l1 .* sin.(θ .+ 2.0*α.*k_range)
+
+#     Wt       = zeros(T, 4, k)
+#     Wt[1, :] = ones(T, k)
+#     Wt[4, :] = -l1 .* cos.(θ .+ 2.0*α.*k_range)
+
+#     return gn, Wn, Wt
+# end
 
 function vnormal(Wn, v)
     return Wn'*v
@@ -237,16 +273,16 @@ function createAnimateObject(x, y, ϕ, θ; spokeGap=0.2, k=k, α=α, γ=γ)
         settransform!(vki, Translation(0.0, x, y) ∘ LinearMap(RotX(θ+2*α*ki+γ)))
     end
 
-    vspokes2 = vis[:spokes2]
+    # vspokes2 = vis[:spokes2]
 
-    for ki in range(0, stop=k-1, step=1)
-        vki = vspokes2[Symbol("spoke" * String("$ki"))]
+    # for ki in range(0, stop=k-1, step=1)
+    #     vki = vspokes2[Symbol("spoke" * String("$ki"))]
 
-        setobject!(vki, MeshObject(
-            Cylinder(Point(0.0, 0.0, 0.0), Point(0.0, 0.0, l1), 0.015),
-            MeshLambertMaterial(color=RGBA{Float32}(0.0, 0.0, 0.0, 0.25))))
-        settransform!(vki, Translation(spokeGap, x, y) ∘ LinearMap(RotX(θ+2*α*ki+γ)))
-    end
+    #     setobject!(vki, MeshObject(
+    #         Cylinder(Point(0.0, 0.0, 0.0), Point(0.0, 0.0, l1), 0.015),
+    #         MeshLambertMaterial(color=RGBA{Float32}(0.0, 0.0, 0.0, 0.25))))
+    #     settransform!(vki, Translation(spokeGap, x, y) ∘ LinearMap(RotX(θ+2*α*ki+γ)))
+    # end
 
     vtorso = vis[:torso]
     setobject!(vtorso[:link], MeshObject(
@@ -254,34 +290,34 @@ function createAnimateObject(x, y, ϕ, θ; spokeGap=0.2, k=k, α=α, γ=γ)
         MeshLambertMaterial(color=RGBA{Float32}(1.0, 0.0, 0.0, 1.0))))
     settransform!(vtorso[:link], Translation(0.0, x+0.01, y) ∘ LinearMap(RotX(ϕ+pi)))
    
-    vrunway = vis[:runway]
-    setobject!(vrunway[:runway], MeshObject(
-        Rect(Vec(0.0, 0.0, 0.0), Vec(spokeGap, ls, 0.01)),
-        MeshLambertMaterial(color=RGBA{Float32}(0.0, 0.0, 0.0, 0.7))))
-    settransform!(vrunway[:runway], Translation(0.0, x, -ls*sin(γ)) ∘ LinearMap(RotX(γ)))
+    # vrunway = vis[:runway]
+    # setobject!(vrunway[:runway], MeshObject(
+    #     Rect(Vec(0.0, 0.0, 0.0), Vec(spokeGap, ls, 0.01)),
+    #     MeshLambertMaterial(color=RGBA{Float32}(0.0, 0.0, 0.0, 0.7))))
+    # settransform!(vrunway[:runway], Translation(0.0, x, -ls*sin(γ)) ∘ LinearMap(RotX(γ)))
 
-    return vspokes1, vspokes2, vtorso
+    return vspokes1, vtorso #, vspokes2
 end
 
 function animate(Z; γ=γ)
 
     x0, y0, ϕ0, θ0 = Z[1][1:4]
     spokeGap = 0.1
-    vspokes1, vspokes2, vtorso = createAnimateObject(x0, y0, ϕ0, θ0; γ=γ, spokeGap=spokeGap)
-    for z in Z[1:30:end]
+    vspokes1, vtorso = createAnimateObject(x0, y0, ϕ0, θ0; γ=γ, spokeGap=spokeGap)
+    # vspokes1, vtorso, vspokes2 = createAnimateObject(x0, y0, ϕ0, θ0; γ=γ, spokeGap=spokeGap)
+    for z in Z[1:5:end]
         x, y, ϕ, θ = z[1:4]
         for ki in range(0, stop=k-1, step=1)
             vki = vspokes1[Symbol("spoke" * String("$ki"))]
             settransform!(vki, Translation(0.0, x, y) ∘ LinearMap(RotX(θ+2*α*ki+γ)))
         end
-        for ki in range(0, stop=k-1, step=1)
-            vki = vspokes2[Symbol("spoke" * String("$ki"))]
-            settransform!(vki, Translation(spokeGap, x, y) ∘ LinearMap(RotX(θ+2*α*ki+γ)))
-        end
+        # for ki in range(0, stop=k-1, step=1)
+        #     vki = vspokes2[Symbol("spoke" * String("$ki"))]
+        #     settransform!(vki, Translation(spokeGap, x, y) ∘ LinearMap(RotX(θ+2*α*ki+γ)))
+        # end
         settransform!(vtorso[:link], Translation(0.0, x+0.01, y) ∘ LinearMap(RotX(ϕ+pi)))
         sleep(0.005)
     end
-
 end
 
 function startAnimator()
@@ -314,6 +350,7 @@ function plots(Z, fig1)
     fig1.clf()
     subplot(2, 2, 1)
     plot(getindex.(Z, 3), getindex.(Z, 7))
+    scatter(Z[end][3], Z[end][7])
     ylabel(L"\dot{\phi} [rad/s]", fontsize=15)
     subplot(2, 2, 2)
     θ, impactIndex = spokeInContact(Z)
@@ -385,18 +422,16 @@ function spokeInContact(Z; gThreshold=gThreshold, k=k, α=α, Δt=0.0005f0)
     i     = 1
     q, v = parseStates(Z[1])
     znew = vcat(q + v*Δt/2.0f0, v)
-    gn = gap(znew)
-    Wn = wn(q[4])
+    gn, Wn, _ = gap(znew)
     γn = vnormal(Wn, v)
     contactIndex, _ = checkContact(znew, gn, gThreshold, k)
-    ki_prev = contactIndex[1]
+    isempty(contactIndex) ? ki_prev = 1 : ki_prev=contactIndex[1]
     impactInd = Vector{Int32}(undef, length(Z))
 
     for z in Z
         q, v = parseStates(z)
         znew = vcat(q + v*Δt/2.0f0, v)
-        gn = gap(znew)
-        Wn = wn(q[4])
+        gn, Wn, _ = gap(znew)
         γn = vnormal(Wn, v)
         contactIndex, _ = checkContact(znew, gn, gThreshold, k)
         
