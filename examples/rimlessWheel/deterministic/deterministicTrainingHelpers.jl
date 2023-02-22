@@ -10,7 +10,7 @@ include("../../../src/solver.jl")
 
 sys            = RimlessWheel()
 lcp            = Lcp(Float32, sys)
-Δt = 0.0005f0; totalTimeStep = 1500
+Δt = 0.0003f0; totalTimeStep = 1500
 oneStep(x, θ; kwargs...) = oneTimeStep(lcp, x, θ; kwargs...)
 
 function trajectory(x0, param::Vector{T}; expert=false, Δt = Δt, totalTimeStep = totalTimeStep) where {T<:Real}
@@ -19,7 +19,7 @@ function trajectory(x0, param::Vector{T}; expert=false, Δt = Δt, totalTimeStep
     x       = deepcopy(x0)
  
     for i in 1:totalTimeStep
-        x = oneStep(x, param; Δt=Δt, expert=expert)
+        x       = oneStep(x, param; Δt=Δt, expert=expert)
         X[i]    = x
     end
     # isStumbling(X) ? println("We got stumbling! Beware of gradient jumps") : nothing
@@ -28,39 +28,45 @@ function trajectory(x0, param::Vector{T}; expert=false, Δt = Δt, totalTimeStep
 end
 
 function isStumbling(x)
-    any(getindex.(x, 8) .> 0.0) 
+    x[8] >= -0.01
 end
 
 function sampleInitialStates(param::Vector{T}, sampleNum; α=α, totalTime=1000) where {T<:Real}
 
     sampleTrajectories = Vector{Vector{Vector{T}}}()
 
-    for i in 1:2
-        # x0 = initialState(pi-0.0f0, -0.5f0, 0.0f0, 0.0f0)
-        x0 = Float32.(initialState(rand(pi-α:0.05:pi+α), 
-                                    rand(-3.0:0.05:-0.5),   #large thetadot can cause leaping
-                                    rand(-pi/4:0.05:pi/4), 
-                                    rand(-1.0:0.1:1.0)) )
+    # x0 = initialState(pi-0.0f0, -0.5f0, 0.0f0, 0.0f0)
+    x0 = Float32.(initialState(rand(pi-α:0.05:pi+α), 
+                                rand(-3.0:0.05:-0.5),   #large thetadot can cause leaping
+                                0.0, 
+                                rand(-1.0:0.1:1.0)) )
 
-        S = trajectory(x0, param; totalTimeStep=totalTime)
-        push!(sampleTrajectories, S)
-    end
+    S = trajectory(x0, param; totalTimeStep=totalTime)
+    push!(sampleTrajectories, S)
 
     #sample 10 initial states from the long trajectories
     X0 = Vector{Vector{T}}()
 
     for i in 1:sampleNum
-        if rand() < 0.3 
+        if rand() < 0.65 
             push!(X0, rand(rand(sampleTrajectories)))
         else
             x0 = Float32.(initialState(rand(pi-α:0.05:pi+α), 
                                         rand(-3.0:0.05:-0.5), 
-                                        rand(-pi/4:0.05:pi/4), 
+                                        0.0, 
                                         rand(-1.0:0.1:1.0)) )
             push!(X0, x0)
         end 
     end
-
+    #extract stumbling
+    for i in eachindex(X0)
+        if isStumbling(X0[i])
+            X0[i] = Float32.(initialState(rand(pi-α:0.05:pi+α), 
+                        rand(-3.0:0.05:-0.5), 
+                        rand(-pi/4:0.05:pi/4), 
+                        rand(-1.0:0.1:1.0)) )
+        end
+    end
     return X0
 
 end

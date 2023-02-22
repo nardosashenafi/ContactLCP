@@ -126,7 +126,7 @@ function complementPairIndex(nonbasic, nonbasicIndex)
     return nonbasic[nonbasicIndex]  #find complement of the dropped variable so we can add it to the basic variables on the next iteration
 end
 
-function lemkeLexi(M, q::AbstractArray{T}, x; MAX_ITER = 30, piv_tol = 1e-5,
+function lemkeLexi(M, q::AbstractArray{T}, x; MAX_ITER = 20, piv_tol = 1e-5,
                     LEXITHRESHOLD = 1e-10, MAX_INFEASIBLECOUNT = 5) where {T<:Real}
     totalRow = size(M, 1)
     totalCol = size(M, 2)

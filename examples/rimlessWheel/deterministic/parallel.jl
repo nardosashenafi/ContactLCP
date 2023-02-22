@@ -15,21 +15,41 @@ param_expert   = Float32[30.0, 5.0]
 # ps             = 0.1f0*randn(Float32, DiffEqFlux.paramlength(unn))
 
 Hd              = FastChain(FastDense(6, 8, elu), 
-                  FastDense(8, 7, elu),
-                  FastDense(7, 1))
+                  FastDense(8, 5, elu),
+                  FastDense(5, 1))
 const N         = 6
 npbc            = MLBasedESC.NeuralPBC(N, Hd)
 const satu      = 3.0f0
 
 function trajLoss(X0, param::Vector{T}; totalTime=500) where {T<:Real}
 
-    l = 0.0f0
-    for x0 in X0
-        S       = trajectory(x0, param; totalTimeStep=totalTime)
-        l       += hipSpeedLoss(S)
+    l = Threads.Atomic{T}()
+    Threads.@threads for x0 in X0
+        lmin = oneBatch(x0, param;totalTimeStep=totalTime)
+        Threads.atomic_add!(l, lmin)
     end
 
-    return sum(l)/length(X0)
+    return l.value/length(X0)
+end
+
+function oneBatch(x0, param;totalTimeStep=1500, α=α)
+    S  = trajectory(x0, param; totalTimeStep=totalTimeStep)
+    l  = hipSpeedLoss(S)
+
+    # #add cost on contact frequency
+    # β       = 0.2f0
+    # xd_dot  = 0.5f0
+    # freq_d  = 1.0f0/(2.0f0*l1*sin(α)/xd_dot)
+
+    # θ             = getindex.(S, 4)
+    # xdot          = getindex.(S, 5)
+    # xddot_avg     = 1.0f0/length(θ)*sum(xdot)
+    # strikePeriod  = 2.0f0*l1*sin(α)/xddot_avg  #TODO: assumes  if the spoke in contact
+    # f             = 1.0f0/strikePeriod
+    # if f >= (1+β)*freq_d
+    #     l += 0.1f0*(f - (1+β) .* freq_d)
+    # end
+    return l
 end
 
 function testControl(X0, ps, grad, fig1; timeSteps=5000)
@@ -72,7 +92,7 @@ function hipSpeedLoss(Z; gThreshold=gThreshold, k=k, α=α)
     lmag = dot(loss, loss)
 
     ϕdot = getindex.(Z, 7)
-    lmag += 0.5f0*dot(ϕdot, ϕdot)
+    lmag += 1.0f0*dot(ϕdot, ϕdot)
 
     # #add cost on contact frequency
     # β       = 0.2f0
@@ -89,9 +109,15 @@ function hipSpeedLoss(Z; gThreshold=gThreshold, k=k, α=α)
     return 1.0f0/length(Z)*lmag
 end
 
+function gradient!(grad, X0, param::AbstractArray{T}; totalTimeStep = 1000) where {T<:Real}
+    Threads.@threads for i in eachindex(X0)
+        grad[i] = ForwardDiff.gradient((θ) -> oneBatch(X0[i], θ; totalTimeStep = totalTimeStep), param)
+    end
+end
+
 function controlToHipSpeed(;T=Float32)
     
-    opt                 = Adam(0.005)
+    opt                 = Adam(0.001)
 
     counter             = 0
     X0                  = Vector{Vector{T}}()
@@ -99,19 +125,23 @@ function controlToHipSpeed(;T=Float32)
     param               = 0.3f0*randn(Float32, DiffEqFlux.paramlength(Hd)+N)
     param[end-N+1:end]  = 0.1f0*rand(N)
     minibatchSize       = 2
-                            
-    test(X, θ, grad)  = testControl(X, θ, grad, fig1; timeSteps=8000)
+    lg1                 = Vector{Vector{eltype(param)}}(undef, minibatchSize)
+          
+    test(X, θ, grad)  = testControl(X, θ, grad, fig1; timeSteps=10000)
 
     @showprogress for i in 1:5000
+        println("Sampling")
         X0    = sampleInitialStates(param, minibatchSize; totalTime=3000)
         println("X0 = ", X0)
-
-        l(θ)  = trajLoss(X0, θ; totalTime=2500)
-        lg    = ForwardDiff.gradient(l, param)
-
+        # l(θ)  = trajLoss(X0, θ; totalTime=4000)
+        # lg    = ForwardDiff.gradient(l, param)
+        gradient!(lg1, X0, param; totalTimeStep = 2000) 
+        lg   = mean(lg1)
+        println("gradient complete")
         if counter > 4
             println(" ")
             test([X0[1]], param, lg)
+            BSON.@save "./saved_weights/deterministic_hardware_6-8-8-5-5-1_elu.bson" param
             counter = 0
         end
         if any(isnan.(lg))
