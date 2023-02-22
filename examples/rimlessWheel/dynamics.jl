@@ -23,14 +23,12 @@ end
 function initialState(θ0, θ0dot, ϕ0, ϕ0dot; γi = 0.0f0)
     @assert pi-α <= θ0 <= pi+α "Give an initial spoke angle for the spoke in contact. This helps calculate (x, y) correctly and sets the rimless wheel in contact with the surface. Pick initial θ0 such that pi-α <= θ0 <= pi+α"
     
-    xs = 0.0f0
-    ys = 0.0f0
-    x = xs + l1*sin(θ0)
-    y = ys - l1*cos(θ0) + 0.0001    #give it a little gap so it does not start with penetrating the groud
+    x = l1*sin(pi-θ0)
+    y = l1*cos(pi-θ0)
     ϕ = ϕ0 
     θ = θ0 
-    xdot = l1*cos(θ0) * θ0dot
-    ydot = l1*sin(θ0) * θ0dot
+    xdot = -l1*cos(pi-θ0) * θ0dot
+    ydot = l1*sin(pi-θ0) * θ0dot
     ϕdot = ϕ0dot 
     θdot = θ0dot
 
@@ -89,61 +87,66 @@ function gap(z, γi)     #allows you to change the slope but contact force is no
     return gn
 end
 
-function gap(z::Vector{T}) where {T<:Real}     #assumes flat surface
+# function gap(z::Vector{T}) where {T<:Real}     #assumes flat surface
     
-    k_range         = range(0, stop=k-1, step=1)
-    xhip, yhip, θ   = (z[1], z[2], z[4])
-    y_floor         = 0.0f0
-    ȳ_f             = y_floor       ###NOTE: this is only true for level ground
-    gn              = zeros(T, k)
-    gt              = zeros(T, k)
-    Wn              = zeros(T, 4, k)
-    Wt              = zeros(T, 4, k)
-    δ               = 1e-5                  #for divide by zeros
+#     k_range         = range(0, stop=k-1, step=1)
+#     xhip, yhip, θ   = (z[1], z[2], z[4])
+#     y_floor         = 0.0f0
+#     ȳ_f             = y_floor       ###NOTE: this is only true for level ground
+#     gn              = zeros(T, k)
+#     gt              = zeros(T, k)
+#     Wn              = zeros(T, 4, k)
+#     Wt              = zeros(T, 4, k)
+#     δ               = 1e-5                  #for divide by zeros
 
-    for ki in k_range 
-        θi          = θ + 2.0f0*α*ki
-        xs, ys      = (xhip - l1*sin(θi), yhip + l1*cos(θi) )
-        x_floor     = (ys*xhip - xs*yhip) / (ys-yhip)
+#     for ki in k_range 
+#         θi          = θ + 2.0f0*α*ki
+#         xs, ys      = (xhip - l1*sin(θi), yhip + l1*cos(θi) )
+#         x_floor     = (ys*xhip - xs*yhip) / (ys-yhip)
 
-        if abs(cos(θi)) < δ      #for the perfectly horizontal spoke, the intersection between the spoke and the floor is at infinity
-            x_floor = xs + sign(xs - xhip)*100.0f0
-        end
+#         if abs(cos(θi)) < δ      #for the perfectly horizontal spoke, the intersection between the spoke and the floor is at infinity
+#             x_floor = xs + sign(xs - xhip)*100.0f0
+#         end
         
-        gn[ki+1]    = sign(ys)*sqrt((xs - x_floor)^2 + (ys-y_floor)^2)
-        Wn[:, ki+1] = 1.0f0/(gn[ki+1]+δ) .* [(xs-x_floor) (ys-y_floor) 0.0f0 l1*cos(θi)*(x_floor-xs)-(ys-y_floor)*l1*sin(θi)]
-        ##### compute tangential component
-        θx = θi - pi/2
-        sinθx = sin(pi/2.0f0 - θx)
-        # abs(sinθx) < δ ? x̄_f = x_floor : x̄_f = x_floor + gn[ki+1]/sinθx
-        x̄_f = x_floor + gn[ki+1]/(sinθx)
-        gt[ki+1] = sqrt((xs - x̄_f)^2 + (ys - ȳ_f)^2)
+#         gn[ki+1]    = sign(ys)*sqrt((xs - x_floor)^2 + (ys-y_floor)^2)
+#         Wn[:, ki+1] = 1.0f0/(gn[ki+1]+δ) .* [(xs-x_floor) (ys-y_floor) 0.0f0 l1*cos(θi)*(x_floor-xs)-(ys-y_floor)*l1*sin(θi)]
+#         ##### compute tangential component
+#         θx = θi - pi/2
+#         sinθx = sin(pi/2.0f0 - θx)
+#         # abs(sinθx) < δ ? x̄_f = x_floor : x̄_f = x_floor + gn[ki+1]/sinθx
+#         x̄_f = x_floor + gn[ki+1]/(sinθx)
+#         gt[ki+1] = sqrt((xs - x̄_f)^2 + (ys - ȳ_f)^2)
 
-        # Wt[:,ki+1] = 1.0f0/(gt[ki+1]+δ) .* [xs-x̄_f; (ys-ȳ_f); 0.0f0; (xs - x̄_f)*(-l1*cos(θi) - gn[ki+1]*cos(pi/2.0 - θx)/((sinθx)^2+δ)) - (ys-ȳ_f)*l1*sin(θi)] +
-        #              -1.0f0/(gt[ki+1]+δ) * (xs-x̄_f)/(sinθx + δ) .* Wn[:,ki+1]
+#         # Wt[:,ki+1] = 1.0f0/(gt[ki+1]+δ) .* [xs-x̄_f; (ys-ȳ_f); 0.0f0; (xs - x̄_f)*(-l1*cos(θi) - gn[ki+1]*cos(pi/2.0 - θx)/((sinθx)^2+δ)) - (ys-ȳ_f)*l1*sin(θi)] +
+#         #              -1.0f0/(gt[ki+1]+δ) * (xs-x̄_f)/(sinθx + δ) .* Wn[:,ki+1]
 
-        Wt[:,ki+1] = 1.0f0/(gt[ki+1]+δ) .* [xs-x̄_f; (ys-ȳ_f); 0.0f0; (xs - x̄_f)*(-l1*cos(θi)) - (ys-ȳ_f)*l1*sin(θi)]         
-        # Wt[:, ki+1] = [1.0f0 0.0f0 0.0f0 -l1*cos(θi)]
+#         Wt[:,ki+1] = 1.0f0/(gt[ki+1]+δ) .* [xs-x̄_f; (ys-ȳ_f); 0.0f0; (xs - x̄_f)*(-l1*cos(θi)) - (ys-ȳ_f)*l1*sin(θi)]         
+#         # Wt[:, ki+1] = [1.0f0 0.0f0 0.0f0 -l1*cos(θi)]
 
-    end
-    return gn, Wn, Wt
-end
-
-# function gap(z::Vector{T}) where {T<:Real}
-    
-#     k_range = range(0, stop=k-1, step=1)
-#     y, θ     = (z[2], z[4])
-#     gn       = y .+ l1*cos.(θ .+ 2*α*k_range) 
-#     Wn       = zeros(T, 4, k)
-#     Wn[2, :] = ones(T, k)
-#     Wn[4, :] = -l1 .* sin.(θ .+ 2.0*α.*k_range)
-
-#     Wt       = zeros(T, 4, k)
-#     Wt[1, :] = ones(T, k)
-#     Wt[4, :] = -l1 .* cos.(θ .+ 2.0*α.*k_range)
-
+#     end
 #     return gn, Wn, Wt
 # end
+
+function spokeNearGround(gn)
+    _, spoke = findmin(abs.(gn))
+    return spoke
+end
+
+function gap(z::Vector{T}) where {T<:Real}
+    
+    k_range = range(0, stop=k-1, step=1)
+    y, θ     = (z[2], z[4])
+    gn       = y .+ l1*cos.(θ .+ 2*α*k_range) 
+    Wn       = zeros(T, 4, k)
+    Wn[2, :] = ones(T, k)
+    Wn[4, :] = -l1 .* sin.(θ .+ 2.0*α.*k_range)
+
+    Wt       = zeros(T, 4, k)
+    Wt[1, :] = ones(T, k)
+    Wt[4, :] = -l1 .* cos.(θ .+ 2.0*α.*k_range)
+
+    return gn, Wn, Wt
+end
 
 function vnormal(Wn, v)
     return Wn'*v
@@ -241,17 +244,22 @@ function impactMap(ϕ)
 
 end
 
-function comparePostImpact(lcp, x, param; Δt = 0.001f0)
-    
+function comparePostImpact(lcp, x; param=zeros(2), expert=true, Δt = 0.001f0)
+
+    println("Make sure x is a point of impact")
+    # x= [0.09163268650073744, 0.28589820307479014, -0.006866646029560244, 2.8311059731226207, 1.6253018883308197, -0.5162607562984872, 0.013881086255179611, -5.657496313791293]
     ϕ = x[3]
     θdot, ϕdot = [x[8], x[7]]
     postImpactMap = impactMap(ϕ) * [θdot, ϕdot]
 
-    gn, γn, γt, M, h, Wn, Wt, ϵn, ϵt, μ, gThreshold = sysAttributes(lcp, x, param)
-    λn, λt, λR  = solveLcp(gn, γn, γt, M, h, Wn, Wt, ϵn, ϵt, μ, gThreshold, x; Δt=Δt)
+    qA, uA  = lcp.sys(x)
+    qM      = qA + 0.5f0*Δt*uA
 
-    qM, uA = sys(x)
-    uE = M\((Wn - Wt*diagm(0 => lcp.μ))*λn + Wt*λR + h*Δt) + uA
+    x_mid   = vcat(qM, uA)
+    gn, γn, γt, M, h, Wn, Wt, ϵn, ϵt, μ, gThreshold = sysAttributes(lcp, x_mid, param;expert=expert)
+    λn, λt, λR  = solveLcp(gn, γn, γt, M, h, Wn, Wt, ϵn, ϵt, μ, gThreshold, x_mid; Δt=Δt)
+
+    uE = M\((Wn - Wt*diagm(0 => μ_const))*λn + Wt*λR + h*Δt) + uA
     θdotlcp, ϕdotLcp  = [uE[4], uE[3]]
 
     println("[θdot-, ϕdot-] = ", [θdot, ϕdot])
@@ -305,7 +313,7 @@ function animate(Z; γ=γ)
     spokeGap = 0.1
     vspokes1, vtorso = createAnimateObject(x0, y0, ϕ0, θ0; γ=γ, spokeGap=spokeGap)
     # vspokes1, vtorso, vspokes2 = createAnimateObject(x0, y0, ϕ0, θ0; γ=γ, spokeGap=spokeGap)
-    for z in Z[1:5:end]
+    for z in Z[1:10:end]
         x, y, ϕ, θ = z[1:4]
         for ki in range(0, stop=k-1, step=1)
             vki = vspokes1[Symbol("spoke" * String("$ki"))]
@@ -453,4 +461,44 @@ function spokeInContact(Z; gThreshold=gThreshold, k=k, α=α, Δt=0.0005f0)
 
     return θ_new, impactInd
 end
+
+# function spokeInContact(Z; gThreshold=gThreshold, k=k, α=α, Δt=0.0005f0)
+
+#     θ = getindex.(Z, 4)
+#     θ_new = deepcopy(θ)
+#     θdot = getindex.(Z, 8)
+#     i     = 1
+#     q, v = parseStates(Z[1])
+#     znew = vcat(q + v*Δt/2.0f0, v)
+#     gn, Wn, _ = gap(znew)
+#     γn = vnormal(Wn, v)
+#     contactIndex, _ = checkContact(znew, gn, gThreshold, k)
+#     isempty(contactIndex) ? ki_prev = 1 : ki_prev=contactIndex[1]
+#     impactInd = Vector{Int32}(undef, length(Z))
+
+#     for z in Z
+#         q, v = parseStates(z)
+#         znew = vcat(q + v*Δt/2.0f0, v)
+#         gn, Wn, _ = gap(znew)
+#         γn = vnormal(Wn, v)
+#         contactIndex, _ = checkContact(znew, gn, gThreshold, k)
+        
+#         if !isempty(contactIndex) 
+#             if !isnothing(findfirst(γni -> γni < 0.0, γn[contactIndex]))
+#                 ki = contactIndex[findfirst(γni -> γni < 0.0, γn[contactIndex])]   #the small and decreasing gap
+#                 ki != ki_prev ? impactInd[i] = 1 : impactInd[i] = 0
+#                 if 0 <= abs(ki - ki_prev) < k-1
+#                     δk = (ki - ki_prev) 
+#                 elseif abs(ki - ki_prev) == k-1
+#                     δk = sign(ki - ki_prev)
+#                 end
+#                 θ_new[i+1:end] .+= 2*α*δk
+#                 ki_prev = ki
+#             end
+#         end
+#         i += 1
+#     end
+
+#     return θ_new, impactInd
+# end
 
