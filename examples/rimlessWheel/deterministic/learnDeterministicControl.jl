@@ -21,11 +21,21 @@ const N         = 6
 npbc            = MLBasedESC.NeuralPBC(N, Hd)
 const satu      = 3.0f0
 
+function extractStumbling(X)
+    ind = findfirst(x -> x >= -0.01, getindex.(X, 8))
+    if !isnothing(ind)
+        return X[1:ind] 
+    else
+        return X
+    end
+end
+
 function trajLoss(X0, param::Vector{T}; totalTime=500) where {T<:Real}
 
     l = 0.0f0
     for x0 in X0
         S       = trajectory(x0, param; totalTimeStep=totalTime)
+        # S1      = extractStumbling(S)
         l       += hipSpeedLoss(S)
     end
 
@@ -52,7 +62,7 @@ function hipSpeedLoss(Z; gThreshold=gThreshold, k=k, α=α)
     xd_dot  = 0.5f0
 
     loss = 0.0f0
-    ki_prev = 0
+    ki = 0
 
     for z in Z
         gn, _, _ = gap(z)
@@ -61,32 +71,44 @@ function hipSpeedLoss(Z; gThreshold=gThreshold, k=k, α=α)
         #loss between desired ẋ and actual ẋ should not be computed using getindex.(Z, 1) because this state does not directly depend on the control.
         #Using getindex.(Z, 1) as ẋ in auto-diff gives zero gradient
         if !isempty(contactIndex)
-            ki      = contactIndex[1] - 1
-            loss    += xd_dot - (l1 * cos(z[4] + 2*α*ki) * z[8])
-            ki_prev = ki
+            ki = contactIndex[1] - 1
         else
-            loss    += (xd_dot - (l1 * cos(z[4] + 2*α*ki_prev) * z[8]))    #the closest estimate to the hip speed when the spokes are not in contact
+            ki = spokeNearGround(gn) - 1
         end
+        loss += xd_dot - (l1 * cos(z[4] + 2*α*ki) * z[8])
+
     end
 
     lmag = dot(loss, loss)
 
     ϕdot = getindex.(Z, 7)
-    lmag += 0.5f0*dot(ϕdot, ϕdot)
+    lmag += 2.0f0*dot(ϕdot, ϕdot)
 
     # #add cost on contact frequency
     # β       = 0.2f0
-    # freq_d  = 1.0f0/(2.0f0*lcp.sys.l1*sin(lcp.sys.α)/xd_dot)
+    # freq_d  = 1.0f0/(2.0f0*l1*sin(α)/xd_dot)
 
-    # xdot          = getindex.(X, 5)
+    # xdot          = getindex.(Z, 5)
+    # θ             = getindex.(Z, 4)
     # xddot_avg     = 1.0f0/length(θ)*sum(xdot)
     # strikePeriod  = 2.0f0*l1*sin(α)/xddot_avg  #TODO: assumes  if the spoke in contact
     # f             = 1.0f0/strikePeriod
     # if f >= (1+β)*freq_d
-    #     lmag += 0.1f0*(f - (1+β) .* freq_d)
+    #     lmag += 5.0f0*(f - (1+β) .* freq_d)
     # end
 
     return 1.0f0/length(Z)*lmag
+end
+
+macro timeout(seconds, expr)
+    quote
+        tsk = @task $expr
+        schedule(tsk)
+        Timer($seconds) do timer
+            istaskdone(tsk) || Base.throwto(tsk, InterruptException())
+        end
+        fetch(tsk)
+    end
 end
 
 function controlToHipSpeed(;T=Float32)
@@ -103,20 +125,21 @@ function controlToHipSpeed(;T=Float32)
     test(X, θ, grad)  = testControl(X, θ, grad, fig1; timeSteps=8000)
 
     @showprogress for i in 1:5000
-        X0    = sampleInitialStates(param, minibatchSize; totalTime=3000)
+        X0    = sampleInitialStates(param, minibatchSize; totalTime=5000)
         println("X0 = ", X0)
 
-        l(θ)  = trajLoss(X0, θ; totalTime=2500)
+        l(θ)  = trajLoss(X0, θ; totalTime=2000)
         lg    = ForwardDiff.gradient(l, param)
 
         if counter > 4
             println(" ")
             test([X0[1]], param, lg)
+            BSON.@save "./saved_weights/deterministic_hardware_6-8-8-7-7-1_elu.bson" param
             counter = 0
         end
         if any(isnan.(lg))
             println("NaN occurred")
-            break
+            continue
         end
         Flux.update!(opt, param, lg)
         counter += 1

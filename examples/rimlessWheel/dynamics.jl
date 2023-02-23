@@ -158,12 +158,11 @@ end
 
 function massMatrix(ϕ)
     
-    M = [mt 0.0f0 m2*l2*cos(ϕ) 0.0f0;
-        0.0f0 mt m2*l2*sin(ϕ) 0.0f0;
-        m2*l2*cos(ϕ) m2*l2*sin(ϕ) I2+m2*l2^2 0.0f0;
-        0.0f0 0.0f0 0.0f0 I1]
+    return [mt 0.0f0 m2*l2*cos(ϕ) 0.0f0;
+            0.0f0 mt m2*l2*sin(ϕ) 0.0f0;
+            m2*l2*cos(ϕ) m2*l2*sin(ϕ) I2+m2*l2^2 0.0f0;
+            0.0f0 0.0f0 0.0f0 I1]
 
-    return M
 end
 
 inputLayer(x) = [cos(x[3]), sin(x[3]), cos(x[4]), sin(x[4]), x[7], x[8]]
@@ -198,9 +197,9 @@ function genForces(z, param::Vector{T}; expert=false) where {T<:Real}
         -m2*l2*sin(ϕ)*ϕdot m2*l2*cos(ϕ)*ϕdot 0.0f0 0.0f0;
         0.0f0 0.0f0 0.0f0 0.0f0]
 
-    G = [mt*g*sin(γ), 
+    G = [-mt*g*sin(γ), 
         mt*g*cos(γ), 
-        m2*g*l2*sin(ϕ + γ),
+        m2*g*l2*sin(ϕ - γ),
         0.0f0]
 
     return B*control(z, param; expert=expert) - C*v - G
