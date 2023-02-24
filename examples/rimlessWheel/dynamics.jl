@@ -51,7 +51,7 @@ end
 function (sys::RimlessWheel)(z, sysParam, controlParam::Vector{T}; ϵn=ϵn_const, ϵt=ϵt_const, μ=μ_const, gThreshold=gThreshold, expert=false) where {T<:Real}
     q, v = parseStates(z)
     x, y, ϕ, θ = q
-    gn, Wn, Wt = gap(z)
+    gn, Wn, Wt = gap(z, sysParam)
     γn  = vnormal(Wn, v)
     γt  = vtang(Wt, v)
     M   = massMatrix(ϕ)
@@ -71,68 +71,7 @@ function parseStates(x::Vector{T}) where {T<:Real}
     return q, v
 end
 
-function gap(z, γi)     #allows you to change the slope but contact force is not two force member here. 
-    
-    k_range         = range(0, stop=k-1, step=1)
-    xhip, yhip, θ   = (z[1], z[2], z[4])
-    gn              = zeros(k)
-
-    for ki in k_range 
-        xs, ys          = (xhip - l1*sin(θ + 2*α*ki), yhip + l1*cos(θ + 2*α*ki) )
-        x_intersection  = (xs*yhip - ys*xhip)/(tan(γi)*(xs - xhip) - (ys - yhip))
-        y_intersection  = tan(γi)*x_intersection            #intersection between the spokes and the incline
-        gn[ki+1]        = ys - y_intersection
-    end
-
-    return gn
-end
-
-# function gap(z::Vector{T}) where {T<:Real}     #assumes flat surface
-    
-#     k_range         = range(0, stop=k-1, step=1)
-#     xhip, yhip, θ   = (z[1], z[2], z[4])
-#     y_floor         = 0.0f0
-#     ȳ_f             = y_floor       ###NOTE: this is only true for level ground
-#     gn              = zeros(T, k)
-#     gt              = zeros(T, k)
-#     Wn              = zeros(T, 4, k)
-#     Wt              = zeros(T, 4, k)
-#     δ               = 1e-5                  #for divide by zeros
-
-#     for ki in k_range 
-#         θi          = θ + 2.0f0*α*ki
-#         xs, ys      = (xhip - l1*sin(θi), yhip + l1*cos(θi) )
-#         x_floor     = (ys*xhip - xs*yhip) / (ys-yhip)
-
-#         if abs(cos(θi)) < δ      #for the perfectly horizontal spoke, the intersection between the spoke and the floor is at infinity
-#             x_floor = xs + sign(xs - xhip)*100.0f0
-#         end
-        
-#         gn[ki+1]    = sign(ys)*sqrt((xs - x_floor)^2 + (ys-y_floor)^2)
-#         Wn[:, ki+1] = 1.0f0/(gn[ki+1]+δ) .* [(xs-x_floor) (ys-y_floor) 0.0f0 l1*cos(θi)*(x_floor-xs)-(ys-y_floor)*l1*sin(θi)]
-#         ##### compute tangential component
-#         θx = θi - pi/2
-#         sinθx = sin(pi/2.0f0 - θx)
-#         # abs(sinθx) < δ ? x̄_f = x_floor : x̄_f = x_floor + gn[ki+1]/sinθx
-#         x̄_f = x_floor + gn[ki+1]/(sinθx)
-#         gt[ki+1] = sqrt((xs - x̄_f)^2 + (ys - ȳ_f)^2)
-
-#         # Wt[:,ki+1] = 1.0f0/(gt[ki+1]+δ) .* [xs-x̄_f; (ys-ȳ_f); 0.0f0; (xs - x̄_f)*(-l1*cos(θi) - gn[ki+1]*cos(pi/2.0 - θx)/((sinθx)^2+δ)) - (ys-ȳ_f)*l1*sin(θi)] +
-#         #              -1.0f0/(gt[ki+1]+δ) * (xs-x̄_f)/(sinθx + δ) .* Wn[:,ki+1]
-
-#         Wt[:,ki+1] = 1.0f0/(gt[ki+1]+δ) .* [xs-x̄_f; (ys-ȳ_f); 0.0f0; (xs - x̄_f)*(-l1*cos(θi)) - (ys-ȳ_f)*l1*sin(θi)]         
-#         # Wt[:, ki+1] = [1.0f0 0.0f0 0.0f0 -l1*cos(θi)]
-
-#     end
-#     return gn, Wn, Wt
-# end
-
-function spokeNearGround(gn)
-    _, spoke = findmin(abs.(gn))
-    return spoke
-end
-
-function gap(z::Vector{T}) where {T<:Real}
+function gap(z::Vector{T}) where {T<:Real}      # to a level floor
     
     k_range = range(0, stop=k-1, step=1)
     y, θ     = (z[2], z[4])
@@ -146,6 +85,57 @@ function gap(z::Vector{T}) where {T<:Real}
     Wt[4, :] = -l1 .* cos.(θ .+ 2.0*α.*k_range)
 
     return gn, Wn, Wt
+end
+
+function hangingSpoke(z, gn; gThreshold=gThreshold, k=k)
+    hangingSpoke   = 0
+    contactIndex,_ = checkContact(z, gn, gThreshold, k)
+
+    if z[8] <= 0.0
+        hangingSpoke = maximum(contactIndex) + 1
+        hangingSpoke > k ? hangingSpoke=1 : nothing 
+    else
+        hangingSpoke = minimum(contactIndex) - 1
+        hangingSpoke < 1 ? hangingSpoke=k : nothing 
+    end
+end
+
+function gap(z, sysParam)     #introduces constant bump for each spoke
+
+    x_floor, y_floor = sysParam
+    k_range  = range(0, stop=k-1, step=1)
+    gn       = zeros(T, k)
+    Wn       = zeros(T, 4, k)
+    Wt       = zeros(T, 4, k)
+
+    for ki in k_range     
+        gki, wnki, wtki = gapSpokeToObstacle(z, ki+1, x_floor[ki+1], y_floor[ki+1])
+        gn[ki+1]   = gki
+        Wn[:,ki+1] = wnki
+        Wt[:,ki+1] = wtki
+    end
+
+    return gn, Wn, Wt
+end
+
+function gapSpokeToObstacle(z::Vector{T}, ki, x_floor, y_floor) where {T<:Real}     #assumes flat surface
+    
+    xhip, yhip, θ   = (z[1], z[2], z[4])
+    δ               = 1e-5          #for divide by zeros
+
+    θi       = θ + 2.0f0*α*ki
+    xs, ys   = (xhip - l1*sin(θi), yhip + l1*cos(θi) )
+
+    gn       = sign(ys)*sqrt((xs - x_floor)^2 + (ys-y_floor)^2)
+    Wn       = 1.0f0/(gn+δ) .* [(xs-x_floor) (ys-y_floor) 0.0f0 l1*cos(θi)*(x_floor-xs)-(ys-y_floor)*l1*sin(θi)]
+    Wt       = [ys-y_floor x_floor-xs 0.0 -l1*cos(θi)*(ys_y_floor)-l1*sin(θi)*(x_floor-xs)]
+
+    return gn, Wn, Wt
+end
+
+function spokeNearGround(gn)
+    _, spoke = findmin(abs.(gn))
+    return spoke
 end
 
 function vnormal(Wn, v)

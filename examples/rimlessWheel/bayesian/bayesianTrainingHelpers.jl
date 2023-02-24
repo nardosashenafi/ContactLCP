@@ -9,7 +9,7 @@ include("../../../src/solver.jl")
 
 sys  = RimlessWheel()
 lcp  = Lcp(Float32, sys)
-Δt   = 0.0005f0
+Δt   = 0.0003f0
 
 function stateAndForcesWithNoise(lcp::Lcp, x, sysParam, controlParam::AbstractArray{T}; Δt = 0.001f0, kwargs...) where {T<:Real}
 
@@ -18,23 +18,10 @@ function stateAndForcesWithNoise(lcp::Lcp, x, sysParam, controlParam::AbstractAr
 
     x_mid   = vcat(qM, uA)
     gn, γn, γt, M, h, Wn, Wt, ϵn, ϵt, μ, gThreshold = sysAttributes(lcp, x_mid, sysParam, controlParam; kwargs...)
-    contactIndex, _ = checkContact(x_mid, gn, gThreshold, k)
     λn, λt, λR  = solveLcp(gn, γn, γt, M, h, Wn, Wt, ϵn, ϵt, μ, gThreshold, x_mid; Δt=Δt)
 
-    ######add noise on the angle of contact force to simulate uneven/uncertain terrain
-    Wn_noise        = deepcopy(Wn)
-    σx_Wn_noise     = 0.3f0 
-    μx_Wn_noise     = 0.5f0 .* Wn_noise[1, contactIndex]   
-    noise_nx        = σx_Wn_noise .* randn(length(contactIndex)) .+ μx_Wn_noise
-    Wn_noise[1, contactIndex] += noise_nx 
-
-    σy_Wn_noise  = 0.3f0 .* Wn_noise[2, contactIndex]
-    μy_Wn_noise  = 0.5f0 .* Wn_noise[2, contactIndex]  
-    noise_ny     = abs.(σy_Wn_noise .* randn(length(contactIndex)) .+ μy_Wn_noise)      #don't change the sign of the y component of the contact force in order to prevent it from penetrating into the ground
-    Wn_noise[2, contactIndex] += noise_ny 
-
     ####complete integration
-    uE = M\((Wn_noise - Wt*diagm(0 => μ))*λn + Wt*λR + h*Δt) + uA
+    uE = M\((Wn_noise - Wt*diagm(0 => μ))*λn + Wt_noise*λR + h*Δt) + uA
     qE = qM + 0.5f0*Δt*uE
 
     return vcat(qE,uE), λn, λt
@@ -47,16 +34,26 @@ end
 
 oneStep(x, sysParam, controlParam; kwargs...) = oneTimeStepWithNoise(lcp, x, sysParam, controlParam; kwargs...)
 
-function trajectory(x0, sysParam, controlParam::Vector{T}; expert=false, Δt = Δt, totalTimeStep = 1000) where {T<:Real}
+function bumpHeight(x)
+
+    x_floor, y_floor = [0.0, 0.0]
+    gn, _, _ = gap(x)
+    hs = hangingSpoke(x, gn)
+    xs = x[1] - l1*sin(θ + 2*α*hs)
+    gi, _, _ = gapHangingSpoke(x, hs, x_floor, y_floor) 
+
+end
+
+function trajectory(x0, controlParam::Vector{T}; expert=false, Δt = Δt, totalTimeStep = 1000) where {T<:Real}
 
     X       = Vector{Vector{T}}(undef, totalTimeStep)
     x       = deepcopy(x0)
- 
+    sysParam = bumpHeight(x)
+
     for i in 1:totalTimeStep
         x       = oneStep(x, sysParam, controlParam; Δt=Δt, expert=expert)
         X[i]    = x
     end
-    # isStumbling(X) ? println("We got stumbling! Beware of gradient jumps") : nothing
 
     return X
 end
@@ -64,6 +61,10 @@ end
 function sampleSystemParam()
     γi = rand(0.0f0:0.01:30.0f0*pi/180f0)
     return γi
+end
+
+function isStumbling(x)
+    x[8] >= -0.01
 end
 
 function sampleInitialStates(sysParam, controlParam::Vector{T}, sampleNum; α=α, totalTime=1000) where {T<:Real}
@@ -78,7 +79,7 @@ function sampleInitialStates(sysParam, controlParam::Vector{T}, sampleNum; α=α
                                     rand(-1.0:0.1:1.0)))
 
 
-        S = trajectory(x0, sysParam, w; totalTimeStep=totalTime)
+        S = trajectory(x0, w; totalTimeStep=totalTime)
         push!(sampleTrajectories, S)
     end
 
@@ -96,7 +97,33 @@ function sampleInitialStates(sysParam, controlParam::Vector{T}, sampleNum; α=α
             push!(X0, x0)
         end 
     end
-
+    #extract stumbling
+    for i in eachindex(X0)
+        if isStumbling(X0[i])
+            X0[i] = Float32.(initialState(rand(pi-α:0.05:pi+α), 
+                        rand(-3.0:0.05:-0.5), 
+                        rand(-pi/4:0.05:pi/4), 
+                        rand(-1.0:0.1:1.0)) )
+        end
+    end
     return X0
 
+end
+
+function plots(Z, fig1)
+    PyPlot.figure(1)
+    fig1.clf()
+    subplot(2, 2, 1)
+    plot(getindex.(Z, 3), getindex.(Z, 7))
+    scatter(Z[end][3], Z[end][7])
+    ylabel(L"\dot{\phi} [rad/s]", fontsize=15)
+    subplot(2, 2, 2)
+    # θ, impactIndex = spokeInContact(Z)
+    plot(getindex.(Z, 4), getindex.(Z, 8))
+    scatter(Z[end][4], Z[end][8])
+    ylabel(L"\dot{\theta} [rad/s]", fontsize=15)
+    subplot(2, 2, 3)
+    plot(getindex.(Z, 5))
+    ylabel("vx [m/s]", fontsize=15)
+    println("Average hip speed = ", mean(getindex.(Z, 5)))
 end

@@ -14,8 +14,8 @@ x0             = Float32.(initialState(pi, -1.0f0, 0.0f0, 0.0f0))
 param_expert   = Float32[30.0, 5.0]
 
 Hd              = FastChain(FastDense(6, 8, elu), 
-                  FastDense(8, 5, elu),
-                  FastDense(5, 1))
+                  FastDense(8, 7, elu),
+                  FastDense(7, 1))
 const N         = 6
 const paramNum  = DiffEqFlux.paramlength(Hd)+N
 npbc            = MLBasedESC.NeuralPBC(N, Hd)
@@ -67,30 +67,18 @@ function hipSpeedLoss(Z; gThreshold=gThreshold, k=k, α=α)
     return 1.0f0/length(Z)*lmag
 end
 
-function extractStumbling(X)
-    ind = findfirst(x -> x >= -0.01, getindex.(X, 8))
-    if !isnothing(ind)
-        return X[1:ind] 
-    else
-        return X
-    end
-end
+@model function fitLoss(x0, param::AbstractArray{T}; totalTimeStep = 2000) where {T<:Real}
 
-@model function fitLoss(X0, μ_prior::AbstractArray{T}, σ_prior::AbstractArray{T}; totalTimeStep = 2000) where {T<:Real}
-
+    μ_prior, σ_prior = unstackParams(param)
     # w  = Vector{T}(undef, length(μ_prior))
     # w .~ Distributions.Normal.(μ_prior, LogExpFunctions.softplus.(σ_prior))
     w ~ arraydist(map((m, s) -> Distributions.Normal(m, LogExpFunctions.softplus(s)), μ_prior, σ_prior))
 
-    l11 = 0.0f0
-    for x0 in X0
-        X   = trajectory(x0, [], w; totalTimeStep=totalTimeStep)  
-        # X1  = extractStumbling(X)
-        l11 += hipSpeedLoss(X)
-    end
+    X       = trajectory(x0, [], w; totalTimeStep=totalTimeStep)  
+    l11     = hipSpeedLoss(X)
     
     # 0.0 ~ Normal(l11/batch_size, LogExpFunctions.softplus.(s[1]))
-    0.0 ~ Distributions.Normal(l11/length(X0), 0.2f0)
+    0.0 ~ Distributions.Normal(l11, 10.0f0)
 end
 
 function getq(param)
@@ -117,8 +105,10 @@ function controlToHipSpeed()
     elbo_num    = 5
     minibatchsize  = 2
 
-    param = Float32.(vcat(0.3f0*randn(paramNum), invsoftplus.(0.1f0*rand(paramNum))))
-    μ_param, σ_param = unstackParams(param)
+    param = Float32.(vcat(0.3f0*randn(DiffEqFlux.paramlength(Hd)), 
+                        0.1f0*rand(N), 
+                        invsoftplus.(0.1f0*rand(DiffEqFlux.paramlength(Hd))),
+                        invsoftplus.(0.1f0*rand(N))))
 
     optimizer   = Variational.DecayedADAGrad(0.001)
 
@@ -127,17 +117,19 @@ function controlToHipSpeed()
     converged   = false
 
     prog        = ProgressMeter.Progress(num_steps, 1)
-    diff_results = DiffResults.GradientResult(param)
+    diff_results = [DiffResults.GradientResult(param) for i in 1:minibatchsize]
     elbo_data   = Vector{Float32}()
 
     @showprogress for i in 1:5000
 
-        μ_param, σ_param = unstackParams(param)
         X0      = sampleInitialStates([], param, minibatchsize; totalTime=3000)
-        model   = fitLoss(X0, μ_param, σ_param; totalTimeStep=2000)
-        AdvancedVI.grad!(vo, alg, getq, model, param, diff_results, elbo_num)
+        println("X0 = ", X0)
+        Threads.@threads for i in eachindex(X0)
+            model   = fitLoss(X0[i], param; totalTimeStep=2000)
+            AdvancedVI.grad!(vo, alg, getq, model, param, diff_results[i], elbo_num)
+        end
 
-        ∇ = DiffResults.gradient(diff_results)
+        ∇ = mean([DiffResults.gradient(diff_results[i]) for i in 1:minibatchsize])
         Δ = Flux.Optimise.apply!(optimizer, param, ∇)
         if any(isnan.(Δ))
             println("NaN occurred")
@@ -145,7 +137,7 @@ function controlToHipSpeed()
         end
         @. param = param - Δ
         ###################################################
-
+        model   = fitLoss(X0[1], param; totalTimeStep=2000)
         push!(elbo_data, vo(alg, getq(param), model, elbo_num))
 
         ##########################################################
@@ -166,7 +158,7 @@ function hasconverged(x0, param, elbo_data, i)
     loss      = hipSpeedLoss(X)
     plots(X, fig1)
     ax2.plot(i, filtered_elbo[end], marker=".", color="k") 
-    BSON.@save "./saved_weights/RW_bayesian_6-8-8-5-5-1_elu.bson" param
+    BSON.@save "./saved_weights/RW_bayesian_6-8-8-7-7-1_elu.bson" param
     println("loss = ", round(loss, digits=4) , " | hip speed = ", round.(mean(getindex.(X, 5)), digits=4) )
 
     return false
