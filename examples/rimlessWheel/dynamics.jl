@@ -35,6 +35,25 @@ function initialState(θ0, θ0dot, ϕ0, ϕ0dot; γi = 0.0f0)
     return [x, y, ϕ, θ, xdot, ydot, ϕdot, θdot]
 end
 
+function initialStateWithBumps(θ0::T, θ0dot, ϕ0, ϕ0dot, rmax; k=k, α=α) where {T<:Real}
+    @assert pi-α <= θ0 <= pi+α "Give an initial spoke angle for the spoke in contact. This helps calculate (x, y) correctly and sets the rimless wheel in contact with the surface. Pick initial θ0 such that pi-α <= θ0 <= pi+α"
+    
+    r = rmax*rand(T, k)
+    x = l1*sin(pi-θ0)
+    y = r[1] + l1*cos(pi-θ0) 
+    ϕ = ϕ0 
+    θ = θ0 
+    xdot = -l1*cos(pi-θ0) * θ0dot
+    ydot = l1*sin(pi-θ0) * θ0dot
+    ϕdot = ϕ0dot 
+    θdot = θ0dot
+
+    #make sure the next spoke is not penetrating into the bump
+    r[2] = r[1]*0.5
+    r[10] = r[1]*0.5
+    return [x, y, ϕ, θ, xdot, ydot, ϕdot, θdot], r
+end
+
 #returns the attributes needed to model contact
 function (sys::RimlessWheel)(z, param::Vector{T}; ϵn=ϵn_const, ϵt=ϵt_const, μ=μ_const, gThreshold=gThreshold, expert=false) where {T<:Real}
     q, v = parseStates(z)
@@ -65,14 +84,34 @@ function (sys::RimlessWheel)(x::Vector{T}) where {T<:Real}
     return parseStates(x)
 end
 
+function createUnevenTerrain(z, r)
+    x, y, θ = (z[1], z[2], z[4])
+    ki = spokeNearGround(gap(z)[1]) 
+    xs, ys   = (x - l1*sin(θ + 2.0*α*(ki-1)), y + l1*cos(θ + 2.0*α*(ki-1)) )
+
+    xb = zeros(T, k)
+    yb = zeros(T, k)
+
+    xb[ki] = xs 
+    kj_prev = 0
+
+    for kj in vcat(range(ki+1, k, step=1), range(1, ki-1, step=1))
+        kj-1 < 1 ? kj_prev = 10 : kj_prev = kj-1
+        l̄      = sqrt((l1)^2 + (l1)^2 - 2*(l1)*(l1)*cos(2α))
+        xb[kj] = xb[kj_prev] + l̄
+    end
+
+    return [xb, yb, r]
+end
+
 function parseStates(x::Vector{T}) where {T<:Real}
     q = x[1:4]      #[x, y, ϕ, θ], ϕ is torso angle and θ is angle of the spoke in contact. If there are two in contact, it can be either one. Gap function checks either anyway
     v = x[5:8]      #[xdot, ydot, ϕdot, θdot]
     return q, v
 end
 
-function gap(z::Vector{T}) where {T<:Real}      # to a level floor
-    
+function gap(z::Vector{T}) where {T<:Real}      
+    # to a level floor; the gap is the vertical distance between end of spoke and ground
     k_range = range(0, stop=k-1, step=1)
     y, θ     = (z[2], z[4])
     gn       = y .+ l1*cos.(θ .+ 2*α*k_range) 
@@ -100,37 +139,54 @@ function hangingSpoke(z, gn; gThreshold=gThreshold, k=k)
     end
 end
 
-function gap(z, sysParam)     #introduces constant bump for each spoke
-
-    x_floor, y_floor = sysParam
-    k_range  = range(0, stop=k-1, step=1)
+function gap(z::Vector{T}, sysParam)  where {T<:Real}
+   #introduces constant bump for each spoke; the gap is measured along the length of the spoke
+    xb, yb, r = sysParam
     gn       = zeros(T, k)
     Wn       = zeros(T, 4, k)
     Wt       = zeros(T, 4, k)
 
-    for ki in k_range     
-        gki, wnki, wtki = gapSpokeToObstacle(z, ki+1, x_floor[ki+1], y_floor[ki+1])
-        gn[ki+1]   = gki
-        Wn[:,ki+1] = wnki
-        Wt[:,ki+1] = wtki
+    for ki in range(0, stop=k-1, step=1)     
+        gki, wnki, wtki = gapSpokeToObstacle(z, ki, xb[ki+1], yb[ki+1], r[ki+1])
+        gn[ki+1] = gki
+        Wn[:, ki+1] = wnki
+        Wt[:, ki+1] = wtki
     end
 
     return gn, Wn, Wt
 end
 
-function gapSpokeToObstacle(z::Vector{T}, ki, x_floor, y_floor) where {T<:Real}     #assumes flat surface
-    
+function gapSpokeToObstacle(z::Vector{T}, ki, xbi, ybi, ri) where {T<:Real}     
+    #takes gap along the length of the spoke
     xhip, yhip, θ   = (z[1], z[2], z[4])
     δ               = 1e-5          #for divide by zeros
 
     θi       = θ + 2.0f0*α*ki
     xs, ys   = (xhip - l1*sin(θi), yhip + l1*cos(θi) )
 
-    gn       = sign(ys)*sqrt((xs - x_floor)^2 + (ys-y_floor)^2)
-    Wn       = 1.0f0/(gn+δ) .* [(xs-x_floor) (ys-y_floor) 0.0f0 l1*cos(θi)*(x_floor-xs)-(ys-y_floor)*l1*sin(θi)]
-    Wt       = [ys-y_floor x_floor-xs 0.0 -l1*cos(θi)*(ys_y_floor)-l1*sin(θi)*(x_floor-xs)]
+    ####find point of contact on the bump 
+    # θb      = atan(ys-ybi, xs-xbi)
+    # x_floor = xbi + ri*cos(θb)
+    # y_floor = ybi + ri*sin(θb)
+    x_floor = xbi
+    y_floor = ri
+    #########compute gap and its derivatives
+    if  xbi - 0.05 <= xs <= xbi + 0.05
+        # gn = sign(ys-y_floor)*sqrt((xs - x_floor)^2 + (ys-y_floor)^2)
+        # Wn = 1.0f0/(gn+δ) .* [(xs-x_floor) (ys-y_floor) 0.0f0 l1*cos(θi)*(x_floor-xs)-(ys-y_floor)*l1*sin(θi)]
+        # Wt = [ys-y_floor x_floor-xs 0.0f0 -l1*cos(θi)*(ys-y_floor)-l1*sin(θi)*(x_floor-xs)]
 
-    return gn, Wn, Wt
+        gn = ys - y_floor
+        Wn = [0.0f0 1.0f0 0.0f0 -l1*sin(θ + 2.0*α*ki)]
+        Wt = [1.0f0 0.0 0.0 -l1*cos(θ + 2.0*α*ki)]
+
+        return gn, Wn, Wt
+    else 
+        gn = ys
+        Wn = [0.0f0 1.0f0 0.0f0 -l1*sin(θ + 2.0*α*ki)]
+        Wt = [1.0f0 0.0 0.0 -l1*cos(θ + 2.0*α*ki)]
+        return gn, Wn, Wt
+    end
 end
 
 function spokeNearGround(gn)
@@ -314,6 +370,76 @@ function animate(Z; γ=γ)
         # end
         settransform!(vtorso[:link], Translation(0.0, x+0.01, y) ∘ LinearMap(RotX(ϕ+pi)))
         sleep(0.005)
+    end
+end
+
+function createAnimateObject(x, y, ϕ, θ, sysParam; spokeGap=0.2, k=k, α=α, γ=γ)
+
+    vspokes1 = vis[:spokes1]
+
+    for ki in range(0, stop=k-1, step=1)
+        vki = vspokes1[Symbol("spoke" * String("$ki"))]
+
+        setobject!(vki, MeshObject(
+            Cylinder(Point(0.0, 0.0, 0.0), Point(0.0, 0.0, l1), 0.015),
+            MeshLambertMaterial(color=RGBA{Float32}(0.0, 0.0, 0.0, 0.7))))
+        settransform!(vki, Translation(0.0, x, y) ∘ LinearMap(RotX(θ+2*α*ki+γ)))
+    end
+
+    # vspokes2 = vis[:spokes2]
+
+    # for ki in range(0, stop=k-1, step=1)
+    #     vki = vspokes2[Symbol("spoke" * String("$ki"))]
+
+    #     setobject!(vki, MeshObject(
+    #         Cylinder(Point(0.0, 0.0, 0.0), Point(0.0, 0.0, l1), 0.015),
+    #         MeshLambertMaterial(color=RGBA{Float32}(0.0, 0.0, 0.0, 0.25))))
+    #     settransform!(vki, Translation(spokeGap, x, y) ∘ LinearMap(RotX(θ+2*α*ki+γ)))
+    # end
+
+    vtorso = vis[:torso]
+    setobject!(vtorso[:link], MeshObject(
+        HyperRectangle(Vec(0.0, 0.0, 0.0), Vec(spokeGap, 0.02, l2+0.1)),
+        MeshLambertMaterial(color=RGBA{Float32}(1.0, 0.0, 0.0, 1.0))))
+    settransform!(vtorso[:link], Translation(0.0, x+0.01, y) ∘ LinearMap(RotX(ϕ+pi)))
+   
+    xb, yb, r = sysParam
+    vBumps = vis[:bumps]
+    for ki in range(0, stop=k-1, step=1)
+        vki = vBumps[Symbol("spoke" * String("$ki"))]
+        setobject!(vki, MeshObject(
+            HyperRectangle(Vec(0.0, 0.0, 0.0), Vec(0.01, 0.1, r[ki+1])),
+            MeshLambertMaterial(color=RGBA{Float32}(0.0, 0.0, 1.0, 0.75))))
+        settransform!(vki, Translation(0.0, xb[ki+1]-0.05, yb[ki+1]) )
+    end
+
+    return vspokes1, vtorso, vBumps #, vspokes2
+end
+
+function animate(Z, sysParam; γ=γ)
+
+    x0, y0, ϕ0, θ0 = Z[1][1:4]
+    spokeGap = 0.1
+    vspokes1, vtorso, vBumps = createAnimateObject(x0, y0, ϕ0, θ0, sysParam[1]; γ=γ, spokeGap=spokeGap)
+    # vspokes1, vtorso, vspokes2 = createAnimateObject(x0, y0, ϕ0, θ0; γ=γ, spokeGap=spokeGap)
+    for j in range(1, step=15, stop=length(Z))
+        z = Z[j]
+        x, y, ϕ, θ = z[1:4]
+        for ki in range(0, stop=k-1, step=1)
+            vki = vspokes1[Symbol("spoke" * String("$ki"))]
+            settransform!(vki, Translation(0.0, x, y) ∘ LinearMap(RotX(θ+2*α*ki+γ)))
+        end
+        # for ki in range(0, stop=k-1, step=1)
+        #     vki = vspokes2[Symbol("spoke" * String("$ki"))]
+        #     settransform!(vki, Translation(spokeGap, x, y) ∘ LinearMap(RotX(θ+2*α*ki+γ)))
+        # end
+        settransform!(vtorso[:link], Translation(0.0, x+0.01, y) ∘ LinearMap(RotX(ϕ+pi)))
+        
+        for ki in range(0, stop=k-1, step=1)
+            vki = vBumps[Symbol("spoke" * String("$ki"))]
+            settransform!(vki, Translation(0.0, sysParam[j][1][ki+1]-0.05, 0.0))
+        end
+        sleep(0.001)
     end
 end
 

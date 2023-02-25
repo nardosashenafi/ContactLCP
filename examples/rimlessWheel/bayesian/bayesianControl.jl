@@ -76,15 +76,15 @@ function extractStumbling(X)
     end
 end
 
-@model function fitLoss(X0, μ_prior::AbstractArray{T}, σ_prior::AbstractArray{T}; totalTimeStep = 2000) where {T<:Real}
+@model function fitLoss(X0, R, μ_prior::AbstractArray{T}, σ_prior::AbstractArray{T}; totalTimeStep = 2000) where {T<:Real}
 
     # w  = Vector{T}(undef, length(μ_prior))
     # w .~ Distributions.Normal.(μ_prior, LogExpFunctions.softplus.(σ_prior))
     w ~ arraydist(map((m, s) -> Distributions.Normal(m, LogExpFunctions.softplus(s)), μ_prior, σ_prior))
 
     l11 = 0.0f0
-    for x0 in X0
-        X   = trajectory(x0, [], w; totalTimeStep=totalTimeStep)  
+    for i in eachindex(X0)
+        X ,_  = trajectory(X0[i], R[i], w; totalTimeStep=totalTimeStep)  
         # X1  = extractStumbling(X)
         l11 += hipSpeedLoss(X)
     end
@@ -133,8 +133,8 @@ function controlToHipSpeed()
     @showprogress for i in 1:5000
 
         μ_param, σ_param = unstackParams(param)
-        X0      = sampleInitialStates([], param, minibatchsize; totalTime=3000)
-        model   = fitLoss(X0, μ_param, σ_param; totalTimeStep=2000)
+        X0, R      = sampleInitialStates(param, minibatchsize; totalTime=3000)
+        model   = fitLoss(X0, R, μ_param, σ_param; totalTimeStep=2000)
         AdvancedVI.grad!(vo, alg, getq, model, param, diff_results, elbo_num)
 
         ∇ = DiffResults.gradient(diff_results)
@@ -161,9 +161,9 @@ function hasconverged(x0, param, elbo_data, i)
 
     println("elbo = ", round(elbo_data[end], digits=4))
 
-    w         = rand(getq(param))
-    X         = trajectory(x0, [], w; totalTimeStep=10000)
-    loss      = hipSpeedLoss(X)
+    w                   = rand(getq(param))
+    X, sysParam         = trajectory(x0, [], w; totalTimeStep=10000)
+    loss                = hipSpeedLoss(X)
     plots(X, fig1)
     ax2.plot(i, filtered_elbo[end], marker=".", color="k") 
     BSON.@save "./saved_weights/RW_bayesian_6-8-8-5-5-1_elu.bson" param
