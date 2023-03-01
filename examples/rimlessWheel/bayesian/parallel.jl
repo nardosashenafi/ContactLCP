@@ -13,78 +13,30 @@ include("bayesianTrainingHelpers.jl")
 x0             = Float32.(initialState(pi, -1.0f0, 0.0f0, 0.0f0))
 param_expert   = Float32[30.0, 5.0]
 
-Hd              = FastChain(FastDense(6, 8, elu), 
-                  FastDense(8, 7, elu),
-                  FastDense(7, 1))
+Hd              = FastChain(FastDense(6, 6, elu), 
+                  FastDense(6, 5, elu),
+                  FastDense(5, 1))
 const N         = 6
 const paramNum  = DiffEqFlux.paramlength(Hd)+N
 npbc            = MLBasedESC.NeuralPBC(N, Hd)
-const satu      = 2.0f0
+const satu      = 3.0f0
 responsetype    = DSP.Lowpass(0.5)
 designmethod    = DSP.Butterworth(4)
 
-function hipSpeedLoss(Z; gThreshold=gThreshold, k=k, α=α)
-
-    #loss of one trajectory
-    xd_dot  = 0.5f0
-
-    loss = 0.0f0
-    ki = 0
-
-    for z in Z
-        gn, _, _ = gap(z)
-        contactIndex, _ = checkContact(z, gn, gThreshold, k)
-
-        #loss between desired ẋ and actual ẋ should not be computed using getindex.(Z, 1) because this state does not directly depend on the control.
-        #Using getindex.(Z, 1) as ẋ in auto-diff gives zero gradient
-        if !isempty(contactIndex)
-            ki = contactIndex[1] - 1
-        else
-            ki = spokeNearGround(gn) - 1
-        end
-        loss += xd_dot - (l1 * cos(z[4] + 2*α*ki) * z[8])
-
-    end
-
-    lmag = dot(loss, loss)
-
-    ϕdot = getindex.(Z, 7)
-    lmag += 2.0f0*dot(ϕdot, ϕdot)
-
-    # #add cost on contact frequency
-    # β       = 0.2f0
-    # freq_d  = 1.0f0/(2.0f0*l1*sin(α)/xd_dot)
-
-    # xdot          = getindex.(Z, 5)
-    # θ             = getindex.(Z, 4)
-    # xddot_avg     = 1.0f0/length(θ)*sum(xdot)
-    # strikePeriod  = 2.0f0*l1*sin(α)/xddot_avg  #TODO: assumes  if the spoke in contact
-    # f             = 1.0f0/strikePeriod
-    # if f >= (1+β)*freq_d
-    #     lmag += 5.0f0*(f - (1+β) .* freq_d)
-    # end
-
-    return 1.0f0/length(Z)*lmag
-end
-
-@model function fitLoss(x0, param::AbstractArray{T}; totalTimeStep = 2000) where {T<:Real}
+@model function fitLoss(x0, r, param::AbstractArray{T}; totalTimeStep = 2000) where {T<:Real}
 
     μ_prior, σ_prior = unstackParams(param)
-    # w  = Vector{T}(undef, length(μ_prior))
-    # w .~ Distributions.Normal.(μ_prior, LogExpFunctions.softplus.(σ_prior))
     w ~ arraydist(map((m, s) -> Distributions.Normal(m, LogExpFunctions.softplus(s)), μ_prior, σ_prior))
 
-    X       = trajectory(x0, [], w; totalTimeStep=totalTimeStep)  
-    l11     = hipSpeedLoss(X)
+    X, obstacles  = trajectory(x0, r, w; totalTimeStep=totalTimeStep)   
+    l11     = hipSpeedLoss(X, obstacles)
     
-    # 0.0 ~ Normal(l11/batch_size, LogExpFunctions.softplus.(s[1]))
-    0.0 ~ Distributions.Normal(l11, 10.0f0)
+    0.0 ~ Distributions.Normal(l11, 0.1f0)
 end
 
 function getq(param)
     μ_param, σ_param = unstackParams(param)
     return MvNormal(μ_param, LogExpFunctions.softplus.(σ_param))
-    # return arraydist(map((m, σ) -> Distributions.Normal(m, LogExpFunctions.softplus.(σ)), μ_param, σ_param))
 end
 
 function unstackParams(param)
@@ -108,7 +60,7 @@ function controlToHipSpeed()
     param = Float32.(vcat(0.3f0*randn(DiffEqFlux.paramlength(Hd)), 
                         0.1f0*rand(N), 
                         invsoftplus.(0.1f0*rand(DiffEqFlux.paramlength(Hd))),
-                        invsoftplus.(0.1f0*rand(N))))
+                        invsoftplus.(0.05f0*rand(N))))
 
     optimizer   = Variational.DecayedADAGrad(0.001)
 
@@ -122,10 +74,11 @@ function controlToHipSpeed()
 
     @showprogress for i in 1:5000
 
-        X0      = sampleInitialStates([], param, minibatchsize; totalTime=3000)
+        X0, R = sampleInitialStates(param, minibatchsize; totalTime=5000)
         println("X0 = ", X0)
+        println("R = ", R)
         Threads.@threads for i in eachindex(X0)
-            model   = fitLoss(X0[i], param; totalTimeStep=2000)
+            model   = fitLoss(X0[i], R[i], param; totalTimeStep=2000)
             AdvancedVI.grad!(vo, alg, getq, model, param, diff_results[i], elbo_num)
         end
 
@@ -137,33 +90,12 @@ function controlToHipSpeed()
         end
         @. param = param - Δ
         ###################################################
-        model   = fitLoss(X0[1], param; totalTimeStep=2000)
+        model   = fitLoss(X0[1], R[1], param; totalTimeStep=2000)
         push!(elbo_data, vo(alg, getq(param), model, elbo_num))
 
         ##########################################################
-        mod(i, 10) == 0.0 ? converged = hasconverged(X0[1], param, elbo_data,i) : nothing
+        mod(i, 5) == 0.0 ? converged = hasconverged(X0[1], R[1], param, elbo_data,i) : nothing
 
         ProgressMeter.next!(prog)
     end
-end
-
-function hasconverged(x0, param, elbo_data, i)
-
-    filtered_elbo = filter_elbo(elbo_data[end-9:end])
-
-    println("elbo = ", round(elbo_data[end], digits=4))
-
-    w         = rand(getq(param))
-    X         = trajectory(x0, [], w; totalTimeStep=10000)
-    loss      = hipSpeedLoss(X)
-    plots(X, fig1)
-    ax2.plot(i, filtered_elbo[end], marker=".", color="k") 
-    BSON.@save "./saved_weights/RW_bayesian_6-8-8-7-7-1_elu.bson" param
-    println("loss = ", round(loss, digits=4) , " | hip speed = ", round.(mean(getindex.(X, 5)), digits=4) )
-
-    return false
-end
-
-function filter_elbo(Δelbo_vec)
-    DSP.filt(DSP.digitalfilter(responsetype, designmethod), Δelbo_vec)
 end

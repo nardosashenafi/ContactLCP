@@ -108,6 +108,13 @@ function lexiPivot!(Q, M, q::AbstractArray{T}, r, s) where {T<:Real}
 
 end
 
+""" 
+    updateComplementPair(basic, nonbasic, oldBasicInd, newBasicIndex)
+
+For every basic solution, keep track of the index of the complementary nonbasic pair during the pivotting process.
+This will be used in extracting the basic solution in the end 
+
+"""
 
 function updateComplementPair(basic, nonbasic, oldBasicInd, newBasicIndex)
     locateComplementOfBasic = basic[oldBasicInd]
@@ -125,6 +132,15 @@ end
 function complementPairIndex(nonbasic, nonbasicIndex)
     return nonbasic[nonbasicIndex]  #find complement of the dropped variable so we can add it to the basic variables on the next iteration
 end
+
+
+"""
+    lemkeLexi(A, b, state)
+
+Compute basic solution to the linear complementarity problem through the pivotting technique
+
+Taken from book [Brogliato]-"Numerical methods for nonsmooth dynamical system" Chapter 12.4 (Linear complementarity Problem) Lemke Algorithm
+"""
 
 function lemkeLexi(M, q::AbstractArray{T}, x; MAX_ITER = 20, piv_tol = 1e-5,
                     LEXITHRESHOLD = 1e-10, MAX_INFEASIBLECOUNT = 5) where {T<:Real}
@@ -221,6 +237,14 @@ function lemkeLexi(M, q::AbstractArray{T}, x; MAX_ITER = 20, piv_tol = 1e-5,
     # basicSol = 0.1f0*ones(T, totalCol)
     return basicSol
 end
+
+"""
+    extractSolution(pivottedIndices, q̂Vector, totalColumnsofA)
+
+Extracts basic solution from the q̂ vector 
+
+Pivotting techniques changes the order of the q̂ vector. Retrace steps throughout the pivotting technique to find out which component of q̂ belongs to the basic solution
+"""
 
 function extractSolution(pivottedIndices, q̂::AbstractArray{T}, totalCol) where {T<:Real}
 
