@@ -183,7 +183,7 @@ function testControl(X0, R, ps, grad, fig1; timeSteps=5000)
 
     plots(S, fig1)
 
-    println("loss = ", round(loss, digits=4) , " | grad = ", mean(grad) )
+    println("loss = ", round(loss, digits=4) , " | grad = ", maximum(grad) )
     # println("loss = ", round(l1(param), digits=4),  " | p = ", round.(param, digits=4), " | hip speed = ", round.(mean(-cm.sys.l1 .* cos.(getindex.(Z, 1)) .* getindex.(Z, 3)), digits=4) )
 end
 
@@ -206,7 +206,8 @@ function controlToHipSpeedUnvevenTerrain(;T=Float32)
                                 rand(-1.0f0:0.1f0:1.0f0), 0.03f0)
 
     @showprogress for i in 1:5000
-        X0, R = sampleInitialStatesUnevenTerrain(param, r_const, minibatchsize; totalTime=3000)
+        X0, R = sampleInitialStatesUnevenTerrain(param, r_const, minibatchsize; 
+                                                    totalTime=6000)
         println("X0 = ", X0)
         println("R = ", R)
 
