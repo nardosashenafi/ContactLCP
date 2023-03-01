@@ -82,7 +82,7 @@ function hipSpeedLoss(Z; gThreshold=gThreshold, k=k, α=α)
     lmag = dot(loss, loss)
 
     ϕdot = getindex.(Z, 7)
-    lmag += 3.0f0*dot(ϕdot, ϕdot)
+    lmag += 2.5f0*dot(ϕdot, ϕdot)
 
     # #add cost on contact frequency
     # β       = 0.2f0

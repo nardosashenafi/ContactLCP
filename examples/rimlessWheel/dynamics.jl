@@ -35,7 +35,7 @@ function initialState(θ0, θ0dot, ϕ0, ϕ0dot; γi = 0.0f0)
     return [x, y, ϕ, θ, xdot, ydot, ϕdot, θdot]
 end
 
-function initialStateWithBumps(θ0::T, θ0dot, ϕ0, ϕ0dot, rmax; k=k, α=α) where {T<:Real}
+function initialStateWithBumps(θ0::T, θ0dot, ϕ0, ϕ0dot, rmax::T; k=k, α=α) where {T<:Real}
     @assert pi-α <= θ0 <= pi+α "Give an initial spoke angle for the spoke in contact. This helps calculate (x, y) correctly and sets the rimless wheel in contact with the surface. Pick initial θ0 such that pi-α <= θ0 <= pi+α"
     
     r = rmax*rand(T, k)
@@ -52,6 +52,21 @@ function initialStateWithBumps(θ0::T, θ0dot, ϕ0, ϕ0dot, rmax; k=k, α=α) wh
     r[2] = r[1]*0.5
     r[10] = r[1]*0.5
     return [x, y, ϕ, θ, xdot, ydot, ϕdot, θdot], r
+end
+
+function initialStateWithBumps(θ0::T, θ0dot, ϕ0, ϕ0dot, rvec::Vector{T}; k=k, α=α) where {T<:Real}
+    @assert pi-α <= θ0 <= pi+α "Give an initial spoke angle for the spoke in contact. This helps calculate (x, y) correctly and sets the rimless wheel in contact with the surface. Pick initial θ0 such that pi-α <= θ0 <= pi+α"
+    
+    x = l1*sin(pi-θ0)
+    y = rvec[1] + l1*cos(pi-θ0) 
+    ϕ = ϕ0 
+    θ = θ0 
+    xdot = -l1*cos(pi-θ0) * θ0dot
+    ydot = l1*sin(pi-θ0) * θ0dot
+    ϕdot = ϕ0dot 
+    θdot = θ0dot
+
+    return [x, y, ϕ, θ, xdot, ydot, ϕdot, θdot], rvec
 end
 
 """
@@ -256,7 +271,7 @@ function control(z, θp::Vector{T}; expert=false) where {T<:Real}
 
     if expert #working expert controller
         @assert length(θp) == 2
-        return -θp[1]*(q[3]-0.5f0) - θp[2]*v[3]
+        return -θp[1]*(q[3]-0.65f0) - θp[2]*v[3]
     else
         # u = -θp[1]*(q[3]-0.38f0) - θp[2]*v[3]
         # @assert length(θp) == DiffEqFlux.paramlength(unn) 
@@ -477,7 +492,7 @@ function animate(Z, sysParam; γ=γ)
             vki = vBumps[Symbol("spoke" * String("$ki"))]
             settransform!(vki, Translation(0.0, sysParam[j][1][ki+1]-0.05, 0.0))
         end
-        sleep(0.005)
+        sleep(0.002)
     end
 end
 
