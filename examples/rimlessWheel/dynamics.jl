@@ -54,7 +54,14 @@ function initialStateWithBumps(θ0::T, θ0dot, ϕ0, ϕ0dot, rmax; k=k, α=α) wh
     return [x, y, ϕ, θ, xdot, ydot, ϕdot, θdot], r
 end
 
-#returns the attributes needed to model contact
+"""
+    sys(state, controllerParameters)
+
+Return system specific parameters such as gap function to model contact.
+
+This call method is what relays the system information to the LCP 
+"""
+
 function (sys::RimlessWheel)(z, param::Vector{T}; ϵn=ϵn_const, ϵt=ϵt_const, μ=μ_const, gThreshold=gThreshold, expert=false) where {T<:Real}
     q, v = parseStates(z)
     x, y, ϕ, θ = q
@@ -67,6 +74,14 @@ function (sys::RimlessWheel)(z, param::Vector{T}; ϵn=ϵn_const, ϵt=ϵt_const, 
     return gn, γn, γt, M, h, Wn, Wt, ϵn, ϵt, μ, gThreshold
 end
 
+""" 
+    sys(state, systemParameters, controllerParameters)
+
+Return system specific parameters such as gap function to model contact.
+
+Pass system parameters to introduce random bumps to each spoke. "systemParameters" contains [[x1, x2...], [y1, y2,...], [height1, height2...]] of each bump for each spoke
+
+"""
 function (sys::RimlessWheel)(z, sysParam, controlParam::Vector{T}; ϵn=ϵn_const, ϵt=ϵt_const, μ=μ_const, gThreshold=gThreshold, expert=false) where {T<:Real}
     q, v = parseStates(z)
     x, y, ϕ, θ = q
@@ -79,12 +94,26 @@ function (sys::RimlessWheel)(z, sysParam, controlParam::Vector{T}; ϵn=ϵn_const
     return gn, γn, γt, M, h, Wn, Wt, ϵn, ϵt, μ, gThreshold
 end
 
-#parses out the poses and velocities from the state vector
+""" 
+    sys(state)
+Parse out the poses and velocities from the state vector. Used by LCP
+
+"""
+
 function (sys::RimlessWheel)(x::Vector{T}) where {T<:Real}
     return parseStates(x)
 end
 
-function createUnevenTerrain(z, r)
+"""
+    createAnimateObject(state, bumpHeight)
+
+Return bump location [[x1, x2...], [y1, y2,...], [height1, height2...]] for each spoke
+
+For each spoke, there is a designated bump of height r. The height remains fixed throughout a trajectory.
+This function places the bumps at the appriopriate location on the ground so the spokes can strike the designated bumps.
+
+"""
+function createUnevenTerrain(z::Vector{T}, r) where {T<:Real}
     x, y, θ = (z[1], z[2], z[4])
     ki = spokeNearGround(gap(z)[1]) 
     xs, ys   = (x - l1*sin(θ + 2.0*α*(ki-1)), y + l1*cos(θ + 2.0*α*(ki-1)) )
@@ -111,7 +140,7 @@ function parseStates(x::Vector{T}) where {T<:Real}
 end
 
 function gap(z::Vector{T}) where {T<:Real}      
-    # to a level floor; the gap is the vertical distance between end of spoke and ground
+    # gap to a level floor; the gap is the vertical distance between end of spoke and ground
     k_range = range(0, stop=k-1, step=1)
     y, θ     = (z[2], z[4])
     gn       = y .+ l1*cos.(θ .+ 2*α*k_range) 
@@ -139,8 +168,17 @@ function hangingSpoke(z, gn; gThreshold=gThreshold, k=k)
     end
 end
 
+"""
+    gap(state, bumpParameters)
+    
+Compute gap between edge of spokes and corresponding bump.  
+See also [`createUnevenTerrain`](@ref) on how to construct bumps  
+
+Constructs constant bump for each spoke; the gap is measured along the length of the spoke
+
+"""
+
 function gap(z::Vector{T}, sysParam)  where {T<:Real}
-   #introduces constant bump for each spoke; the gap is measured along the length of the spoke
     xb, yb, r = sysParam
     gn       = zeros(T, k)
     Wn       = zeros(T, 4, k)
@@ -218,7 +256,7 @@ function control(z, θp::Vector{T}; expert=false) where {T<:Real}
 
     if expert #working expert controller
         @assert length(θp) == 2
-        return -θp[1]*(q[3]-0.38f0) - θp[2]*v[3]
+        return -θp[1]*(q[3]-0.5f0) - θp[2]*v[3]
     else
         # u = -θp[1]*(q[3]-0.38f0) - θp[2]*v[3]
         # @assert length(θp) == DiffEqFlux.paramlength(unn) 
@@ -439,7 +477,7 @@ function animate(Z, sysParam; γ=γ)
             vki = vBumps[Symbol("spoke" * String("$ki"))]
             settransform!(vki, Translation(0.0, sysParam[j][1][ki+1]-0.05, 0.0))
         end
-        sleep(0.001)
+        sleep(0.005)
     end
 end
 
