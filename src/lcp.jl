@@ -5,13 +5,34 @@ struct Lcp{T, TSYS}
     end
 end
 
+"""
+    sysAttributes(lcp, states, controllerParameters)
+
+Return system specific values such as gap, friction coefficient, ... etc,
+"""
+
 function sysAttributes(lcp::Lcp, x, param; kwargs...)
     return lcp.sys(x, param; kwargs...)
 end
 
+"""
+    sysAttributes(lcp, states, systemParameters, controllerParameters)
+
+Return system specific values such as gap, friction coefficient, ... etc,
+
+Pass "systemParameters" to modify the system attributes such as gap or mass of the system.  
+"""
+
 function sysAttributes(lcp::Lcp, x, sysParam, controlParam; kwargs...)
     return lcp.sys(x, sysParam, controlParam; kwargs...)
 end
+
+"""
+    checkContact(state, gapVector, gapThreshold, totalNumberOfContacts)
+
+Return a vector of indices for active contacts. The indices follow the order of the gap vector
+
+"""
 
 function checkContact(x, gn::AbstractArray{T}, gThreshold, total_contact_num) where {T<:Real}
      
@@ -27,6 +48,13 @@ function checkContact(x, gn::AbstractArray{T}, gThreshold, total_contact_num) wh
     return contactIndex, length(contactIndex)
 end
 
+"""
+    getAb(gn, γn, γt, M, h, Wn, Wt, ϵn, ϵt, μ, contactIndex, current_contact_num)
+
+If there are active contacts, construct the matrix A and vector b used to calculate contact force.
+Taken from the paper [Glocker]"Formulation and preparation for numerical evaluation of linear complementarity systems in dynamics", equation 33
+
+"""
 function getAb(gn, γn, γt, M, h, Wn, Wt, ϵn, ϵt, μ, contactIndex, current_contact_num; Δt = 0.001f0)
 
     gnt = @view gn[contactIndex]
@@ -56,6 +84,14 @@ function getAb(gn, γn, γt, M, h, Wn, Wt, ϵn, ϵt, μ, contactIndex, current_c
     return A, b
 end
 
+"""
+    solveLcp(gn, γn, γt, M, h, Wn, Wt, ϵn, ϵt, μ, gThreshold, x)
+
+Computes contact forces in the normal and tangential direction using lexicographic lemke algorithm.
+
+Taken from book [Brogliato]-"Numerical methods for nonsmooth dynamical system" Chapter 12.4 (Linear complementarity Problem) Lemke Algorithm
+"""
+
 function solveLcp(gn, γn, γt, M, h::AbstractArray{T}, Wn, Wt, ϵn, ϵt, μ, gThreshold, x_mid; Δt=0.001f0) where {T<:Real}
 
     total_contact_num   = length(gn)
@@ -78,6 +114,13 @@ function solveLcp(gn, γn, γt, M, h::AbstractArray{T}, Wn, Wt, ϵn, ϵt, μ, gT
     return Λn, Λt, ΛR
 end
 
+"""
+    oneStep(lcp, state, controllerParameters)
+
+Integrate one time step of the Moreau's time stepping method 
+
+Taken from the paper [Glocker]"Formulation and preparation for numerical evaluation of linear complementarity systems in dynamics", section 5
+"""
 function oneTimeStep(lcp::Lcp, x, param::AbstractArray{T}; Δt = 0.001f0, kwargs...) where {T<:Real}
 
     qA, uA  = lcp.sys(x)
@@ -93,6 +136,12 @@ function oneTimeStep(lcp::Lcp, x, param::AbstractArray{T}; Δt = 0.001f0, kwargs
     return vcat(qE,uE)
 end
 
+"""
+    oneStep(lcp, state, systemParameters, controllerParameters)
+
+Integrate one time step of the Moreau's time stepping method 
+
+"""
 function oneTimeStep(lcp::Lcp, x, sysParam, controlParam::AbstractArray{T}; Δt = 0.001f0, kwargs...) where {T<:Real}
 
     qA, uA  = lcp.sys(x)

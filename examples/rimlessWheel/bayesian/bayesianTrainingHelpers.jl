@@ -9,7 +9,15 @@ include("../../../src/solver.jl")
 
 sys  = RimlessWheel()
 lcp  = Lcp(Float32, sys)
-Δt   = 0.0003f0
+Δt   = 0.0002f0
+
+
+function unstackParams(param)
+    μ_param = @view param[1:paramNum]
+    σ_param = @view param[paramNum+1:end]
+
+    return μ_param, σ_param
+end
 
 function stateAndForcesWithNoise(lcp::Lcp, x, sysParam, controlParam::AbstractArray{T}; Δt = 0.001f0, kwargs...) where {T<:Real}
 
@@ -56,9 +64,30 @@ function trajectory(x0, r, controlParam::Vector{T}; expert=false, Δt = Δt, tot
     return X, obstacles
 end
 
-function sampleSystemParam()
-    γi = rand(0.0f0:0.01:30.0f0*pi/180f0)
-    return γi
+function hipSpeedLoss(Z, obstacles; gThreshold=gThreshold, k=k, α=α)
+
+    #loss of one trajectory
+    xd_dot  = 0.5f0
+    loss = 0.0f0
+    ki = 0
+
+    for i in eachindex(Z)
+        z = Z[i]
+        gn, _, _ = gap(z, obstacles[i])
+        contactIndex, _ = checkContact(z, gn, gThreshold, k)
+
+        #loss between desired ẋ and actual ẋ should not be computed using getindex.(Z, 1) because this state does not directly depend on the control.
+        #Using getindex.(Z, 1) as ẋ in auto-diff gives zero gradient
+        if !isempty(contactIndex)
+            ki = contactIndex[1] - 1
+        else
+            ki = spokeNearGround(gn) - 1
+        end
+        error = xd_dot - (l1 * cos(z[4] + 2*α*ki) * z[8])
+        loss += 10.0f0*dot(error, error) + 0.1f0*dot(z[7], z[7])
+    end
+
+    return 1.0f0/length(Z)*loss
 end
 
 function isStumbling(x)
@@ -68,13 +97,14 @@ end
 function sampleInitialStates(controlParam::Vector{T}, sampleNum; α=α, totalTime=1000) where {T<:Real}
 
     sampleTrajectories = Vector{Vector{Vector{T}}}()
-    rmax = 0.06f0
+    rmax = 0.03f0
 
     w     = rand(getq(controlParam))
-    x0, r = initialStateWithBumps(rand(pi-α:0.05f0:pi+α), 
-                                rand(-3.0f0:0.05f0:-0.5f0), 
-                                0.0f0, 
-                                rand(-1.0f0:0.1f0:1.0f0), rmax)
+    x0, r = initialStateWithBumps(
+                rand(pi-α+0.2f0:0.05f0:pi+α-0.2f0), 
+                rand(-3.0f0:0.05f0:0.0f0), 
+                0.0f0, 
+                rand(-1.0f0:0.1f0:1.0f0), rmax)
 
 
     S, _ = trajectory(x0, r, w; totalTimeStep=totalTime)
@@ -89,10 +119,12 @@ function sampleInitialStates(controlParam::Vector{T}, sampleNum; α=α, totalTim
             push!(X0, rand(rand(sampleTrajectories)))
             push!(R, r)
         else
-            x0, r1 = initialStateWithBumps(rand(pi-α:0.05f0:pi+α), 
-                                        rand(-3.0f0:0.05f0:-0.5f0), 
-                                        0.0f0, 
-                                        rand(-1.0f0:0.1f0:1.0f0), rmax)
+            x0, r1 = initialStateWithBumps(
+                    rand(pi-α+0.2f0:0.05f0:pi+α-0.2f0), 
+                    rand(-3.0f0:0.05f0:0.0f0), 
+                    0.0f0, 
+                    rand(-1.0f0:0.1f0:1.0f0), rmax)
+
             push!(X0, x0)
             push!(R, r1)
         end 
@@ -100,14 +132,37 @@ function sampleInitialStates(controlParam::Vector{T}, sampleNum; α=α, totalTim
     #extract stumbling
     for i in eachindex(X0)
         if isStumbling(X0[i])
-            X0[i], R[i] = Float32.(initialState(rand(pi-α:0.05f0:pi+α), 
-                        rand(-3.0f0:0.05f0:-0.5f0), 
-                        rand(-pi/4.0f0:0.05f0:pi/4.0f0), 
-                        rand(-1.0f0:0.1f0:1.0f0)), rmax)
+            X0[i], R[i] = initialStateWithBumps(
+                rand(pi-α+0.2f0:0.05f0:pi+α-0.2f0), 
+                rand(-3.0f0:0.05f0:0.0f0), 
+                rand(-pi/4.0f0:0.05f0:pi/4.0f0), 
+                rand(-1.0f0:0.1f0:1.0f0), rmax)
         end
+
     end
     return X0, R
 
+end
+
+function hasconverged(x0, r, param, elbo_data, i)
+
+    filtered_elbo = filter_elbo(elbo_data[end-4:end])
+
+    println("elbo = ", round(elbo_data[end], digits=4))
+
+    w                   = rand(getq(param))
+    X, obstacles        = trajectory(x0, r, w; totalTimeStep=5000)
+    loss                = hipSpeedLoss(X, obstacles)
+    plots(X, fig1)
+    ax2.plot(i, filtered_elbo[end], marker=".", color="k") 
+    BSON.@save "./saved_weights/RW_bayesian_6-8-8-5-5-1_elu.bson" param
+    println("loss = ", round(loss, digits=4) , " | hip speed = ", round.(mean(getindex.(X, 5)), digits=4) )
+
+    return false
+end
+
+function filter_elbo(Δelbo_vec)
+    DSP.filt(DSP.digitalfilter(responsetype, designmethod), Δelbo_vec)
 end
 
 function plots(Z, fig1)
