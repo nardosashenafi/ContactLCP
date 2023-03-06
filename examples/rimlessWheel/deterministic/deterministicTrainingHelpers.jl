@@ -37,7 +37,7 @@ function sampleInitialStates(param::Vector{T}, sampleNum; α=α, totalTime=1000)
 
     # x0 = initialState(pi-0.0f0, -0.5f0, 0.0f0, 0.0f0)
     x0 = Float32.(initialState(rand(pi-α:0.05:pi+α), 
-                                rand(-3.0:0.05:-0.5),   #large thetadot can cause leaping
+                                rand(-2.0:0.05:2.0),   #large thetadot can cause leaping
                                 0.0, 
                                 rand(-1.0:0.1:1.0)) )
 
@@ -52,7 +52,7 @@ function sampleInitialStates(param::Vector{T}, sampleNum; α=α, totalTime=1000)
             push!(X0, rand(rand(sampleTrajectories)))
         else
             x0 = Float32.(initialState(rand(pi-α:0.05:pi+α), 
-                                        rand(-3.0:0.05:-0.5), 
+                                        rand(-2.0:0.05:2.0), 
                                         0.0, 
                                         rand(-1.0:0.1:1.0)) )
             push!(X0, x0)
@@ -62,7 +62,7 @@ function sampleInitialStates(param::Vector{T}, sampleNum; α=α, totalTime=1000)
     for i in eachindex(X0)
         if isStumbling(X0[i])
             X0[i] = Float32.(initialState(rand(pi-α:0.05:pi+α), 
-                        rand(-3.0:0.05:-0.5), 
+                        rand(-2.0:0.05:2.0), 
                         rand(-pi/4:0.05:pi/4), 
                         rand(-1.0:0.1:1.0)) )
         end

@@ -75,29 +75,11 @@ function hipSpeedLoss(Z; gThreshold=gThreshold, k=k, α=α)
         else
             ki = spokeNearGround(gn) - 1
         end
-        loss += xd_dot - (l1 * cos(z[4] + 2*α*ki) * z[8])
-
+        error = xd_dot - (l1 * cos(z[4] + 2*α*ki) * z[8])
+        loss += 10.0f0*dot(error, error) + 0.1f0*dot(z[7], z[7])
     end
 
-    lmag = dot(loss, loss)
-
-    ϕdot = getindex.(Z, 7)
-    lmag += 2.5f0*dot(ϕdot, ϕdot)
-
-    # #add cost on contact frequency
-    # β       = 0.2f0
-    # freq_d  = 1.0f0/(2.0f0*l1*sin(α)/xd_dot)
-
-    # xdot          = getindex.(Z, 5)
-    # θ             = getindex.(Z, 4)
-    # xddot_avg     = 1.0f0/length(θ)*sum(xdot)
-    # strikePeriod  = 2.0f0*l1*sin(α)/xddot_avg  #TODO: assumes  if the spoke in contact
-    # f             = 1.0f0/strikePeriod
-    # if f >= (1+β)*freq_d
-    #     lmag += 5.0f0*(f - (1+β) .* freq_d)
-    # end
-
-    return 1.0f0/length(Z)*lmag
+    return 1.0f0/length(Z)*loss
 end
 
 function controlToHipSpeed(;T=Float32)

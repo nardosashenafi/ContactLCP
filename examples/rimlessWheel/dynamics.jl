@@ -411,7 +411,7 @@ function animate(Z; γ=γ)
     spokeGap = 0.1
     vspokes1, vtorso = createAnimateObject(x0, y0, ϕ0, θ0; γ=γ, spokeGap=spokeGap)
     # vspokes1, vtorso, vspokes2 = createAnimateObject(x0, y0, ϕ0, θ0; γ=γ, spokeGap=spokeGap)
-    for z in Z[1:10:end]
+    for z in Z[1:15:end]
         x, y, ϕ, θ = z[1:4]
         for ki in range(0, stop=k-1, step=1)
             vki = vspokes1[Symbol("spoke" * String("$ki"))]
@@ -422,7 +422,7 @@ function animate(Z; γ=γ)
         #     settransform!(vki, Translation(spokeGap, x, y) ∘ LinearMap(RotX(θ+2*α*ki+γ)))
         # end
         settransform!(vtorso[:link], Translation(0.0, x+0.01, y) ∘ LinearMap(RotX(ϕ+pi)))
-        sleep(0.005)
+        sleep(0.002)
     end
 end
 
