@@ -68,7 +68,6 @@ function hipSpeedLoss(Z, obstacles; gThreshold=gThreshold, k=k, α=α)
 
     #loss of one trajectory
     xd_dot  = 0.5f0
-
     loss = 0.0f0
     ki = 0
 
@@ -81,23 +80,18 @@ function hipSpeedLoss(Z, obstacles; gThreshold=gThreshold, k=k, α=α)
         #Using getindex.(Z, 1) as ẋ in auto-diff gives zero gradient
         if !isempty(contactIndex)
             ki = contactIndex[1] - 1
-        # else
-        #     ki = spokeNearGround(gn) - 1
+        else
+            ki = spokeNearGround(gn) - 1
         end
-        loss += xd_dot - (l1 * cos(z[4] + 2*α*ki) * z[8])
-
+        error = xd_dot - (l1 * cos(z[4] + 2*α*ki) * z[8])
+        loss += 10.0f0*dot(error, error) + 0.1f0*dot(z[7], z[7])
     end
 
-    lmag = dot(loss, loss)
-
-    ϕdot = getindex.(Z, 7)
-    lmag += 7.0f0*dot(ϕdot, ϕdot)
-
-    return 1.0f0/length(Z)*lmag
+    return 1.0f0/length(Z)*loss
 end
 
 function isStumbling(x)
-    x[8] >= -0.2
+    x[8] >= -0.01
 end
 
 function sampleInitialStates(controlParam::Vector{T}, sampleNum; α=α, totalTime=1000) where {T<:Real}
@@ -108,7 +102,7 @@ function sampleInitialStates(controlParam::Vector{T}, sampleNum; α=α, totalTim
     w     = rand(getq(controlParam))
     x0, r = initialStateWithBumps(
                 rand(pi-α+0.2f0:0.05f0:pi+α-0.2f0), 
-                rand(-4.0f0:0.05f0:-1.0f0), 
+                rand(-3.0f0:0.05f0:0.0f0), 
                 0.0f0, 
                 rand(-1.0f0:0.1f0:1.0f0), rmax)
 
@@ -127,7 +121,7 @@ function sampleInitialStates(controlParam::Vector{T}, sampleNum; α=α, totalTim
         else
             x0, r1 = initialStateWithBumps(
                     rand(pi-α+0.2f0:0.05f0:pi+α-0.2f0), 
-                    rand(-4.0f0:0.05f0:-1.0f0), 
+                    rand(-3.0f0:0.05f0:0.0f0), 
                     0.0f0, 
                     rand(-1.0f0:0.1f0:1.0f0), rmax)
 
@@ -140,7 +134,7 @@ function sampleInitialStates(controlParam::Vector{T}, sampleNum; α=α, totalTim
         if isStumbling(X0[i])
             X0[i], R[i] = initialStateWithBumps(
                 rand(pi-α+0.2f0:0.05f0:pi+α-0.2f0), 
-                rand(-4.0f0:0.05f0:-1.0f0), 
+                rand(-3.0f0:0.05f0:0.0f0), 
                 rand(-pi/4.0f0:0.05f0:pi/4.0f0), 
                 rand(-1.0f0:0.1f0:1.0f0), rmax)
         end
@@ -161,7 +155,7 @@ function hasconverged(x0, r, param, elbo_data, i)
     loss                = hipSpeedLoss(X, obstacles)
     plots(X, fig1)
     ax2.plot(i, filtered_elbo[end], marker=".", color="k") 
-    BSON.@save "./saved_weights/RW_bayesian_6-6-6-5-5-1_elu.bson" param
+    BSON.@save "./saved_weights/RW_bayesian_6-8-8-5-5-1_elu.bson" param
     println("loss = ", round(loss, digits=4) , " | hip speed = ", round.(mean(getindex.(X, 5)), digits=4) )
 
     return false

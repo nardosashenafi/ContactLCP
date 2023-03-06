@@ -13,13 +13,13 @@ include("bayesianTrainingHelpers.jl")
 x0             = Float32.(initialState(pi, -1.0f0, 0.0f0, 0.0f0))
 param_expert   = Float32[30.0, 5.0]
 
-Hd              = FastChain(FastDense(6, 6, elu), 
-                  FastDense(6, 5, elu),
+Hd              = FastChain(FastDense(6, 8, elu), 
+                  FastDense(8, 5, elu),
                   FastDense(5, 1))
 const N         = 6
 const paramNum  = DiffEqFlux.paramlength(Hd)+N
 npbc            = MLBasedESC.NeuralPBC(N, Hd)
-const satu      = 3.0f0
+const satu      = 1.5f0
 responsetype    = DSP.Lowpass(0.5)
 designmethod    = DSP.Butterworth(4)
 
@@ -31,7 +31,7 @@ designmethod    = DSP.Butterworth(4)
     X, obstacles  = trajectory(x0, r, w; totalTimeStep=totalTimeStep)   
     l11     = hipSpeedLoss(X, obstacles)
     
-    0.0 ~ Distributions.Normal(l11, 0.1f0)
+    0.0 ~ Distributions.Normal(l11, 0.0001f0)
 end
 
 function getq(param)
@@ -54,7 +54,7 @@ function controlToHipSpeed()
     Turing.setadbackend(:forwarddiff)
 
     num_steps   = 5000
-    elbo_num    = 5
+    elbo_num    = 3
     minibatchsize  = 2
 
     param = Float32.(vcat(0.3f0*randn(DiffEqFlux.paramlength(Hd)), 
@@ -62,7 +62,7 @@ function controlToHipSpeed()
                         invsoftplus.(0.1f0*rand(DiffEqFlux.paramlength(Hd))),
                         invsoftplus.(0.05f0*rand(N))))
 
-    optimizer   = Variational.DecayedADAGrad(0.001)
+    optimizer   = Variational.DecayedADAGrad(0.005)
 
     vo          = Variational.ELBO()
     alg         = ADVI(elbo_num, num_steps)
@@ -74,11 +74,11 @@ function controlToHipSpeed()
 
     @showprogress for i in 1:5000
 
-        X0, R = sampleInitialStates(param, minibatchsize; totalTime=5000)
+        X0, R = sampleInitialStates(param, minibatchsize; totalTime=6000)
         println("X0 = ", X0)
         println("R = ", R)
         Threads.@threads for i in eachindex(X0)
-            model   = fitLoss(X0[i], R[i], param; totalTimeStep=2000)
+            model   = fitLoss(X0[i], R[i], param; totalTimeStep=5000)
             AdvancedVI.grad!(vo, alg, getq, model, param, diff_results[i], elbo_num)
         end
 
@@ -89,12 +89,13 @@ function controlToHipSpeed()
             continue
         end
         @. param = param - Δ
-        ###################################################
-        model   = fitLoss(X0[1], R[1], param; totalTimeStep=2000)
-        push!(elbo_data, vo(alg, getq(param), model, elbo_num))
 
         ##########################################################
-        mod(i, 5) == 0.0 ? converged = hasconverged(X0[1], R[1], param, elbo_data,i) : nothing
+        if mod(i, 5) == 0.0 
+            model   = fitLoss(X0[1], R[1], param; totalTimeStep=6000)
+            push!(elbo_data, vo(alg, getq(param), model, elbo_num))
+            converged = hasconverged(X0[1], R[1], param, elbo_data,i) 
+        end
 
         ProgressMeter.next!(prog)
     end
