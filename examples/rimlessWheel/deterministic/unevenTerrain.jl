@@ -25,7 +25,7 @@ Hd              = FastChain(FastDense(6, 6, elu),
                   FastDense(4, 1))
 const N         = 6
 npbc            = MLBasedESC.NeuralPBC(N, Hd)
-const satu      = 2.0f0
+const satu      = 1.5f0
 
 
 function unstackParams(param)
@@ -109,23 +109,18 @@ function hipSpeedLoss(Z, obstacles; gThreshold=gThreshold, k=k, α=α)
         #Using getindex.(Z, 1) as ẋ in auto-diff gives zero gradient
         if !isempty(contactIndex)
             ki = contactIndex[1] - 1
-        # else
-        #     ki = spokeNearGround(gn) - 1
+        else
+            ki = spokeNearGround(gn) - 1
         end
-        loss += xd_dot - (l1 * cos(z[4] + 2*α*ki) * z[8])
-
+        error = xd_dot - (l1 * cos(z[4] + 2*α*ki) * z[8])
+        loss += 10.0f0*dot(error, error) + 0.1f0*dot(z[7], z[7])
     end
 
-    lmag = dot(loss, loss)
-
-    ϕdot = getindex.(Z, 7)
-    lmag += 7.0f0*dot(ϕdot, ϕdot)
-
-    return 1.0f0/length(Z)*lmag
+    return 1.0f0/length(Z)*loss
 end
 
 function isStumbling(x)
-    x[8] >= -0.2
+    x[8] >= -0.01
 end
 
 function sampleInitialStatesUnevenTerrain(controlParam::Vector{T}, r_const, sampleNum; α=α, totalTime=1000) where {T<:Real}
@@ -134,7 +129,7 @@ function sampleInitialStatesUnevenTerrain(controlParam::Vector{T}, r_const, samp
 
     x0, r = initialStateWithBumps(
                 rand(pi-α+0.2f0:0.05f0:pi+α-0.2f0), 
-                rand(-4.0f0:0.05f0:-1.0f0), 
+                rand(-3.0f0:0.1f0:0.0f0), 
                 0.0f0, 
                 rand(-1.0f0:0.1f0:1.0f0), r_const)
 
@@ -153,7 +148,7 @@ function sampleInitialStatesUnevenTerrain(controlParam::Vector{T}, r_const, samp
         else
             x0, r1 = initialStateWithBumps(
                     rand(pi-α+0.2f0:0.05f0:pi+α-0.2f0), 
-                    rand(-4.0f0:0.05f0:-1.0f0), 
+                    rand(-3.0f0:0.1f0:0.0f0), 
                     0.0f0, 
                     rand(-1.0f0:0.1f0:1.0f0), r_const)
 
@@ -166,7 +161,7 @@ function sampleInitialStatesUnevenTerrain(controlParam::Vector{T}, r_const, samp
         if isStumbling(X0[i])
             X0[i], R[i] = initialStateWithBumps(
                             rand(pi-α+0.2f0:0.05f0:pi+α-0.2f0), 
-                            rand(-4.0f0:0.05f0:-1.0f0), 
+                            rand(-3.0f0:0.1f0:0.0f0), 
                             rand(-pi/4.0f0:0.05f0:pi/4.0f0), 
                             rand(-1.0f0:0.1f0:1.0f0), r_const)
         end
@@ -211,7 +206,7 @@ function controlToHipSpeedUnvevenTerrain(;T=Float32)
         println("X0 = ", X0)
         println("R = ", R)
 
-        l(θ)  = trajLoss(X0, R, θ; totalTime=2000)
+        l(θ)  = trajLoss(X0, R, θ; totalTime=6000)
         lg    = ForwardDiff.gradient(l, param)
 
         if counter > 4
