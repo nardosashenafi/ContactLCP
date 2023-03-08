@@ -46,6 +46,21 @@ function unstackParams(param)
     return μ_param, σ_param
 end
 
+function map(state::Vector{T}, param) where {T<:Real}
+    μ_param, _ = unstackParams(param)
+    return MLBasedESC.controller(npbc, inputLayer(state), μ_param)
+end
+
+function marginalize(state::Vector{T}, param; sampleNum=5) where {T<:Real}
+    effort = 0.0f0
+    for _ in 1:sampleNum
+        w = rand(getq(param))
+        effort += MLBasedESC.controller(npbc, inputLayer(state), w)
+    end
+
+    return effort/sampleNum
+end
+
 function controlToHipSpeed()
 
     fig1 = figure()
