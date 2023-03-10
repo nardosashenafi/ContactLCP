@@ -40,7 +40,24 @@ function oneTimeStepWithNoise(lcp::Lcp, x, sysParam, controlParam::AbstractArray
     return x2
 end
 
-oneStep(x, sysParam, controlParam; kwargs...) = oneTimeStepWithNoise(lcp, x, sysParam, controlParam; kwargs...)
+function oneTimeStepWithNoise(lcp::Lcp, x, sysParam, u::T; Δt = 0.001f0, kwargs...) where {T<:Real}
+
+    qA, uA  = lcp.sys(x)
+    qM      = qA + 0.5f0*Δt*uA
+
+    x_mid   = vcat(qM, uA)
+    gn, γn, γt, M, h, Wn, Wt, ϵn, ϵt, μ, gThreshold = sysAttributes(lcp, x_mid, sysParam, u; kwargs...)
+    λn, λt, λR  = solveLcp(gn, γn, γt, M, h, Wn, Wt, ϵn, ϵt, μ, gThreshold, x_mid; Δt=Δt)
+
+    ####complete integration
+    uE = M\((Wn - Wt*diagm(0 => μ))*λn + Wt*λR + h*Δt) + uA
+    qE = qM + 0.5f0*Δt*uE
+
+    return vcat(qE,uE)
+end
+
+oneStep(x, sysParam, controlParam::AbstractArray{T}; kwargs...) where {T<:Real} = oneTimeStepWithNoise(lcp, x, sysParam, controlParam; kwargs...)
+oneStep(x, sysParam, u::T; kwargs...) where {T<:Real} = oneTimeStepWithNoise(lcp, x, sysParam, u; kwargs...)
 
 function trajectory(x0, r, controlParam::Vector{T}; expert=false, Δt = Δt, totalTimeStep = 1000) where {T<:Real}
 
@@ -181,4 +198,102 @@ function plots(Z, fig1)
     plot(getindex.(Z, 5))
     ylabel("vx [m/s]", fontsize=15)
     println("Average hip speed = ", mean(getindex.(Z, 5)))
+end
+
+function integrateMarginalization(x0, r, controlParam::Vector{T}, sampleNum; expert=false, Δt = Δt, totalTimeStep = 1000) where {T<:Real}
+
+    X           = Vector{Vector{T}}(undef, totalTimeStep)
+    obstacles   = Vector{Vector{Vector{T}}}(undef, totalTimeStep)
+    sysParam    = createUnevenTerrain(x0, r)
+    x           = deepcopy(x0)
+    θi          = x[4]
+
+    for i in 1:totalTimeStep
+        if abs( x[4] - θi) > 2pi - 2α
+            sysParam = createUnevenTerrain(x, r)
+            θi =  x[4]
+        end
+        u       = marginalize(x, controlParam; sampleNum=sampleNum)
+        x       = oneStep(x, sysParam, u; Δt=Δt, expert=expert)
+        X[i]    = x
+        obstacles[i] = sysParam
+    end
+
+    return X, obstacles
+    
+end
+
+function control(z, u::T; expert=false) where {T<:Real}
+    q, v = parseStates(z)
+
+    if expert #working expert controller
+        @assert length(θp) == 2
+        return -θp[1]*(q[3]-0.65f0) - θp[2]*v[3]
+    else    
+        return clamp(u, -satu, satu)
+    end
+end
+
+function genForces(z, u::T; expert=false) where {T<:Real}
+
+    q, v = parseStates(z)
+    x, y, ϕ, θ = q
+    xdot, ydot, ϕdot, θdot = v
+    #h = Bu - C qdot - G
+    B = [0.0f0, 0.0f0, 1.0f0, -1.0f0]
+
+    C = [0.0f0 0.0f0 -m2*l2*sin(ϕ)*ϕdot 0.0f0;
+        0.0f0 0.0f0 m2*l2*cos(ϕ)*ϕdot 0.0f0;
+        -m2*l2*sin(ϕ)*ϕdot m2*l2*cos(ϕ)*ϕdot 0.0f0 0.0f0;
+        0.0f0 0.0f0 0.0f0 0.0f0]
+
+    G = [-mt*g*sin(γ), 
+        mt*g*cos(γ), 
+        m2*g*l2*sin(ϕ - γ),
+        0.0f0]
+
+    return B*control(z, u; expert=expert) - C*v - G
+end
+
+function (sys::RimlessWheel)(z, sysParam, u::T; ϵn=ϵn_const, ϵt=ϵt_const, μ=μ_const, gThreshold=gThreshold, expert=false) where {T<:Real}
+    q, v = parseStates(z)
+    x, y, ϕ, θ = q
+    gn, Wn, Wt = gap(z, sysParam)
+    γn  = vnormal(Wn, v)
+    γt  = vtang(Wt, v)
+    M   = massMatrix(ϕ)
+    h   = genForces(z, u; expert=expert)
+
+    return gn, γn, γt, M, h, Wn, Wt, ϵn, ϵt, μ, gThreshold
+end
+
+function compareBayesianDeterministic(controlParam; k=k)
+
+    Δh = range(0.0, step=0.1, length=10)
+    hardware_data = BSON.load("/home/nardosashenafi/repos/ContactLCP/examples/rimlessWheel/hardware_data/determinisitic_bestRun.bson")
+
+    for δh in Δh
+        rvec = 0.0
+        [append!(rvec[end] + iseven(i)*δh) for i in 1:k]
+        initialStateWithBumps(θ0, θ0dot, ϕ0, ϕ0dot, rvec)
+    end
+end
+
+function controllerDistributions(param, sampleNum)
+    
+    u   = Vector{eltype(param)}(undef, sampleNum)
+    xi  = [2.782345f-5
+             0.32197183
+             0.0
+             3.1415
+             0.15
+            -1.3911725f-5
+             0.0
+            -0.5]
+
+    for i in 1:sampleNum
+        u[i] = MLBasedESC.controller(npbc, inputLayer(xi), rand(getq(param)))
+    end
+
+    Plots.histogram(u)
 end
