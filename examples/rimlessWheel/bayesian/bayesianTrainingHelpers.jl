@@ -84,7 +84,7 @@ end
 function hipSpeedLoss(Z, obstacles; gThreshold=gThreshold, k=k, α=α)
 
     #loss of one trajectory
-    xd_dot  = 0.5f0
+    xd_dot  = 2.0f0
     loss = 0.0f0
     ki = 0
 
@@ -101,14 +101,14 @@ function hipSpeedLoss(Z, obstacles; gThreshold=gThreshold, k=k, α=α)
             ki = spokeNearGround(gn) - 1
         end
         error = xd_dot - (l1 * cos(z[4] + 2*α*ki) * z[8])
-        loss += 10.0f0*dot(error, error) + 0.1f0*dot(z[7], z[7])
+        loss += 10.0f0*dot(error, error) + 0.5f0*dot(z[7], z[7])
     end
 
     return 1.0f0/length(Z)*loss
 end
 
 function isStumbling(x)
-    x[8] >= -0.01
+    x[8] >= -0.2
 end
 
 function sampleInitialStates(controlParam::Vector{T}, sampleNum; α=α, totalTime=1000) where {T<:Real}

@@ -89,11 +89,11 @@ function controlToHipSpeed()
 
     @showprogress for i in 1:5000
 
-        X0, R = sampleInitialStates(param, minibatchsize; totalTime=6000)
+        X0, R = sampleInitialStates(param, minibatchsize; totalTime=7000)
         println("X0 = ", X0)
         println("R = ", R)
         Threads.@threads for i in eachindex(X0)
-            model   = fitLoss(X0[i], R[i], param; totalTimeStep=5000)
+            model   = fitLoss(X0[i], R[i], param; totalTimeStep=4000)
             AdvancedVI.grad!(vo, alg, getq, model, param, diff_results[i], elbo_num)
         end
 

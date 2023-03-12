@@ -1,11 +1,11 @@
 export RimlessWheel
 
-const m1           = 1.13f0    
+const m1           = 2.30f0    
 const m2           = 3.385f0
 const l1           = 0.3f0        #wheel
 const l2           = 0.06f0          #torso COM
 const mt           = m1 + m2
-const I1           = 0.0885f0/2.0f0
+const I1           = 0.0885f0
 const I2           = m2*l2^2.0f0/3.0f0
 const g            = 9.81f0
 const k            = 10
