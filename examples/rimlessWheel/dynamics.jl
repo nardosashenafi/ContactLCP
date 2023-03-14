@@ -35,6 +35,44 @@ function initialState(θ0, θ0dot, ϕ0, ϕ0dot; γi = 0.0f0)
     return [x, y, ϕ, θ, xdot, ydot, ϕdot, θdot]
 end
 
+function initialStateRandomAngle(θ0, θ0dot, ϕ0, ϕ0dot; γi = 0.0f0)
+    @assert pi-α <= θ0 <= pi+α "Give an initial spoke angle for the spoke in contact. This helps calculate (x, y) correctly and sets the rimless wheel in contact with the surface. Pick initial θ0 such that pi-α <= θ0 <= pi+α"
+    
+    x = l1*sin(pi-θ0)
+    y = l1*cos(pi-θ0)
+    ϕ = ϕ0 
+    xdot = -l1*cos(pi-θ0) * θ0dot
+    ydot = l1*sin(pi-θ0) * θ0dot
+    ϕdot = ϕ0dot 
+    θdot = θ0dot
+
+    ki = rand(0:1:k-1)
+    θ = θ0 + rand(-1:1:1)*2*α*ki
+
+    return [x, y, ϕ, θ, xdot, ydot, ϕdot, θdot]
+end
+
+function initialStateWithBumpsRandomAngle(θ0::T, θ0dot, ϕ0, ϕ0dot, rmax::T; k=k, α=α) where {T<:Real}
+    @assert pi-α <= θ0 <= pi+α "Give an initial spoke angle for the spoke in contact. This helps calculate (x, y) correctly and sets the rimless wheel in contact with the surface. Pick initial θ0 such that pi-α <= θ0 <= pi+α"
+    
+    r = rmax*rand(T, k)
+    x = l1*sin(pi-θ0)
+    y = r[1] + l1*cos(pi-θ0) 
+    ϕ = ϕ0 
+    xdot = -l1*cos(pi-θ0) * θ0dot
+    ydot = l1*sin(pi-θ0) * θ0dot
+    ϕdot = ϕ0dot 
+    θdot = θ0dot
+
+    ki = rand(0:1:k-1)
+    θ = θ0 + rand(-1:1:1)*2*α*ki
+    #make sure the next spoke is not penetrating into the bump
+    r[2] = r[1]*0.5
+    r[10] = r[1]*0.5
+    return [x, y, ϕ, θ, xdot, ydot, ϕdot, θdot], r
+end
+
+
 function initialStateWithBumps(θ0::T, θ0dot, ϕ0, ϕ0dot, rmax::T; k=k, α=α) where {T<:Real}
     @assert pi-α <= θ0 <= pi+α "Give an initial spoke angle for the spoke in contact. This helps calculate (x, y) correctly and sets the rimless wheel in contact with the surface. Pick initial θ0 such that pi-α <= θ0 <= pi+α"
     

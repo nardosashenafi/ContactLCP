@@ -19,7 +19,7 @@ Hd              = FastChain(FastDense(6, 8, elu),
                   FastDense(7, 1))
 const N         = 6
 npbc            = MLBasedESC.NeuralPBC(N, Hd)
-const satu      = 3.0f0
+const satu      = 2.0f0
 
 function extractStumbling(X)
     ind = findfirst(x -> x >= -0.01, getindex.(X, 8))
@@ -59,7 +59,7 @@ end
 function hipSpeedLoss(Z; gThreshold=gThreshold, k=k, α=α)
 
     #loss of one trajectory
-    xd_dot  = 0.5f0
+    xd_dot  = 1.0f0
 
     loss = 0.0f0
     ki = 0
@@ -76,7 +76,7 @@ function hipSpeedLoss(Z; gThreshold=gThreshold, k=k, α=α)
             ki = spokeNearGround(gn) - 1
         end
         error = xd_dot - (l1 * cos(z[4] + 2*α*ki) * z[8])
-        loss += 10.0f0*dot(error, error) + 0.1f0*dot(z[7], z[7])
+        loss += 30.0f0*dot(error, error) + 1.0f0*dot(z[7], z[7])
     end
 
     return 1.0f0/length(Z)*loss
@@ -96,10 +96,10 @@ function controlToHipSpeed(;T=Float32)
     test(X, θ, grad)  = testControl(X, θ, grad, fig1; timeSteps=8000)
 
     @showprogress for i in 1:5000
-        X0    = sampleInitialStates(param, minibatchSize; totalTime=5000)
+        X0    = sampleInitialStates(param, minibatchSize; totalTime=7000)
         println("X0 = ", X0)
 
-        l(θ)  = trajLoss(X0, θ; totalTime=2000)
+        l(θ)  = trajLoss(X0, θ; totalTime=4000)
         lg    = ForwardDiff.gradient(l, param)
 
         if counter > 4
