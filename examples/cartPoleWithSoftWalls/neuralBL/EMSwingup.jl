@@ -188,8 +188,9 @@ function trainEM()
     minibatch   = 3
     diff_results = DiffResults.GradientResult(param)
     initialExploration = 0.60
+    iteration = 0
 
-    for i in 1:90000
+    for i in 1:10000
         ψ, θk   = unstackParams(param)
         #Apply combination of DAgger and uniform sampling around the desired equilbrium state
         #inorder to assist exploration 
@@ -216,11 +217,12 @@ function trainEM()
                 xi = x0[1]
             end
             X = testBayesian(xi, ψ, θk; totalTimeStep=7000)
-            println("MOE loss = ", averageControlLoss([xi], param, explorationPercent; totalTimeStep=7000), " POI = ", poi(xi, ψ))
+            println("iteration = ", iteration, " MOE loss = ", averageControlLoss([xi], param, explorationPercent; totalTimeStep=7000), " POI = ", poi(xi, ψ))
             # BSON.@save "neuralBL/savedWeights/setdistancetraining.bson" param
             counter = 0
         end
         counter += 1
+        iteration += 1
         Flux.update!(opt, param, grads)
     end
 end

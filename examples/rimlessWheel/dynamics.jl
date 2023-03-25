@@ -46,8 +46,7 @@ function initialStateRandomAngle(θ0, θ0dot, ϕ0, ϕ0dot; γi = 0.0f0)
     ϕdot = ϕ0dot 
     θdot = θ0dot
 
-    ki = rand(0:1:k-1)
-    θ = θ0 + rand(-1:1:1)*2*α*ki
+    θ   = θ0 + rand(-1:1:1)*2*α*rand(0:1:k-1)
 
     return [x, y, ϕ, θ, xdot, ydot, ϕdot, θdot]
 end
@@ -64,11 +63,10 @@ function initialStateWithBumpsRandomAngle(θ0::T, θ0dot, ϕ0, ϕ0dot, rmax::T; 
     ϕdot = ϕ0dot 
     θdot = θ0dot
 
-    ki = rand(0:1:k-1)
-    θ = θ0 + rand(-1:1:1)*2*α*ki
+    θ   = θ0 + rand(-1:1:1)*2*α*rand(0:1:k-1)
     #make sure the next spoke is not penetrating into the bump
-    r[2] = r[1]*0.5
-    r[10] = r[1]*0.5
+    # r[2] = r[1]*0.5
+    # r[10] = r[1]*0.5
     return [x, y, ϕ, θ, xdot, ydot, ϕdot, θdot], r
 end
 
@@ -87,8 +85,8 @@ function initialStateWithBumps(θ0::T, θ0dot, ϕ0, ϕ0dot, rmax::T; k=k, α=α)
     θdot = θ0dot
 
     #make sure the next spoke is not penetrating into the bump
-    r[2] = r[1]*0.5
-    r[10] = r[1]*0.5
+    # r[2] = r[1]*0.5
+    # r[10] = r[1]*0.5
     return [x, y, ϕ, θ, xdot, ydot, ϕdot, θdot], r
 end
 
@@ -309,7 +307,7 @@ function control(z, θp::Vector{T}; expert=false) where {T<:Real}
 
     if expert #working expert controller
         @assert length(θp) == 2
-        return -θp[1]*(q[3]-0.65f0) - θp[2]*v[3]
+        return -θp[1]*(q[3]-1.0f0) - θp[2]*v[3]
     else
         # u = -θp[1]*(q[3]-0.38f0) - θp[2]*v[3]
         # @assert length(θp) == DiffEqFlux.paramlength(unn) 
