@@ -24,6 +24,44 @@ function testBayesian(xi, ψ, uk; totalTimeStep = totalTimeStep)
     plotPartition(ψ, uk, X)
 end
 
+function testBayesianPaper(xi, ψ, uk; totalTimeStep = totalTimeStep)    
+    X,U = integrate(xi, ψ, uk; totalTimeStep = totalTimeStep)
+
+    clf()
+    width = 30
+    X1 = range(-10.0f0, 10.0f0, length=width)
+    X2 = range(-10.0f0, 10.0f0, length=width)
+    
+    u = Matrix{Int}(undef, width, width)
+    c = Matrix{Int}(undef, width, width)
+
+    for i in 1:width    #row
+        for j in 1:width    #column
+            pk      = bin(vcat(X1[j], X2[width-i+1]), ψ)
+            c[i, j] = argmax(pk)
+            u[i, j] = uk[c[i, j]]
+        end
+    end
+
+    custom_font = 15
+    plt.subplot(1, 2, 1)
+    scatter(X[end][1], X[end][2], marker="*", color="red", s=300, zorder=2)
+    plot(getindex.(X, 1), getindex.(X, 2), color="black", linewidth=5, zorder=1)
+    ylabel(L"x_2", fontsize=custom_font)
+    xlabel(L"x_1", fontsize=custom_font)
+    tick_params(axis="both", labelsize=custom_font)
+
+    imshow(u, extent = [X1[1], X1[end], X2[1], X2[end]])
+    title("Control", fontsize=custom_font)
+
+    plt.subplot(1, 2, 2)
+    imshow(c, extent = [X1[1], X1[end], X2[1], X2[end]])
+    title("State partitions", fontsize=custom_font)
+    ylabel(L"x_2", fontsize=custom_font)
+    xlabel(L"x_1", fontsize=custom_font)
+    tick_params(axis="both", labelsize=custom_font)
+end
+
 function plotPartition(ψ, uk, X)
     width = 30
     X1 = range(-5.0f0, 5.0f0, length=width)

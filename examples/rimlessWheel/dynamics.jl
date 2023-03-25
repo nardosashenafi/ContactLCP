@@ -46,8 +46,7 @@ function initialStateRandomAngle(θ0, θ0dot, ϕ0, ϕ0dot; γi = 0.0f0)
     ϕdot = ϕ0dot 
     θdot = θ0dot
 
-    ki = rand(0:1:k-1)
-    θ = θ0 + rand(-1:1:1)*2*α*ki
+    θ   = θ0 + rand(-1:1:1)*2.0f0*α*rand(0:1:k-1)
 
     return [x, y, ϕ, θ, xdot, ydot, ϕdot, θdot]
 end
@@ -64,8 +63,7 @@ function initialStateWithBumpsRandomAngle(θ0::T, θ0dot, ϕ0, ϕ0dot, rmax::T; 
     ϕdot = ϕ0dot 
     θdot = θ0dot
 
-    ki = rand(0:1:k-1)
-    θ = θ0 + rand(-1:1:1)*2*α*ki
+    θ   = θ0 + rand(-1:1:1)*2.0f0*α*rand(0:1:k-1)
     #make sure the next spoke is not penetrating into the bump
     r[2] = r[1]*0.5
     r[10] = r[1]*0.5
@@ -534,6 +532,44 @@ function animate(Z, sysParam; γ=γ)
     end
 end
 
+
+function createAnimateObjectForPaper(; spokeGap=0.2, k=k, α=α, γ=γ, ls=ls)
+
+    z = initialState(pi+α-0.5, 0.0f0, 1.3f0, 0.0f0)
+
+    x0, y0, ϕ0, θ0 = z[1:4]
+    vspokes1 = vis[:spokes1]
+
+    for ki in range(0, stop=k-1, step=1)
+        vki = vspokes1[Symbol("spoke" * String("$ki"))]
+
+        setobject!(vki, MeshObject(
+            Cylinder(Point(0.0, 0.0, 0.0), Point(0.0, 0.0, l1), 0.007),
+            MeshLambertMaterial(color=RGBA{Float32}(0.0, 0.0, 0.0, 0.3))))
+        settransform!(vki, Translation(0.0, x0, y0) ∘ LinearMap(RotX(θ0+2*α*ki+γ)))
+    end
+
+
+    vtorso = vis[:torso]
+    setobject!(vtorso[:link], MeshObject(
+        HyperRectangle(Vec(0.0, 0.0, 0.0), Vec(0.0, 0.02, 0.15)),
+        MeshLambertMaterial(color=RGBA{Float32}(0.0, 0.0, 0.0, 1.0))))
+    settransform!(vtorso[:link], Translation(0.0, x0+0.01, y0) ∘ LinearMap(RotX(ϕ0+pi)))
+   
+    setobject!(vtorso[:bob], MeshObject(
+        HyperSphere(Point(0.0, 0.0, 0.0), 0.01),
+        MeshLambertMaterial(color=RGBA{Float32}(0.0, 0.0, 0.0, 1.0))))
+    settransform!(vtorso[:bob], Translation(0.0, x0+0.15*sin(pi-ϕ0), y0+0.15*cos(pi-ϕ0) ))
+    
+    vrunway = vis[:runway]
+    setobject!(vrunway[:runway], MeshObject(
+        Rect(Vec(0.0, 0.0, 0.0), Vec(0.0, ls, 0.01)),
+        MeshLambertMaterial(color=RGBA{Float32}(0.0, 0.0, 0.0, 0.7))))
+    settransform!(vrunway[:runway], Translation(0.0, x0-0.2, 0.0) ∘ LinearMap(RotX(γ)))
+
+    return vspokes1, vtorso, vrunway #, vspokes2
+end
+
 function startAnimator()
     window = Window()
     vis = Visualizer()
@@ -557,6 +593,28 @@ function plots(Z)
     fig1 = plt.figure(1)
     plots(Z, fig1)
 
+end
+
+function plots(Z, param, fig1)
+    PyPlot.figure(1)
+    fig1.clf()
+    subplot(2, 2, 1)
+    plot(getindex.(Z, 3), getindex.(Z, 7))
+    scatter(Z[end][3], Z[end][7])
+    ylabel(L"\dot{\phi} [rad/s]", fontsize=15)
+    subplot(2, 2, 2)
+    θ, impactIndex = spokeInContact(Z)
+    plot(θ, getindex.(Z, 8))
+    scatter(θ[end], Z[end][8])
+    ylabel(L"\dot{\theta} [rad/s]", fontsize=15)
+    subplot(2, 2, 3)
+    plot(getindex.(Z, 5))
+    ylabel("vx [m/s]", fontsize=15)
+    subplot(2, 2, 4)
+    τ = [control(z, param) for z in Z]
+    plot(τ)
+    ylabel(L"\tau", fontsize=15)
+    println("Average hip speed = ", mean(getindex.(Z, 5)))
 end
 
 function plots(Z, fig1)

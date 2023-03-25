@@ -39,7 +39,7 @@ end
 
 function sampleInitialState(ψ::Vector{T}, uk; totalTimeStep = totalTimeStep, minibatch=4) where {T<:Real}
     
-    x0 = [rand(-4.0:0.001:4.0), rand(-4.0:0.001:4.0)]
+    x0 = [rand(-10.0:0.01:10.0), rand(-10.0:0.01:10.0)]
     X  = trajectory(x0, ψ, uk)
     
     samples = Vector{Vector{T}}()
