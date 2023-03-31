@@ -222,7 +222,6 @@ function plots(Z, fig1)
     println("Average hip speed = ", mean(getindex.(Z, 5)))
 end
 
-<<<<<<< HEAD
 function MAP(state::Vector{T}, param) where {T<:Real}
     μ_param, _ = unstackParams(param)
     return MLBasedESC.controller(npbc, inputLayer(state), μ_param)
@@ -236,7 +235,8 @@ function marginalize(state::Vector{T}, param; sampleNum=5) where {T<:Real}
     end
 
     return effort/sampleNum
-=======
+end
+
 function plots(Z, param, fig1)
     PyPlot.figure(1)
     fig1.clf()
@@ -257,7 +257,6 @@ function plots(Z, param, fig1)
     plot(τ)
     ylabel(L"\tau", fontsize=15)
     println("Average hip speed = ", mean(getindex.(Z, 5)))
->>>>>>> fadc38f4090567bceb8261b8566ca1a0ad45d64b
 end
 
 function integrateMarginalization(x0, r, controlParam::Vector{T}, sampleNum; expert=false, Δt = Δt, totalTimeStep = 1000) where {T<:Real}
