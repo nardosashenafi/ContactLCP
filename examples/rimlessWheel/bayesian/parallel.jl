@@ -34,6 +34,7 @@ designmethod    = DSP.Butterworth(4)
     0.0 ~ Distributions.Normal(l11, 0.0001f0)
 end
 
+<<<<<<< HEAD
 function getq(param)
     μ_param, σ_param = unstackParams(param)
     return MvNormal(μ_param, LogExpFunctions.softplus.(σ_param))
@@ -61,6 +62,8 @@ function marginalize(state::Vector{T}, param; sampleNum=5) where {T<:Real}
     return effort/sampleNum
 end
 
+=======
+>>>>>>> fadc38f4090567bceb8261b8566ca1a0ad45d64b
 function controlToHipSpeed()
 
     fig1 = figure()
@@ -106,9 +109,10 @@ function controlToHipSpeed()
         @. param = param - Δ
 
         ##########################################################
+        push!(elbo_data, vo(alg, getq(param), model, elbo_num))
+
         if mod(i, 5) == 0.0 
             model   = fitLoss(X0[1], R[1], param; totalTimeStep=6000)
-            push!(elbo_data, vo(alg, getq(param), model, elbo_num))
             converged = hasconverged(X0[1], R[1], param, elbo_data,i) 
         end
 

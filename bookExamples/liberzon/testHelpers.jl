@@ -27,7 +27,7 @@ end
 function testBayesianPaper(xi, ψ, uk; totalTimeStep = totalTimeStep)    
     X,U = integrate(xi, ψ, uk; totalTimeStep = totalTimeStep)
 
-    clf()
+    fig, (ax1, ax2) = plt.subplots(figsize=(10, 10), ncols=2, nrows=1)
     width = 30
     X1 = range(-10.0f0, 10.0f0, length=width)
     X2 = range(-10.0f0, 10.0f0, length=width)
@@ -43,23 +43,23 @@ function testBayesianPaper(xi, ψ, uk; totalTimeStep = totalTimeStep)
         end
     end
 
-    custom_font = 15
-    plt.subplot(1, 2, 1)
-    scatter(X[end][1], X[end][2], marker="*", color="red", s=300, zorder=2)
-    plot(getindex.(X, 1), getindex.(X, 2), color="black", linewidth=5, zorder=1)
-    ylabel(L"x_2", fontsize=custom_font)
-    xlabel(L"x_1", fontsize=custom_font)
-    tick_params(axis="both", labelsize=custom_font)
+    custom_font = 25
+    ax1.scatter(X[end][1], X[end][2], marker="*", color="red", s=300, zorder=2)
+    ax1.plot(getindex.(X, 1), getindex.(X, 2), color="black", linewidth=5, zorder=1)
+    ax1.set_ylabel(L"x_2", fontsize=custom_font)
+    ax1.set_xlabel(L"x_1", fontsize=custom_font)
+    ax1.tick_params(axis="both", labelsize=custom_font)
 
-    imshow(u, extent = [X1[1], X1[end], X2[1], X2[end]])
-    title("Control", fontsize=custom_font)
+    ax1.imshow(u, extent = [X1[1], X1[end], X2[1], X2[end]])
+    ax1.set_title("State Partition", fontsize=custom_font)
 
-    plt.subplot(1, 2, 2)
-    imshow(c, extent = [X1[1], X1[end], X2[1], X2[end]])
-    title("State partitions", fontsize=custom_font)
-    ylabel(L"x_2", fontsize=custom_font)
-    xlabel(L"x_1", fontsize=custom_font)
-    tick_params(axis="both", labelsize=custom_font)
+    ax2.imshow(c, extent = [X1[1], X1[end], X2[1], X2[end]])
+    ax2.title("State partitions", fontsize=custom_font)
+    ax2.set_ylabel(L"x_2", fontsize=custom_font)
+    ax2.set_xlabel(L"x_1", fontsize=custom_font)
+    ax2.tick_params(axis="both", labelsize=custom_font)
+    ax2.set_title("Control", fontsize=custom_font)
+    tight_layout(pad=2.0)
 end
 
 function plotPartition(ψ, uk, X)

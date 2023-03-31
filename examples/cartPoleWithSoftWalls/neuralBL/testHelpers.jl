@@ -214,6 +214,9 @@ end
 
 function completePlots(ψ, θk; xi = [0.0f0, pi, 0.0f0, 0.1f0])
 
+    moe = BSON.load("./savedWeights/for_paper_friction12_setdistancetraining_3NN_psi_5-4-4-3-3-1-thetak-5-10-10-4-4-1_elu copy.bson")[:param]
+    ψ, θk   = unstackParams(moe)
+
     X, _ = integrate(xi, ψ, θk; totalTimeStep = 4500)
     fig, (ax1, ax2, ax3, ax4, ax5, ax6) = plt.subplots(figsize=(13, 3), ncols=3, nrows=2)
     ###################Plot trajectory
@@ -223,7 +226,7 @@ function completePlots(ψ, θk; xi = [0.0f0, pi, 0.0f0, 0.1f0])
     ax1.scatter(X[3980][2], X[3980][4], marker="*", s=100, color="red", zorder=2)
 
     #################plot experimental data
-    file = MATLAB.MatFile("./hardware/cartpole_MOE/hardware_data/cartpole_MOE_2_8_firstCatchUnderlayment.mat", "r")
+    file = MATLAB.MatFile("./../hardware/cartpole_MOE/hardware_data/cartpole_MOE_2_8_firstCatchUnderlayment.mat", "r")
     data = get_variable(file, "cart_data")
     MATLAB.close(file)
 
@@ -238,16 +241,16 @@ function completePlots(ψ, θk; xi = [0.0f0, pi, 0.0f0, 0.1f0])
     ax1.set_ylabel(L"\dot{\theta}")
     ax1.set_xlabel(L"\theta")
     #####################Plot Control input 
-    width = 30
+    wid = 30
     
-    X2    = range(-1.0, 2.0f0pi, length=width)
-    X2dot = range(-10.0f0, 10.0f0, length=width)
+    X2    = range(-1.0, 2.0f0pi, length=wid)
+    X2dot = range(-10.0f0, 10.0f0, length=wid)
 
-    u = Matrix{Float32}(undef, width, width)
-    c = Matrix{Int}(undef, width, width)
+    u = Matrix{Float32}(undef, wid, wid)
+    c = Matrix{Int}(undef, wid, wid)
 
-    for i in 1:width    #row
-        for j in 1:width    #column
+    for i in 1:wid    #row
+        for j in 1:wid    #column
             x       = vcat(0.0, X2[j], 0.0f0, X2dot[i])
             pk      = bin(x, ψ)
             c[i,j]  = argmax(pk)
@@ -284,11 +287,11 @@ function completePlots(ψ, θk; xi = [0.0f0, pi, 0.0f0, 0.1f0])
 
     #####################Plot Control input 
 
-    u = Matrix{Float32}(undef, width, width)
-    c = Matrix{Int}(undef, width, width)
+    u = Matrix{Float32}(undef, wid, wid)
+    c = Matrix{Int}(undef, wid, wid)
 
-    for i in 1:width    #row
-        for j in 1:width    #column
+    for i in 1:wid    #row
+        for j in 1:wid    #column
             x       = vcat(d+D, X2[j], 0.1f0, X2dot[i])
             pk      = bin(x, ψ)
             c[i,j]  = argmax(pk)
@@ -315,6 +318,131 @@ function completePlots(ψ, θk; xi = [0.0f0, pi, 0.0f0, 0.1f0])
 
     postImpactImage = 1.0 .- Float64.(Gray.(load("../../media/plots/MOEpostImpact.png")))
     ax6.imshow(postImpactImage, cmap="binary")
+
+
+end
+
+function completePlotssplit(ψ, θk; xi = [0.0f0, pi, 0.0f0, 0.1f0])
+
+    moe = BSON.load("./savedWeights/for_paper_friction12_setdistancetraining_3NN_psi_5-4-4-3-3-1-thetak-5-10-10-4-4-1_elu copy.bson")[:param]
+    ψ, θk   = unstackParams(moe)
+
+    X, _ = integrate(xi, ψ, θk; totalTimeStep = 7500);
+    fig, (ax1, ax3) = plt.subplots(figsize=(10, 10), ncols=2, nrows=1)
+    ###################Plot trajectory
+    
+    preimpact = 5687
+    postimpact = 5690
+    custom_fontsize = 18
+    custom_linewidth=2.0
+
+    ax1.plot(getindex.(X[1:preimpact], 2), getindex.(X[1:preimpact], 4), color="black", label="Simulation")
+    ax1.scatter(X[1][2], X[1][4], marker="P", s=100, color="blue", zorder=2)
+    ax1.scatter(X[preimpact][2], X[preimpact][4], marker="*", s=100, color="red", zorder=3)
+
+    #################plot experimental data
+    file = MATLAB.MatFile("./../hardware/cartpole_MOE/hardware_data/cartpole_MOE_2_8_firstCatchUnderlayment.mat", "r")
+    data = get_variable(file, "cart_data")
+    MATLAB.close(file)
+
+    theta = 2*pi .- (pi .- data[4,:])
+    thetadot = data[6,:]
+
+    thetadot[1:100] .= 0.0
+
+    ax1.plot(theta[1:3550], thetadot[1:3550],  linestyle="dotted", color="black", label="Experiment")
+
+    ax1.legend()
+    ax1.set_ylabel(L"\dot{\theta}")
+    ax1.set_xlabel(L"\theta")
+
+    #####################Plot Control input 
+
+    wid = 30
+    
+    X2    = range(-1.0, 2.0f0pi, length=wid)
+    X2dot = range(-10.0f0, 10.0f0, length=wid)
+
+    u = Matrix{Float32}(undef, wid, wid)
+    c = Matrix{Int}(undef, wid, wid)
+
+    for i in 1:wid    #row
+        for j in 1:wid    #column
+            x       = vcat(0.0, X2[j], 0.0f0, X2dot[i])
+            pk      = bin(x, ψ)
+            c[i,j]  = argmax(pk)
+            u[i, j] = input(x, θk, c[i,j])[1]
+        end
+    end
+
+    controlContour = ax3.contourf(X2, X2dot, u, cmap="binary", zorder=1)
+    colorbar(controlContour, ax = ax3)
+    ax3.set_title("Control Input at "* L"[x,\dot{x}]  = [0, 0]", fontsize = custom_fontsize)
+    ax3.set_ylabel(L"\dot{\theta}", fontsize = custom_fontsize)
+    ax3.set_xlabel(L"\theta", fontsize = custom_fontsize)
+
+    ###################Overlap bins contour plot
+    binContour = ax3.contour(X2, X2dot, c, cmap="bone")
+    ax3.scatter(X[1][2], X[1][4], marker="P", s=100, color="blue", zorder=2)
+
+    fig, (ax2, ax4) = plt.subplots(figsize=(15, 8), ncols=2, nrows=1)
+
+    #############Repeat for post impact 
+    #################Plot trajectory
+    ax2.plot(getindex.(X[1:preimpact], 2), getindex.(X[1:preimpact], 4), linewidth=custom_linewidth, color="black", label="Simulation")
+    ax2.plot(getindex.(X[preimpact:postimpact], 2), getindex.(X[preimpact:postimpact], 4),  linewidth=custom_linewidth, linestyle="dashed", color="red", label="Impact")
+    ax2.plot(getindex.(X[postimpact:end], 2), getindex.(X[postimpact:end], 4), color="black", linewidth=custom_linewidth)
+    ax2.scatter(X[preimpact][2], X[preimpact][4], marker="P", s=100, color="blue", zorder=4)
+    ax2.scatter(X[postimpact][2], X[postimpact][4], marker="*", s=100, color="red", zorder=4)
+    ax2.set_ylabel(L"\dot{\theta}", fontsize = custom_fontsize)
+    ax2.set_xlabel(L"\theta", fontsize = custom_fontsize)
+    ax1.tick_params(axis="both", labelsize=custom_fontsize)
+
+    ##################plot experimental data
+    ax2.plot(theta[1:3550], thetadot[1:3550],  linestyle="dotted", color="black",  linewidth=custom_linewidth, label="Experiment")
+    ax2.plot(theta[3550:3620], thetadot[3550:3620],  linestyle="dashed", color="green", linewidth=custom_linewidth)
+    ax2.scatter(theta[3620], thetadot[3620], marker="*", s=100, color="green", zorder=2)
+    ax2.plot(theta[3620:3800], thetadot[3620:3800],  linestyle="dotted", color="black",  linewidth=custom_linewidth)
+    ax2.tick_params(axis="both", labelsize=custom_fontsize)
+
+
+    #####################Plot Control input 
+
+    u = Matrix{Float32}(undef, wid, wid)
+    c = Matrix{Int}(undef, wid, wid)
+
+    for i in 1:wid    #row
+        for j in 1:wid    #column
+            x       = vcat(d+D, X2[j], 0.1f0, X2dot[i])
+            pk      = bin(x, ψ)
+            c[i,j]  = argmax(pk)
+            u[i, j] = input(x, θk, c[i,j])[1]
+        end
+    end
+
+    controlContour = ax4.contourf(X2, X2dot, u, cmap="binary")
+    cbar=colorbar(controlContour, ax = ax4)
+    cbar.ax.tick_params(labelsize=custom_fontsize)
+    ax4.set_title("Control Input at "* L"[x,\dot{x}]  = [0.36, 0.1]", fontsize=custom_fontsize)
+    ax4.set_ylabel(L"\dot{\theta}", fontsize = custom_fontsize)
+    ax4.set_xlabel(L"\theta", fontsize = custom_fontsize)
+
+    ###################Overlap bins contour plot
+    binContour = ax4.contour(X2, X2dot, c, cmap="bone", zorder=1)
+    # clabel(myc, fmt="%d")
+    ax4.scatter(X[preimpact][2], X[preimpact][4], marker="P", s=100, color="blue", zorder=4)
+    ax4.scatter(X[postimpact][2], X[postimpact][4], marker="*", s=100, color="red", zorder=4)
+    ax4.scatter(theta[3620], thetadot[3620], marker="*", s=100, color="green", zorder=4)
+    ax4.tick_params(axis="both", labelsize=custom_fontsize)
+    handles, labels = ax2.get_legend_handles_labels()
+    fig.legend(handles, labels, loc="upper center", fontsize=custom_fontsize, ncol=3)
+    fig.tight_layout(pad=2.0)
+    #########show images
+    # firstImpactImage = 1.0 .- Float64.(Gray.(load("../../media/plots/MOEfirstImpact.png")))
+    # ax5.imshow(firstImpactImage, cmap="binary")
+
+    # postImpactImage = 1.0 .- Float64.(Gray.(load("../../media/plots/MOEpostImpact.png")))
+    # ax6.imshow(postImpactImage, cmap="binary")
 
 
 end

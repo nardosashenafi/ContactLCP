@@ -12,11 +12,31 @@ lcp  = Lcp(Float32, sys)
 Δt   = 0.0002f0
 
 
+function getq(param)
+    μ_param, σ_param = unstackParams(param)
+    return MvNormal(μ_param, LogExpFunctions.softplus.(σ_param))
+end
+
 function unstackParams(param)
     μ_param = @view param[1:paramNum]
     σ_param = @view param[paramNum+1:end]
 
     return μ_param, σ_param
+end
+
+function maximumAposteriori(state::Vector{T}, param) where {T<:Real}
+    μ_param, _ = unstackParams(param)
+    return MLBasedESC.controller(npbc, inputLayer(state), μ_param)
+end
+
+function marginalize(state::Vector{T}, param; sampleNum=5) where {T<:Real}
+    effort = 0.0f0
+    for _ in 1:sampleNum
+        w = rand(getq(param))
+        effort += MLBasedESC.controller(npbc, inputLayer(state), w)
+    end
+
+    return effort/sampleNum
 end
 
 function stateAndForcesWithNoise(lcp::Lcp, x, sysParam, controlParam::AbstractArray{T}; Δt = 0.001f0, kwargs...) where {T<:Real}
@@ -84,7 +104,7 @@ end
 function hipSpeedLoss(Z, obstacles; gThreshold=gThreshold, k=k, α=α)
 
     #loss of one trajectory
-    xd_dot  = 2.0f0
+    xd_dot  = 1.0f0
     loss = 0.0f0
     ki = 0
 
@@ -101,24 +121,26 @@ function hipSpeedLoss(Z, obstacles; gThreshold=gThreshold, k=k, α=α)
             ki = spokeNearGround(gn) - 1
         end
         error = xd_dot - (l1 * cos(z[4] + 2*α*ki) * z[8])
-        loss += 10.0f0*dot(error, error) + 0.5f0*dot(z[7], z[7])
+        loss += 30.0f0*dot(error, error) + 1.0f0*dot(z[7], z[7])
     end
 
     return 1.0f0/length(Z)*loss
 end
 
 function isStumbling(x)
-    x[8] >= -0.2
+    x[8] >= -0.01
 end
 
 function sampleInitialStates(controlParam::Vector{T}, sampleNum; α=α, totalTime=1000) where {T<:Real}
 
     sampleTrajectories = Vector{Vector{Vector{T}}}()
-    rmax = 0.03f0
+    rmax = 0.02f0
 
+    # θshift = 0.2f0
+    θshift = 0.0f0
     w     = rand(getq(controlParam))
-    x0, r = initialStateWithBumps(
-                rand(pi-α+0.2f0:0.05f0:pi+α-0.2f0), 
+    x0, r = initialStateWithBumpsRandomAngle(
+                rand(pi-α+θshift:0.05f0:pi+α-θshift), 
                 rand(-3.0f0:0.05f0:0.0f0), 
                 0.0f0, 
                 rand(-1.0f0:0.1f0:1.0f0), rmax)
@@ -136,8 +158,8 @@ function sampleInitialStates(controlParam::Vector{T}, sampleNum; α=α, totalTim
             push!(X0, rand(rand(sampleTrajectories)))
             push!(R, r)
         else
-            x0, r1 = initialStateWithBumps(
-                    rand(pi-α+0.2f0:0.05f0:pi+α-0.2f0), 
+            x0, r1 = initialStateWithBumpsRandomAngle(
+                    rand(pi-α+θshift:0.05f0:pi+α-θshift), 
                     rand(-3.0f0:0.05f0:0.0f0), 
                     0.0f0, 
                     rand(-1.0f0:0.1f0:1.0f0), rmax)
@@ -149,7 +171,7 @@ function sampleInitialStates(controlParam::Vector{T}, sampleNum; α=α, totalTim
     #extract stumbling
     for i in eachindex(X0)
         if isStumbling(X0[i])
-            X0[i], R[i] = initialStateWithBumps(
+            X0[i], R[i] = initialStateWithBumpsRandomAngle(
                 rand(pi-α+0.2f0:0.05f0:pi+α-0.2f0), 
                 rand(-3.0f0:0.05f0:0.0f0), 
                 rand(-pi/4.0f0:0.05f0:pi/4.0f0), 
@@ -170,9 +192,9 @@ function hasconverged(x0, r, param, elbo_data, i)
     w                   = rand(getq(param))
     X, obstacles        = trajectory(x0, r, w; totalTimeStep=5000)
     loss                = hipSpeedLoss(X, obstacles)
-    plots(X, fig1)
+    plots(X, w, fig1)
     ax2.plot(i, filtered_elbo[end], marker=".", color="k") 
-    BSON.@save "./saved_weights/RW_bayesian_6-8-8-5-5-1_elu.bson" param
+    BSON.@save "./saved_weights/RW_bayesian_6-12-12-7-7-1_elu.bson" param
     println("loss = ", round(loss, digits=4) , " | hip speed = ", round.(mean(getindex.(X, 5)), digits=4) )
 
     return false
@@ -200,6 +222,7 @@ function plots(Z, fig1)
     println("Average hip speed = ", mean(getindex.(Z, 5)))
 end
 
+<<<<<<< HEAD
 function MAP(state::Vector{T}, param) where {T<:Real}
     μ_param, _ = unstackParams(param)
     return MLBasedESC.controller(npbc, inputLayer(state), μ_param)
@@ -213,6 +236,28 @@ function marginalize(state::Vector{T}, param; sampleNum=5) where {T<:Real}
     end
 
     return effort/sampleNum
+=======
+function plots(Z, param, fig1)
+    PyPlot.figure(1)
+    fig1.clf()
+    subplot(2, 2, 1)
+    plot(getindex.(Z, 3), getindex.(Z, 7))
+    scatter(Z[end][3], Z[end][7])
+    ylabel(L"\dot{\phi} [rad/s]", fontsize=15)
+    subplot(2, 2, 2)
+    # θ, impactIndex = spokeInContact(Z)
+    plot(getindex.(Z, 4), getindex.(Z, 8))
+    scatter(Z[end][4], Z[end][8])
+    ylabel(L"\dot{\theta} [rad/s]", fontsize=15)
+    subplot(2, 2, 3)
+    plot(getindex.(Z, 5))
+    ylabel("vx [m/s]", fontsize=15)
+    subplot(2, 2, 4)
+    τ = [control(z, param) for z in Z]
+    plot(τ)
+    ylabel(L"\tau", fontsize=15)
+    println("Average hip speed = ", mean(getindex.(Z, 5)))
+>>>>>>> fadc38f4090567bceb8261b8566ca1a0ad45d64b
 end
 
 function integrateMarginalization(x0, r, controlParam::Vector{T}, sampleNum; expert=false, Δt = Δt, totalTimeStep = 1000) where {T<:Real}
@@ -222,13 +267,14 @@ function integrateMarginalization(x0, r, controlParam::Vector{T}, sampleNum; exp
     sysParam    = createUnevenTerrain(x0, r)
     x           = deepcopy(x0)
     θi          = x[4]
+    u           = Vector{T}(undef, totalTimeStep) 
 
     for i in 1:totalTimeStep
         if abs( x[4] - θi) > 2pi - 2α
             sysParam = createUnevenTerrain(x, r)
             θi =  x[4]
         end
-        u       = marginalize(x, controlParam; sampleNum=sampleNum)
+        u[i]    = marginalize(x, controlParam; sampleNum=sampleNum)
         x       = oneStep(x, sysParam, u; Δt=Δt, expert=expert)
         X[i]    = x
         obstacles[i] = sysParam
