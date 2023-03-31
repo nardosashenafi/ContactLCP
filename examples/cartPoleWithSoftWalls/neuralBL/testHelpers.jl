@@ -333,8 +333,8 @@ function completePlotssplit(ψ, θk; xi = [0.0f0, pi, 0.0f0, 0.1f0])
     
     preimpact = 5687
     postimpact = 5690
-    custom_fontsize = 18
-    custom_linewidth=2.0
+    custom_fontsize = 25
+    custom_linewidth= 4.0
 
     ax1.plot(getindex.(X[1:preimpact], 2), getindex.(X[1:preimpact], 4), color="black", label="Simulation")
     ax1.scatter(X[1][2], X[1][4], marker="P", s=100, color="blue", zorder=2)
@@ -423,7 +423,7 @@ function completePlotssplit(ψ, θk; xi = [0.0f0, pi, 0.0f0, 0.1f0])
     controlContour = ax4.contourf(X2, X2dot, u, cmap="binary")
     cbar=colorbar(controlContour, ax = ax4)
     cbar.ax.tick_params(labelsize=custom_fontsize)
-    ax4.set_title("Control Input at "* L"[x,\dot{x}]  = [0.36, 0.1]", fontsize=custom_fontsize)
+    # ax4.set_title("Control Input at "* L"[x,\dot{x}]  = [0.36, 0.1]", fontsize=custom_fontsize)
     ax4.set_ylabel(L"\dot{\theta}", fontsize = custom_fontsize)
     ax4.set_xlabel(L"\theta", fontsize = custom_fontsize)
 
@@ -436,7 +436,7 @@ function completePlotssplit(ψ, θk; xi = [0.0f0, pi, 0.0f0, 0.1f0])
     ax4.tick_params(axis="both", labelsize=custom_fontsize)
     handles, labels = ax2.get_legend_handles_labels()
     fig.legend(handles, labels, loc="upper center", fontsize=custom_fontsize, ncol=3)
-    fig.tight_layout(pad=2.0)
+    fig.tight_layout(pad=5.0)
     #########show images
     # firstImpactImage = 1.0 .- Float64.(Gray.(load("../../media/plots/MOEfirstImpact.png")))
     # ax5.imshow(firstImpactImage, cmap="binary")

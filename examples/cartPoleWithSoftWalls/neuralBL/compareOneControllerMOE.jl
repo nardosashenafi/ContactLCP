@@ -80,8 +80,8 @@ function contourCompare(oneController, moe)
     clf()
 
     ulim = 10.0
-    fig, (ax1, ax2) = plt.subplots(figsize=(10, 10), ncols=2, nrows=1)
-    custom_linewidth=2.0
+    fig, (ax1, ax2) = plt.subplots(figsize=(15, 10), ncols=2, nrows=1)
+    custom_linewidth= 4.0
     custom_fontsize = 25
 
     wid = 30
@@ -137,4 +137,5 @@ function contourCompare(oneController, moe)
     ax2.tick_params(axis="both", labelsize=custom_fontsize)
     handles, labels = ax2.get_legend_handles_labels()
     fig.legend(handles, labels, loc="upper center", fontsize=custom_fontsize, ncol=4)
+    fig.tight_layout(pad=4.0)
 end
