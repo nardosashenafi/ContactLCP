@@ -16,6 +16,11 @@ export CartPoleWithSoftWalls
 # const lcm           = l 
 # const b             = 0.0
 # const I1            = mp*lcm^2.0f0
+## One controller training
+# const mc            = 0.57f0 
+# const ϵn_const      = 0.5f0*ones(Float32, contactNum)
+# const satu          = 13.0f0
+# const b             = 0.0
 ##Hardware parameters
 const mc            = 0.75f0    
 const mp            = 0.165f0 
@@ -54,7 +59,6 @@ end
 function initialState(x1)
     # @assert pi-α <= θ0 <= pi+α "Give an initial spoke angle for the spoke in contact. This will help set the rimless wheel in contact with the surface"
     
-    x1 = x1
     θ = -10.0f0*pi/180f0
 
     x1dot = 0.0f0
@@ -297,7 +301,7 @@ function control(z, u::AbstractArray{T}; expert=false, lqr_max = satu) where {T<
         x1, θ = q 
         x1dot, θdot = v
         if ((1.0f0-cos(θ) <= (1.0f0-cosd(20.0))) && (abs(θdot) <= 1.5f0))
-        # if ((1.0f0-cos(θ) <= (1.0f0-cosd(20.0))) && (abs(θdot) <= 0.6f0))
+        # if ((1.0f0-cos(θ) <= (1.0f0-cosd(12.0))) && (abs(θdot) <= 0.6f0))
             return clamp(lqr(z), -lqr_max, lqr_max)
         else
             return clamp(u[1], -satu, satu)
@@ -332,27 +336,27 @@ function startAnimator()
     return vis
 end
 
-function createAnimateObject(x1, θ)
-    createAnimateObject(x1, θ, 1.0)
+function createAnimateObject(x1, θ; w=w)
+    createAnimateObject(x1, θ, 1.0; w=w)
 end
-function createAnimateObject(x1, θ, saturation_ratio)
+function createAnimateObject(x1, θ, saturation_ratio; w=w)
     vcart = vis[:cart]
 
     setobject!(vcart, MeshObject(
-        Rect(Vec(0.0, 0.0, 0.0), Vec(0.2, w, 0.1)),
+        Rect(Vec(0.0, 0.0, 0.0), Vec(0.1, w, 0.1)),
         MeshLambertMaterial(color=RGBA{Float32}(0.0, 0.0, 0.0, 0.25/saturation_ratio))))
-    settransform!(vcart, Translation(-0.2, x1-w/2.0f0, 0.0))
+    settransform!(vcart, Translation(-0.1, x1-w/2.0f0, 0.0))
 
     vpendulum = vis[:pendulum]
     setobject!(vpendulum[:link], MeshObject(
         Cylinder(Point(0.0, 0.0, 0.0), Point(0.0, 0.0, l), 0.005),
-        MeshLambertMaterial(color=RGBA{Float32}(1.0, 0.0, 0.0, 1.0/saturation_ratio))))
-    settransform!(vpendulum[:link], Translation(0.0, x1, 0.00) ∘ LinearMap(RotX(θ)))
+        MeshLambertMaterial(color=RGBA{Float32}(0.0, 0.0, 0.0, 1.0/saturation_ratio))))
+    settransform!(vpendulum[:link], Translation(0.0, x1, 0.05) ∘ LinearMap(RotX(θ)))
 
     setobject!(vpendulum[:bob], MeshObject(
         HyperSphere(Point(0.0, 0.0, l), 0.015),
-        MeshLambertMaterial(color=RGBA{Float32}(0.0, 0.0, 1.0, 1.0/saturation_ratio))))
-    settransform!(vpendulum[:bob], Translation(0.0, x1, 0.00) ∘ LinearMap(RotX(θ)))
+        MeshLambertMaterial(color=RGBA{Float32}(0.0, 0.0, 0.0, 1.0/saturation_ratio))))
+    settransform!(vpendulum[:bob], Translation(0.0, x1, 0.05) ∘ LinearMap(RotX(θ)))
    
     vwalls = vis[:walls]
 
@@ -385,13 +389,14 @@ end
 function animate(Z)
     animate(Z, 1.0)
 end
+
 function animate(Z, saturation_ratio)
 
     x1, θ = Z[1][1:2]
     vcart, vpendulum = createAnimateObject(x1, θ, saturation_ratio)
     for z in Z[1:20:end]
         x1, θ = z[1:2]
-        settransform!(vcart, Translation(-0.2, x1-w/2.f0, 0.0))
+        settransform!(vcart, Translation(-0.1, x1-w/2.f0, 0.0))
         settransform!(vpendulum[:link], Translation(0.0, x1, 0.0) ∘ LinearMap(RotX(θ)))
         settransform!(vpendulum[:bob], Translation(0.0, x1, 0.0) ∘ LinearMap(RotX(θ)))
         sleep(0.04)

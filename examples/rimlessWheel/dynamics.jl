@@ -535,16 +535,17 @@ end
 
 function createAnimateObjectForPaper(; spokeGap=0.2, k=k, α=α, γ=γ, ls=ls)
 
-    z = initialState(pi+α-0.5, 0.0f0, 1.3f0, 0.0f0)
+    z = initialState(pi-α, 0.0f0, 1.7f0, 0.0f0)
 
     x0, y0, ϕ0, θ0 = z[1:4]
+    y0 -= 0.265
     vspokes1 = vis[:spokes1]
 
     for ki in range(0, stop=k-1, step=1)
         vki = vspokes1[Symbol("spoke" * String("$ki"))]
 
         setobject!(vki, MeshObject(
-            Cylinder(Point(0.0, 0.0, 0.0), Point(0.0, 0.0, l1), 0.007),
+            Cylinder(Point(0.0, 0.0, 0.0), Point(0.0, 0.0, l1-0.1), 0.007),
             MeshLambertMaterial(color=RGBA{Float32}(0.0, 0.0, 0.0, 0.3))))
         settransform!(vki, Translation(0.0, x0, y0) ∘ LinearMap(RotX(θ0+2*α*ki+γ)))
     end
@@ -552,20 +553,25 @@ function createAnimateObjectForPaper(; spokeGap=0.2, k=k, α=α, γ=γ, ls=ls)
 
     vtorso = vis[:torso]
     setobject!(vtorso[:link], MeshObject(
-        HyperRectangle(Vec(0.0, 0.0, 0.0), Vec(0.0, 0.02, 0.15)),
+        HyperRectangle(Vec(0.0, 0.0, 0.0), Vec(0.0, 0.015, 0.12)),
         MeshLambertMaterial(color=RGBA{Float32}(0.0, 0.0, 0.0, 1.0))))
-    settransform!(vtorso[:link], Translation(0.0, x0+0.01, y0) ∘ LinearMap(RotX(ϕ0+pi)))
+    settransform!(vtorso[:link], Translation(0.0, x0-0.005, y0+0.01) ∘ LinearMap(RotX(ϕ0+pi)))
    
     setobject!(vtorso[:bob], MeshObject(
-        HyperSphere(Point(0.0, 0.0, 0.0), 0.01),
+        HyperSphere(Point(0.0, 0.0, 0.0), 0.015),
         MeshLambertMaterial(color=RGBA{Float32}(0.0, 0.0, 0.0, 1.0))))
-    settransform!(vtorso[:bob], Translation(0.0, x0+0.15*sin(pi-ϕ0), y0+0.15*cos(pi-ϕ0) ))
+    settransform!(vtorso[:bob], Translation(0.0, x0+0.12*sin(pi-ϕ0), y0+0.12*cos(pi-ϕ0)+0.002 ))
     
     vrunway = vis[:runway]
     setobject!(vrunway[:runway], MeshObject(
         Rect(Vec(0.0, 0.0, 0.0), Vec(0.0, ls, 0.01)),
         MeshLambertMaterial(color=RGBA{Float32}(0.0, 0.0, 0.0, 0.7))))
-    settransform!(vrunway[:runway], Translation(0.0, x0-0.2, 0.0) ∘ LinearMap(RotX(γ)))
+    settransform!(vrunway[:runway], Translation(0.0, x0-0.6, 0.0) ∘ LinearMap(RotX(γ)))
+
+    setobject!(vrunway[:runway_base], MeshObject(
+        Rect(Vec(0.0, 0.0, 0.0), Vec(0.0, ls, 0.01)),
+        MeshLambertMaterial(color=RGBA{Float32}(0.0, 0.0, 0.0, 0.7))))
+    settransform!(vrunway[:runway_base], Translation(0.0, x0-0.62, -0.202) ∘ LinearMap(RotX(0.0)))
 
     return vspokes1, vtorso, vrunway #, vspokes2
 end

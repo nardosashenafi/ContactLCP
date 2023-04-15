@@ -1,4 +1,5 @@
 include("bayesianControl.jl")
+using CSV
 
 Hd              = FastChain(FastDense(6, 8, elu), 
                   FastDense(8, 7, elu),
@@ -286,10 +287,12 @@ function plotCollectedData(;δt=0.01)
     # plot(t, filter_signal(xdot))
     plot(t, xdot)
 
-    hardware_data = BSON.load("/home/nardosashenafi/repos/ContactLCP/examples/rimlessWheel/hardware_data/d_even.bson")[:sensorData]
+    # hardware_data = BSON.load("/home/nardosashenafi/repos/ContactLCP/examples/rimlessWheel/hardware_data/d_even.bson")[:sensorData]
+    hardware_data = BSON.load("/home/nardosashenafi/repos/ContactLCP/examples/rimlessWheel/hardware_data/d_nogainNogearRation.bson")[:sensorData]
 
     θdot    = getindex.(hardware_data, 4) 
     ϕdot    = getindex.(hardware_data, 3)
+    ϕ       = getindex.(hardware_data, 1)
     # θdot = getindex.(hardware_data, 6)
     θ       = getindex.(hardware_data, 2) 
     xdot    = Vector{eltype(θdot)}(undef, length(θdot))
@@ -298,8 +301,131 @@ function plotCollectedData(;δt=0.01)
 
     for i in eachindex(θdot)
         θInContact = wrapSpokes(θ[i])
-        xdot[i]     = l1 * cos(θInContact) * (θdot[i]/2)
+        xdot[i]     = l1 * cos(θInContact) * (θdot[i]/4)
     end
     
     plot(t, xdot)
+    plot(t[66150:66850], xdot[66150:66850])
+end
+
+function plotRosbagDeterUneven()
+
+    filethetadot = "./../hardware_data/rosbags/thetadot_gravel1.csv"
+    filetheta = "./../hardware_data/rosbags/theta_gravel1.csv"
+
+    csv_readerthetadot=CSV.File(filethetadot; delim="---")
+    csv_readertheta=CSV.File(filetheta; delim="---")
+    thetadot = []
+    theta = []
+
+    for i in 2:2:length(csv_readerthetadot)
+        push!(thetadot, parse(Float32, csv_readerthetadot[i][1]))
+    end
+    for i in 2:2:length(csv_readertheta)
+        push!(theta, parse(Float32, csv_readertheta[i][1]))
+    end
+    xdot = []
+    for i in eachindex(thetadot)
+        θInContact = wrapSpokes(pi + theta[i])
+        push!(xdot, l1 * cos(θInContact) * (thetadot[i])*1/0.8)
+    end
+
+    custom_linewidth= 2.0
+    custom_fontsize = 25
+    t = range(1, length=length(thetadot), step=1/40)
+    start = 1
+    stop=800
+    plot(range(0, stop=t[stop], length=length(t[start:stop])), xdot[start:stop], linewidth=custom_linewidth, color="black")
+    plot(range(0, stop=t[stop], length=length(t[start:stop])), ones(length(t[start:stop])), color="red", linewidth=2*custom_linewidth, linestyle="dashed", label="Desired Hip Speed")
+
+
+    ylabel(L"\dot{x} [m/s]", fontsize = custom_fontsize)
+    xlabel(L"t [seconds]", fontsize = custom_fontsize)
+    tick_params(axis="both", labelsize=custom_fontsize)
+    legend(fontsize = custom_fontsize)
+end
+
+function plotRosbagDeterEven()
+
+    filethetadot = "./../hardware_data/rosbags/thetadot_labLevel2.csv"
+    filetheta = "./../hardware_data/rosbags/theta_labLevel2.csv"
+
+    # filethetadot = "./../hardware_data/rosbags/thetadot_labLevel3.csv"
+    # filetheta = "./../hardware_data/rosbags/theta_labLevel3.csv"
+
+    csv_readerthetadot=CSV.File(filethetadot; delim="---")
+    csv_readertheta=CSV.File(filetheta; delim="---")
+    thetadot = []
+    theta = []
+
+    for i in 2:2:length(csv_readerthetadot)
+        push!(thetadot, parse(Float32, csv_readerthetadot[i][1]))
+    end
+    for i in 2:2:length(csv_readertheta)
+        push!(theta, parse(Float32, csv_readertheta[i][1]))
+    end
+    xdot = []
+    for i in eachindex(thetadot)
+        θInContact = wrapSpokes(pi + theta[i])
+        push!(xdot, l1 * cos(θInContact) * (thetadot[i])*1/0.8)
+    end
+
+    custom_linewidth= 2.0
+    custom_fontsize = 25
+    t = range(1, length=length(thetadot), step=1/40)
+    # plot(t, xdot, color="black", label="Deterministic on Even Terrain")
+    start = 200
+    stop=650
+    plot(range(0, stop=t[stop], length=length(t[start:stop])), xdot[start:stop], linewidth=custom_linewidth, color="black")
+    plot(range(0, stop=t[stop], length=length(t[start:stop])), ones(length(t[start:stop])), color="red", linewidth=2*custom_linewidth, linestyle="dashed", label="Desired Hip Speed")
+
+
+    ylabel(L"\dot{x} [m/s]", fontsize = custom_fontsize)
+    xlabel(L"t [seconds]", fontsize = custom_fontsize)
+    tick_params(axis="both", labelsize=custom_fontsize)
+    legend(fontsize = custom_fontsize)
+end
+
+
+function plotRosbagBayesEven()
+
+    filethetadot = "./../hardware_data/rosbags/thetadot_bayes_levelLab1.csv"
+    filetheta = "./../hardware_data/rosbags/theta_bayes_levelLab1.csv"
+
+    # filethetadot = "./../hardware_data/rosbags/thetadot_labLevel3.csv"
+    # filetheta = "./../hardware_data/rosbags/theta_labLevel3.csv"
+
+    csv_readerthetadot=CSV.File(filethetadot; delim="---")
+    csv_readertheta=CSV.File(filetheta; delim="---")
+    thetadot = []
+    theta = []
+
+    for i in 2:2:length(csv_readerthetadot)
+        push!(thetadot, parse(Float32, csv_readerthetadot[i][1]))
+    end
+    for i in 2:2:length(csv_readertheta)
+        push!(theta, parse(Float32, csv_readertheta[i][1]))
+    end
+    xdot = []
+    for i in eachindex(thetadot)
+        θInContact = wrapSpokes(pi + theta[i])
+        push!(xdot, l1 * cos(θInContact) * (thetadot[i])*1/0.8)
+    end
+
+    custom_linewidth= 2.0
+    custom_fontsize = 25
+    t = range(1, length=length(thetadot), step=1/40)
+    # plot(t, xdot, color="black", label="Bayesian on Even Terrain")
+    # plot(t, xdot, color="black")
+    # plot(t, ones(length(t)), color="red", linewidth=custom_linewidth, linestyle="dashed", label="Desired Hip Speed")
+    start = 1300
+    stop=1800
+    plot(range(0, stop=t[stop], length=length(t[start:stop])), xdot[start:stop], linewidth=custom_linewidth, color="black")
+    plot(range(0, stop=t[stop], length=length(t[start:stop])), ones(length(t[start:stop])), color="red", linewidth=2*custom_linewidth, linestyle="dashed", label="Desired Hip Speed")
+
+
+    ylabel(L"\dot{x} [m/s]", fontsize = custom_fontsize)
+    xlabel(L"t [seconds]", fontsize = custom_fontsize)
+    tick_params(axis="both", labelsize=custom_fontsize)
+    legend(fontsize = custom_fontsize)
 end
