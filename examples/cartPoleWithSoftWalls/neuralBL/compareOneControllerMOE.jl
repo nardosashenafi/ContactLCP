@@ -80,7 +80,7 @@ function contourCompare(oneController, moe)
     clf()
 
     ulim = 10.0
-    fig, (ax1, ax2) = plt.subplots(figsize=(15, 10), ncols=2, nrows=1)
+    fig, (ax1) = plt.subplots(figsize=(10, 10), ncols=1, nrows=1)
     custom_linewidth= 4.0
     custom_fontsize = 25
 
@@ -98,14 +98,15 @@ function contourCompare(oneController, moe)
     end
 
     controlContour1 = ax1.contourf(X2, X2dot, u, cmap="PuBu", zorder=1, vmin=-ulim, vmax= ulim)
-    # colorbar(controlContour1, ax = ax1)
+    cbar1 = colorbar(controlContour1, ax = ax1)
+    cbar1.ax.tick_params(labelsize=custom_fontsize)
     # ax1.set_title("Control Input at "* L"[x,\dot{x}]  = [0, 0]")
-    ax1.set_ylabel(L"\dot{\theta}", fontsize=custom_fontsize)
-    ax1.set_xlabel(L"\theta", fontsize=custom_fontsize)
-    ax1.plot(getindex.(Xone[1:8850], 2), getindex.(Xone[1:8850], 4), color="black", linewidth=custom_linewidth)
-    ax1.plot(getindex.(Xone[8850:8858], 2), getindex.(Xone[8850:8858], 4), linestyle="dashed", color="red", linewidth=custom_linewidth)
+    ax1.set_ylabel(L"\dot{\theta}_p", fontsize=custom_fontsize)
+    ax1.set_xlabel(L"\theta_p", fontsize=custom_fontsize)
+    ax1.plot(getindex.(Xone[1:8850], 2), getindex.(Xone[1:8850], 4), color="black", linewidth=custom_linewidth, label="One controller")
+    ax1.plot(getindex.(Xone[8850:8858], 2), getindex.(Xone[8850:8858], 4), linestyle="dashed", color="red", linewidth=custom_linewidth, label="Impact")
     ax1.plot(getindex.(Xone[8859:end], 2), getindex.(Xone[8859:end], 4), color="black", linewidth=custom_linewidth)
-    ax1.scatter(Xone[end][2], Xone[end][4], marker="*", s=100, color="red", zorder=3)
+    ax1.scatter(Xone[end][2], Xone[end][4], marker="*", s=300, color="red", zorder=3, label="Last state")
     ax1.tick_params(axis="both", labelsize=custom_fontsize)
 
     ψ, θk = unstackParams(moe)
@@ -121,21 +122,26 @@ function contourCompare(oneController, moe)
         end
     end
 
-    controlContour2 = ax2.contourf(X2, X2dot, um, cmap="PuBu", zorder=1, vmin=-ulim, vmax= ulim)
-    cbar = colorbar(controlContour2, ax = ax2)
-    cbar.ax.tick_params(labelsize=custom_fontsize)
+    handles, labels = ax1.get_legend_handles_labels()
+    fig.legend(handles, labels, loc="upper center", fontsize=custom_fontsize, ncol=4)
+
+    fig, (ax2) = plt.subplots(figsize=(8, 8), ncols=1, nrows=1)
     # ax2.set_title("Control Input at "* L"[x,\dot{x}]  = [0, 0]")
-    ax2.set_ylabel(L"\dot{\theta}", fontsize=custom_fontsize)
-    ax2.set_xlabel(L"\theta", fontsize=custom_fontsize)
+    ax2.set_ylabel(L"\dot{\theta}_p", fontsize=custom_fontsize)
+    ax2.set_xlabel(L"\theta_p", fontsize=custom_fontsize)
     ax2.plot(getindex.(Xmoe1[1:7500], 2), getindex.(Xmoe1[1:7500], 4), color="black", linewidth=custom_linewidth, label="One controller")
     ax2.plot(getindex.(Xmoe1[7500:8630], 2), getindex.(Xmoe1[7500:8630], 4), linestyle="dashed", color="black", label="MOE", linewidth=custom_linewidth)
     ax2.plot(getindex.(Xmoe1[8630:8640], 2), getindex.(Xmoe1[8630:8640], 4), linestyle="dashed", color="red", label="Impact", linewidth=custom_linewidth)
     ax2.plot(getindex.(Xmoe1[8640:end], 2), getindex.(Xmoe1[8640:end], 4), color="black", linewidth=custom_linewidth)
-    ax2.scatter(Xmoe1[end][2], Xmoe1[end][4], marker="*", s=100, color="red", zorder=3, label="Last state")
+    ax2.scatter(Xmoe1[end][2], Xmoe1[end][4], marker="*", s=300, color="red", zorder=3, label="Last state")
+
+    controlContour2 = ax2.contourf(X2, X2dot, um, cmap="PuBu", zorder=1, vmin=-ulim, vmax= ulim)
+    cbar2 = colorbar(controlContour2, ax = ax2)
+    cbar2.ax.tick_params(labelsize=custom_fontsize)
 
     binContour = ax2.contour(X2, X2dot, cm, cmap="bone")
     ax2.tick_params(axis="both", labelsize=custom_fontsize)
     handles, labels = ax2.get_legend_handles_labels()
     fig.legend(handles, labels, loc="upper center", fontsize=custom_fontsize, ncol=4)
-    fig.tight_layout(pad=4.0)
+    # fig.tight_layout(pad=4.0)
 end

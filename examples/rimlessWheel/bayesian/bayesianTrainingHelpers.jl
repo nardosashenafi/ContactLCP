@@ -138,10 +138,11 @@ function sampleInitialStates(controlParam::Vector{T}, sampleNum; α=α, totalTim
 
     # θshift = 0.2f0
     θshift = 0.0f0
+    θdotmin = 0.0f0
     w     = rand(getq(controlParam))
     x0, r = initialStateWithBumpsRandomAngle(
                 rand(pi-α+θshift:0.05f0:pi+α-θshift), 
-                rand(-3.0f0:0.05f0:0.0f0), 
+                rand(-3.0f0:0.05f0:θdotmin), 
                 0.0f0, 
                 rand(-1.0f0:0.1f0:1.0f0), rmax)
 
@@ -160,7 +161,7 @@ function sampleInitialStates(controlParam::Vector{T}, sampleNum; α=α, totalTim
         else
             x0, r1 = initialStateWithBumpsRandomAngle(
                     rand(pi-α+θshift:0.05f0:pi+α-θshift), 
-                    rand(-3.0f0:0.05f0:0.0f0), 
+                    rand(-3.0f0:0.05f0:θdotmin), 
                     0.0f0, 
                     rand(-1.0f0:0.1f0:1.0f0), rmax)
 
@@ -169,16 +170,16 @@ function sampleInitialStates(controlParam::Vector{T}, sampleNum; α=α, totalTim
         end 
     end
     #extract stumbling
-    for i in eachindex(X0)
-        if isStumbling(X0[i])
-            X0[i], R[i] = initialStateWithBumpsRandomAngle(
-                rand(pi-α+0.2f0:0.05f0:pi+α-0.2f0), 
-                rand(-3.0f0:0.05f0:0.0f0), 
-                rand(-pi/4.0f0:0.05f0:pi/4.0f0), 
-                rand(-1.0f0:0.1f0:1.0f0), rmax)
-        end
+    # for i in eachindex(X0)
+    #     if isStumbling(X0[i])
+    #         X0[i], R[i] = initialStateWithBumpsRandomAngle(
+    #             rand(pi-α+0.2f0:0.05f0:pi+α-0.2f0), 
+    #             rand(-3.0f0:0.05f0:θdotmin), 
+    #             rand(-pi/4.0f0:0.05f0:pi/4.0f0), 
+    #             rand(-1.0f0:0.1f0:1.0f0), rmax)
+    #     end
 
-    end
+    # end
     return X0, R
 
 end

@@ -352,16 +352,16 @@ function completePlotssplit(ψ, θk; xi = [0.0f0, pi, 0.0f0, 0.1f0])
 
     ax1.plot(theta[1:3550], thetadot[1:3550],  linestyle="dotted", color="black", label="Experiment")
 
-    ax1.legend()
-    ax1.set_ylabel(L"\dot{\theta}")
-    ax1.set_xlabel(L"\theta")
-
+    ax1.legend(fontsize = custom_fontsize)
+    ax1.set_ylabel(L"\dot{\theta}", fontsize = custom_fontsize)
+    ax1.set_xlabel(L"\theta", fontsize = custom_fontsize)
+    ax1.tick_params(axis="both", labelsize=custom_fontsize)
     #####################Plot Control input 
 
     wid = 30
     
     X2    = range(-1.0, 2.0f0pi, length=wid)
-    X2dot = range(-10.0f0, 10.0f0, length=wid)
+    X2dot = range(-13.0f0, 13.0f0, length=wid)
 
     u = Matrix{Float32}(undef, wid, wid)
     c = Matrix{Int}(undef, wid, wid)
@@ -375,7 +375,7 @@ function completePlotssplit(ψ, θk; xi = [0.0f0, pi, 0.0f0, 0.1f0])
         end
     end
 
-    controlContour = ax3.contourf(X2, X2dot, u, cmap="binary", zorder=1)
+    controlContour = ax3.contourf(X2, X2dot, u, cmap="PuBu", zorder=1)
     colorbar(controlContour, ax = ax3)
     ax3.set_title("Control Input at "* L"[x,\dot{x}]  = [0, 0]", fontsize = custom_fontsize)
     ax3.set_ylabel(L"\dot{\theta}", fontsize = custom_fontsize)
@@ -384,29 +384,34 @@ function completePlotssplit(ψ, θk; xi = [0.0f0, pi, 0.0f0, 0.1f0])
     ###################Overlap bins contour plot
     binContour = ax3.contour(X2, X2dot, c, cmap="bone")
     ax3.scatter(X[1][2], X[1][4], marker="P", s=100, color="blue", zorder=2)
+    ax3.tick_params(axis="both", labelsize=custom_fontsize)
 
-    fig, (ax2, ax4) = plt.subplots(figsize=(15, 8), ncols=2, nrows=1)
+    fig, (ax2) = plt.subplots(figsize=(10, 10), ncols=1, nrows=1)
 
     #############Repeat for post impact 
     #################Plot trajectory
     ax2.plot(getindex.(X[1:preimpact], 2), getindex.(X[1:preimpact], 4), linewidth=custom_linewidth, color="black", label="Simulation")
     ax2.plot(getindex.(X[preimpact:postimpact], 2), getindex.(X[preimpact:postimpact], 4),  linewidth=custom_linewidth, linestyle="dashed", color="red", label="Impact")
     ax2.plot(getindex.(X[postimpact:end], 2), getindex.(X[postimpact:end], 4), color="black", linewidth=custom_linewidth)
-    ax2.scatter(X[preimpact][2], X[preimpact][4], marker="P", s=100, color="blue", zorder=4)
-    ax2.scatter(X[postimpact][2], X[postimpact][4], marker="*", s=100, color="red", zorder=4)
-    ax2.set_ylabel(L"\dot{\theta}", fontsize = custom_fontsize)
-    ax2.set_xlabel(L"\theta", fontsize = custom_fontsize)
-    ax1.tick_params(axis="both", labelsize=custom_fontsize)
+    ax2.scatter(X[preimpact][2], X[preimpact][4], marker="P", s=300, color="blue", zorder=4)
+    ax2.scatter(X[postimpact][2], X[postimpact][4], marker="*", s=300, color="red", zorder=4)
+    ax2.set_ylabel(L"\dot{\theta}_p", fontsize = custom_fontsize)
+    ax2.set_xlabel(L"\theta_p", fontsize = custom_fontsize)
+    ax2.tick_params(axis="both", labelsize=custom_fontsize)
 
     ##################plot experimental data
     ax2.plot(theta[1:3550], thetadot[1:3550],  linestyle="dotted", color="black",  linewidth=custom_linewidth, label="Experiment")
     ax2.plot(theta[3550:3620], thetadot[3550:3620],  linestyle="dashed", color="green", linewidth=custom_linewidth)
-    ax2.scatter(theta[3620], thetadot[3620], marker="*", s=100, color="green", zorder=2)
+    ax2.scatter(theta[3620], thetadot[3620], marker="*", s=300, color="green", zorder=4)
     ax2.plot(theta[3620:3800], thetadot[3620:3800],  linestyle="dotted", color="black",  linewidth=custom_linewidth)
     ax2.tick_params(axis="both", labelsize=custom_fontsize)
+    # ax2.legend(fontsize=custom_fontsize)
+    handles, labels = ax2.get_legend_handles_labels()
+    fig.legend(handles, labels, loc="upper center", fontsize=custom_fontsize, ncol=3)
 
 
     #####################Plot Control input 
+    # fig, (ax4) = plt.subplots(figsize=(10, 10), ncols=1, nrows=1)
 
     u = Matrix{Float32}(undef, wid, wid)
     c = Matrix{Int}(undef, wid, wid)
@@ -420,23 +425,21 @@ function completePlotssplit(ψ, θk; xi = [0.0f0, pi, 0.0f0, 0.1f0])
         end
     end
 
-    controlContour = ax4.contourf(X2, X2dot, u, cmap="binary")
-    cbar=colorbar(controlContour, ax = ax4)
+    controlContour = ax2.contourf(X2, X2dot, u, cmap="PuBu")
+    cbar=colorbar(controlContour, ax = ax2)
     cbar.ax.tick_params(labelsize=custom_fontsize)
     # ax4.set_title("Control Input at "* L"[x,\dot{x}]  = [0.36, 0.1]", fontsize=custom_fontsize)
-    ax4.set_ylabel(L"\dot{\theta}", fontsize = custom_fontsize)
-    ax4.set_xlabel(L"\theta", fontsize = custom_fontsize)
+    ax2.set_ylabel(L"\dot{\theta}_p", fontsize = custom_fontsize)
+    ax2.set_xlabel(L"\theta_p", fontsize = custom_fontsize)
 
     ###################Overlap bins contour plot
-    binContour = ax4.contour(X2, X2dot, c, cmap="bone", zorder=1)
+    binContour = ax2.contour(X2, X2dot, c, cmap="bone", zorder=1)
     # clabel(myc, fmt="%d")
-    ax4.scatter(X[preimpact][2], X[preimpact][4], marker="P", s=100, color="blue", zorder=4)
-    ax4.scatter(X[postimpact][2], X[postimpact][4], marker="*", s=100, color="red", zorder=4)
-    ax4.scatter(theta[3620], thetadot[3620], marker="*", s=100, color="green", zorder=4)
-    ax4.tick_params(axis="both", labelsize=custom_fontsize)
-    handles, labels = ax2.get_legend_handles_labels()
-    fig.legend(handles, labels, loc="upper center", fontsize=custom_fontsize, ncol=3)
-    fig.tight_layout(pad=5.0)
+    ax2.scatter(X[preimpact][2], X[preimpact][4], marker="P", s=300, color="blue", zorder=4)
+    ax2.scatter(X[postimpact][2], X[postimpact][4], marker="*", s=300, color="red", zorder=4)
+    ax2.scatter(theta[3620], thetadot[3620], marker="*", s=300, color="green", zorder=4)
+    ax2.tick_params(axis="both", labelsize=custom_fontsize)
+    # fig.tight_layout(pad=5.0)
     #########show images
     # firstImpactImage = 1.0 .- Float64.(Gray.(load("../../media/plots/MOEfirstImpact.png")))
     # ax5.imshow(firstImpactImage, cmap="binary")
@@ -595,8 +598,8 @@ function completePlots2(ψ, θk; xi = [0.0f0, pi, 0.0f0, 0.1f0])
     # clabel(binOngapContour, [1, 2], fmt="%d")
     cbar = colorbar(gapContour, ax = ax1)
     cbar.ax.tick_params(labelsize=custom_fontsize)
-    ax1.set_title("Controller choice based on gap function at "* L"[\dot{x}, \dot{\theta}] = [0,0] ", fontsize=custom_fontsize)
-    ax1.set_ylabel(L"\theta", fontsize=custom_fontsize)
+    # ax1.set_title("Controller choice based on gap function at "* L"[\dot{x}, \dot{\theta}] = [0,0] ", fontsize=custom_fontsize)
+    ax1.set_ylabel(L"\theta_p", fontsize=custom_fontsize)
     ax1.set_xlabel(L"x", fontsize=custom_fontsize)
     ax1.tick_params(axis="both", labelsize=custom_fontsize)
 
