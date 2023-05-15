@@ -47,7 +47,7 @@ function testControl(X0, ps, grad, fig1; timeSteps=5000)
     S       = trajectory(X0[1], ps; totalTimeStep = timeSteps);
     loss    = trajLoss(X0, ps; totalTime=timeSteps)
 
-    plots(S, fig1)
+    plots(S, ps, fig1)
 
     println("loss = ", round(loss, digits=4) , " | grad = ", mean(grad) )
     # println("loss = ", round(l1(param), digits=4),  " | p = ", round.(param, digits=4), " | hip speed = ", round.(mean(-cm.sys.l1 .* cos.(getindex.(Z, 1)) .* getindex.(Z, 3)), digits=4) )
@@ -76,7 +76,7 @@ function hipSpeedLoss(Z; gThreshold=gThreshold, k=k, α=α)
             ki = spokeNearGround(gn) - 1
         end
         error = xd_dot - (l1 * cos(z[4] + 2*α*ki) * z[8])
-        loss += 30.0f0*dot(error, error) + 1.0f0*dot(z[7], z[7])
+        loss += 30.0f0*dot(error, error) + 3.0f0*dot(z[7], z[7])
     end
 
     return 1.0f0/length(Z)*loss

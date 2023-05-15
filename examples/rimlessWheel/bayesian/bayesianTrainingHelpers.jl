@@ -223,6 +223,21 @@ function plots(Z, fig1)
     println("Average hip speed = ", mean(getindex.(Z, 5)))
 end
 
+function MAP(state::Vector{T}, param) where {T<:Real}
+    μ_param, _ = unstackParams(param)
+    return MLBasedESC.controller(npbc, inputLayer(state), μ_param)
+end
+
+function marginalize(state::Vector{T}, param; sampleNum=5) where {T<:Real}
+    effort = 0.0f0
+    for _ in 1:sampleNum
+        w = rand(getq(param))
+        effort += MLBasedESC.controller(npbc, inputLayer(state), w)
+    end
+
+    return effort/sampleNum
+end
+
 function plots(Z, param, fig1)
     PyPlot.figure(1)
     fig1.clf()

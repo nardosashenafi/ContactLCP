@@ -99,7 +99,10 @@ function trainEM()
         if counter > 10
             ψ, θuk  = unstackParams(param)
             uk      = maxBernoulli.(θuk)
-            testBayesian(x0[1], ψ, uk; totalTimeStep=1000)
+            xi = [-5.0, -5.0]
+            testBayesianPaper(xi, ψ, uk; totalTimeStep=3000)
+            imageName = "./images/image"*string(i)*".eps"
+            savefig(imageName)
             println("loss = ", l1(param), " θuk = ", berAct.(θuk) ," grad = ", lg1[end])
             counter = 0
         end
@@ -107,3 +110,14 @@ function trainEM()
         Flux.update!(opt, param, lg1)
     end
 end
+
+# ψ           = randn(Float32, nn_length)
+# θuk         = LogExpFunctions.logit.(rand(Float32, 4))
+# param       = vcat(ψ, θuk)
+# opt         = Adam(0.001f0)
+# counter     = 0
+# minibatch   = 4
+# ψ, θuk  = unstackParams(param)
+# uk      = maxBernoulli.(θuk)
+# xi = [-5.0, -5.0]
+# testBayesianPaper(xi, ψ, uk; totalTimeStep=3000)

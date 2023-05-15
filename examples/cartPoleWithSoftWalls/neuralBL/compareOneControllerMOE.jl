@@ -1,9 +1,21 @@
 include("EMSwingup.jl")
 
-oneController = BSON.load("./savedWeights/hardware_oneController_5_10_10_4_4_1_elu.bson")[:param]
+# oneController = BSON.load("./savedWeights/oneControllerHangingWalls_thetak5-8-8-4-4-1elu.bson")[:param]
 moe = BSON.load("./savedWeights/for_paper_friction12_setdistancetraining_3NN_psi_5-4-4-3-3-1-thetak-5-10-10-4-4-1_elu copy.bson")[:param]
-# oneController = BSON.load("./savedWeights/oneController_friction12_setdistancetraining-thetak-5-10-10-4-4-1_elu.bson")[:param]
+oneController = BSON.load("./savedWeights/oneController_friction12_setdistancetraining-thetak-5-10-10-4-4-1_elu.bson")[:param]
+# nowalls = BSON.load("./savedWeights/swingupNoWallsThetak_5-8-8-4-4-1elu.bson")[:θk][1]
 
+# function gap(x1, θ)
+#     return Inf*ones(contactNum), Inf*ones(2, contactNum)
+# end
+
+# for i in 1:binSize 
+#     controlArray[i] = FastChain(FastDense(5, 8, elu),
+#                             FastDense(8, 4, elu),
+#                             FastDense(4, 1))
+    
+#     controlNN_length[i] = DiffEqFlux.paramlength(controlArray[i]) 
+# end
 
 function oneTrajectory(xi, param::AbstractArray{T}; totalTimeStep = totalTimeStep) where {T<:Real}
 
@@ -144,4 +156,15 @@ function contourCompare(oneController, moe)
     handles, labels = ax2.get_legend_handles_labels()
     fig.legend(handles, labels, loc="upper center", fontsize=custom_fontsize, ncol=4)
     # fig.tight_layout(pad=4.0)
+end
+
+function comparisonAnimation()
+    x0 = [ 0.0
+    3.1415
+    0.067
+    2.414]
+
+    Xone = oneTrajectory(x0, nowalls; totalTimeStep=5000);
+    Xmoe = moeTraj(x0, moe; totalTimeStep=7000);
+
 end
