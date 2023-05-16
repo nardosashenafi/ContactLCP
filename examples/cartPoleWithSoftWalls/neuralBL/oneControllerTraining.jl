@@ -42,8 +42,8 @@ function trajectory(xi, param::AbstractArray{T}; totalTimeStep = totalTimeStep) 
     return X
 end
 
-function setDistanceLoss(X::Vector{Vector{T}}; r=0.1f0) where {T<:Real}
-    delta, _ = findmin(map(setDistancelossPerState, X))
+function minimumTrajectoryLoss(X::Vector{Vector{T}}; r=0.1f0) where {T<:Real}
+    delta, _ = findmin(map(minimumTrajectoryLossPerState, X))
 
     incurCostAt = (TRACK_LENGTH)/2.0 
     doubleHingeLoss = 0.0f0
@@ -63,7 +63,7 @@ function oneControllerLoss(x0, param::AbstractArray{T}; totalTimeStep = totalTim
             ui = controlArray[1](inputLayer(X[i]), param)
             X[i+1] = oneStep(X[i], ui)
         end
-        ltotal += setDistanceLoss(X) 
+        ltotal += minimumTrajectoryLoss(X) 
     end
     return ltotal/length(x0)
 end
@@ -101,6 +101,7 @@ function trainOneController()
             end
             X = testBayesian(xi, param; totalTimeStep=10000)
             println("One controller loss = ", oneControllerLoss([xi], param))
+            BSON.@save "savedWeights/oneController_MTL_thetak_5-4-2-1.bson" param
             counter = 0
         end
         counter += 1

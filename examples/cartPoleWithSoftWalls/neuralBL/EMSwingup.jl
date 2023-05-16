@@ -78,9 +78,9 @@ controlArray     = Array{Function}(undef, binSize);
 controlNN_length = Vector{Int}(undef, binSize)
 
 for i in 1:binSize 
-    controlArray[i] = FastChain(FastDense(5, 10, elu),
-                            FastDense(10, 4, elu),
-                            FastDense(4, 1))
+    controlArray[i] = FastChain(FastDense(5, 4, elu),
+                            FastDense(4, 2, elu),
+                            FastDense(2, 1))
     
     controlNN_length[i] = DiffEqFlux.paramlength(controlArray[i]) 
 end
@@ -122,15 +122,15 @@ function stackParams(ψ::Vector{T}, θk::Vector{Vector{T}}) where {T<:Real}
     return param
 end
 
-function setDistancelossPerState(x)
+function minimumTrajectoryLossPerState(x)
     x1, x2, x1dot, x2dot = x
 
     return 12.0f0*(1.0f0-cos(x2)) + 
             0.8f0*abs(x1dot) + 0.8f0*abs(x2dot)
 end
 
-function setDistanceLoss(X::Vector{Vector{T}}, pk, k; r=1e-10) where {T<:Real}
-    lmin, lminIndex = findmin(map(setDistancelossPerState, X))
+function minimumTrajectoryLoss(X::Vector{Vector{T}}, pk, k; r=1e-10) where {T<:Real}
+    lmin, lminIndex = findmin(map(minimumTrajectoryLossPerState, X))
 
     actionProbability = 1.0f0 - mean(map((pki, ki) -> pki[ki], pk[1:lminIndex], k[1:lminIndex]))
     actionProbability > 0.05 ? delta = lmin*actionProbability : delta = lmin
@@ -146,7 +146,7 @@ function setDistanceLoss(X::Vector{Vector{T}}, pk, k; r=1e-10) where {T<:Real}
 
 end
 
-function averageControlLoss(x0, param::AbstractArray{T}, explorationPercent; totalTimeStep = totalTimeStep) where {T<:Real}
+function EMLoss(x0, param::AbstractArray{T}, explorationPercent; totalTimeStep = totalTimeStep) where {T<:Real}
     ψ, θk   = unstackParams(param)
     ltotal = 0.0f0
 
@@ -169,7 +169,7 @@ function averageControlLoss(x0, param::AbstractArray{T}, explorationPercent; tot
             ui = input(X[i], θk, k[i])
             X[i+1] = oneStep(X[i], ui)
         end
-        ltotal += setDistanceLoss(X[1:totalTimeStep], pk, k) 
+        ltotal += minimumTrajectoryLoss(X[1:totalTimeStep], pk, k) 
        end
     return ltotal/length(x0)
 end
@@ -199,7 +199,7 @@ function trainEM()
         # For each state in the trajectory, compute the loss incurred by each of the given by the 
         # bin generator 
         explorationPercent = exp.(-i*0.05)*initialExploration 
-        l1(θ)   = averageControlLoss(x0, θ, explorationPercent; totalTimeStep=1500)
+        l1(θ)   = EMLoss(x0, θ, explorationPercent; totalTimeStep=1500)
         # l1(θ)   = accumulatedLossSampler(x0, θ, explorationPercent; totalTimeStep=1500)
 
         # ForwardDiff.gradient takes the gradient of the loss wrt the state bin parameters and the 
@@ -217,8 +217,8 @@ function trainEM()
                 xi = x0[1]
             end
             X = testBayesian(xi, ψ, θk; totalTimeStep=7000)
-            println("iteration = ", iteration, " MOE loss = ", averageControlLoss([xi], param, explorationPercent; totalTimeStep=7000), " POI = ", poi(xi, ψ))
-            # BSON.@save "neuralBL/savedWeights/setdistancetraining.bson" param
+            println("iteration = ", iteration, " MOE loss = ", EMLoss([xi], param, explorationPercent; totalTimeStep=7000), " POI = ", poi(xi, ψ))
+            BSON.@save "savedWeights/MTL_thetak_5-4-2-1_psi_5-4-3-1.bson" param
             counter = 0
         end
         counter += 1
