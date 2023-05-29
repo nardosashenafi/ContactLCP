@@ -323,8 +323,11 @@ function genForces(x, u::AbstractArray{T}; expert=false) where {T<:Real}
 
     #h = Bu - C qdot - G
 
+    # return  [1.0f0, 0.0f0]*control(x, u; expert=expert) -  #Bu 
+    #             [b mp*lcm*sin(θ); -mp*sin(θ)/2.0f0 0.0f0]*v -  #-C qdot
+    #             [0.0f0; -mp*g*lcm*sin(θ)]            #-G
     return  [1.0f0, 0.0f0]*control(x, u; expert=expert) -  #Bu 
-                [b mp*lcm*sin(θ); -mp*sin(θ)/2.0f0 0.0f0]*v -  #-C qdot
+                [b mp*lcm*v[2]*sin(θ); 0.0f0 0.0f0]*v -  #-C qdot
                 [0.0f0; -mp*g*lcm*sin(θ)]            #-G
 end
 
