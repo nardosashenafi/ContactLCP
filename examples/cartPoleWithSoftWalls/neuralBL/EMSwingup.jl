@@ -78,10 +78,12 @@ controlArray     = Array{Function}(undef, binSize);
 controlNN_length = Vector{Int}(undef, binSize)
 
 for i in 1:binSize 
-    controlArray[i] = FastChain(FastDense(5, 4, elu),
-                            FastDense(4, 2, elu),
-                            FastDense(2, 1))
-    
+    # controlArray[i] = FastChain(FastDense(5, 4, elu),
+    #                         FastDense(4, 2, elu),
+    #                         FastDense(2, 1))
+    controlArray[i] = FastChain(FastDense(5, 10, elu),
+                        FastDense(10, 4, elu),
+                        FastDense(4, 1))
     controlNN_length[i] = DiffEqFlux.paramlength(controlArray[i]) 
 end
 
