@@ -115,7 +115,7 @@ function solveLcp(gn, γn, γt, M, h::AbstractArray{T}, Wn, Wt, ϵn, ϵt, μ, gT
 end
 
 """
-    oneStep(lcp, state, controllerParameters)
+    oneTimeStep(lcp, state, controllerParameters)
 
 Integrate one time step of the Moreau's time stepping method 
 
@@ -137,7 +137,7 @@ function oneTimeStep(lcp::Lcp, x, param::AbstractArray{T}; Δt = 0.001f0, kwargs
 end
 
 """
-    oneStep(lcp, state, systemParameters, controllerParameters)
+    oneTimeStep(lcp, state, systemParameters, controllerParameters)
 
 Integrate one time step of the Moreau's time stepping method 
 
