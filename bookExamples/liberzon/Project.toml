@@ -1,5 +1,4 @@
 [deps]
-AdvancedVI = "b5ca4192-6429-45e5-a2d9-87aec30a685c"
 BSON = "fbb218c0-5317-5bc6-957e-2ee96dd4b1f0"
 Bijectors = "76274a88-744f-5084-9051-94815aaf08c4"
 DiffEqFlux = "aae7a2af-3d4f-5e19-a356-7da93b79d9d0"

@@ -37,7 +37,7 @@ function (sys::BouncingBall)(x, param)
     Wn  = wn(sys, x)
     Wt  = wt(sys, x)
 
-    return gn, γn, γt, M, h, Wn, Wt
+    return gn, γn, γt, M, h, Wn, Wt, sys.ϵn, sys.ϵt, sys.μ, sys.gThreshold
 end
 
 function (sys::BouncingBall)(x::Vector{T}) where {T<:Real}
