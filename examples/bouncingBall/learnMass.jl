@@ -1,32 +1,32 @@
-# using ContactLCP
+using ContactLCP
 using LaTeXStrings, PyPlot
 using JuMP, LinearAlgebra
 using ForwardDiff
 
 include("bouncing_ball.jl")
-include("../../src/lcp.jl")
-include("../../src/solver.jl")
+# include("../../src/lcp.jl")
+# include("../../src/solver.jl")
 
 Δt = 0.001f0; totalTimeStep = 1500
 θ0 = Float32[0.2]
 x0 = Float32[0.0,0.0002,0.2,-0.2]
 
 sys  = BouncingBall(Float64)
-lcp  = Lcp(Float64, sys)
+lcp  = ContactLCP.Lcp(Float64, sys)
 
 function loss(lcp, θ, x0, Sθd, λθd; totalTimeStep = 1500)
     Sθ, λθ, _ = trajectory(lcp, x0, θ; totalTimeStep = totalTimeStep)
     return 50.0f0/length(Sθ) * ( 0.5f0*dot(Sθd - Sθ , Sθd - Sθ) + 0.5f0*dot(λθd - λθ, λθd - λθ) )
 end
 
-function oneStep(lcp::Lcp, x1, θm::AbstractArray{T}; Δt = 0.001f0) where {T<:Real}
+function oneStep(lcp::ContactLCP.Lcp, x1, θm::AbstractArray{T}; Δt = 0.001f0) where {T<:Real}
 
     qA, uA  = lcp.sys(x1)
     qM      = qA + 0.5f0*Δt*uA
 
     x_mid   = vcat(qM, uA)
     # println("x = ", x_mid)
-    gn, γn, γt, M, h, Wn, Wt = sysAttributes(lcp, x_mid, [])
+    gn, γn, γt, M, h, Wn, Wt = ContactLCP.sysAttributes(lcp, x_mid, [])
 
     M = [θm[1] 0.0; 0.0 θm[1]]
     h = [0.0, -θm[1]*lcp.sys.g]
@@ -41,7 +41,7 @@ function oneStep(lcp::Lcp, x1, θm::AbstractArray{T}; Δt = 0.001f0) where {T<:R
 
 end
 
-function trajectory(lcp::Lcp, x0, θm::AbstractArray{T}; Δt = 0.001f0, totalTimeStep = 1500) where {T<:Real}
+function trajectory(lcp::ContactLCP.Lcp, x0, θm::AbstractArray{T}; Δt = 0.001f0, totalTimeStep = 1500) where {T<:Real}
 
     X       = Vector{Vector{T}}(undef, totalTimeStep)
     Λn      = Vector{Vector{T}}(undef, totalTimeStep)
@@ -58,7 +58,7 @@ function trajectory(lcp::Lcp, x0, θm::AbstractArray{T}; Δt = 0.001f0, totalTim
     return X, Λn, Λt
 end
 
-function solveM(lcp::Lcp, x0::Vector{T}) where {T<:Real}
+function solveM(lcp::ContactLCP.Lcp, x0::Vector{T}) where {T<:Real}
 
     θm_actual   = [0.2]
     θm          = [0.9]
@@ -67,9 +67,9 @@ function solveM(lcp::Lcp, x0::Vector{T}) where {T<:Real}
     # x0 = [0.0, rand(range(0.2, 0.5, step=0.01)), 0.1, -0.1]
     Sθd, λθd, _ = trajectory(lcp, x0, θm_actual; totalTimeStep=100)
     l1 = Inf
-    for i in 1:100
+    for i in 1:200
         l(θ)  = loss(lcp, θ, x0, Sθd, λθd; totalTimeStep=100)
-        lg    = ReverseDiff.gradient(l, θm)
+        lg    = ForwardDiff.gradient(l, θm)
         θm    .-= η*lg
         l1    = l(θm)
 
@@ -83,7 +83,7 @@ end
 # plots(X, t, Λn, Λt)
 # solveM(lcp, x0)
 
-function checkGradient(lcp::Lcp, x0::Vector{T}) where {T<:Real}
+function checkGradient(lcp::ContactLCP.Lcp, x0::Vector{T}) where {T<:Real}
 
     θm_actual = [0.2]
     θ1        = [0.5]
